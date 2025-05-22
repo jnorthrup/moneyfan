@@ -85,4 +85,34 @@ public record GridCursor(Vect0r<RowVec> rows) {
         Vect0r<RowVec> newRows = Vect0r.of(matching.size(), idx -> getRow(matching.get(idx)));
         return new GridCursor(newRows);
     }
+
+    public GridCursor sortBy(String columnName, java.util.Comparator<Object> comparator) {
+        if (rowCount()==0) return this;
+        int tmpIdx = -1;
+        List<Scalar> scalars = getScalars();
+        for(int i=0;i<scalars.size();i++) if(scalars.get(i).name().equals(columnName)) { tmpIdx=i; break; }
+        if(tmpIdx==-1) throw new IllegalArgumentException("Unknown column " + columnName);
+        final int colIdx = tmpIdx;
+        java.util.List<RowVec> copy = new java.util.ArrayList<>(rowCount());
+        for(RowVec row : this.rows) copy.add(row);
+        copy.sort((a,b) -> comparator.compare(a.get(colIdx).value(), b.get(colIdx).value()));
+        return new GridCursor(Vect0r.fromList(copy));
+    }
+
+    public java.util.Map<Object, GridCursor> groupBy(String columnName) {
+        if (rowCount()==0) return java.util.Collections.emptyMap();
+        int tmpIdx2 = -1;
+        List<Scalar> scalars = getScalars();
+        for(int i=0;i<scalars.size();i++) if(scalars.get(i).name().equals(columnName)) { tmpIdx2=i; break; }
+        if(tmpIdx2==-1) throw new IllegalArgumentException("Unknown column " + columnName);
+        final int colIdx = tmpIdx2;
+        java.util.Map<Object, java.util.List<RowVec>> map = new java.util.HashMap<>();
+        for(RowVec row : this.rows) {
+            Object key = row.get(colIdx).value();
+            map.computeIfAbsent(key, k -> new java.util.ArrayList<>()).add(row);
+        }
+        java.util.Map<Object, GridCursor> result = new java.util.HashMap<>();
+        map.forEach((k, v) -> result.put(k, new GridCursor(Vect0r.fromList(v))));
+        return java.util.Collections.unmodifiableMap(result);
+    }
 }
