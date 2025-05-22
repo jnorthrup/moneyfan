@@ -3,6 +3,7 @@
 /workspace/src/main/java/com/moneyfan/core/CellMeta.java
 /workspace/src/main/java/com/moneyfan/io/CellDriver.java
 /workspace/src/main/java/com/moneyfan/io/ISAMReader.java
+/workspace/src/main/java/com/moneyfan/binance/BinanceIngest.java
 /workspace/src/main/java/com/moneyfan/io/CSVCursorReader.java
 /workspace/src/main/java/com/moneyfan/io/ISAMMeta.java
 /workspace/src/main/java/com/moneyfan/core/IOMemento.java

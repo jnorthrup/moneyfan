@@ -26,8 +26,15 @@ public final class ISAMReader implements AutoCloseable {
     private final ByteBuffer mapped;
     private final ISAMMeta meta;
     private final int rowCount;
+    private final long windowSize;
+    private long windowStart;
+    private ByteBuffer windowBuf;
 
     public ISAMReader(Path dataPath) throws IOException {
+        this(dataPath, 64 * 1024 * 1024); // 64MB default window
+    }
+
+    public ISAMReader(Path dataPath, long windowSize) throws IOException {
         this.dataPath = dataPath;
         this.metaPath = replaceExtension(dataPath, ".meta");
         this.meta = ISAMMeta.read(metaPath);
@@ -35,7 +42,11 @@ public final class ISAMReader implements AutoCloseable {
         long size = channel.size();
         if(size % meta.recordLength()!=0) throw new IOException("Data file size is not multiple of record length");
         this.rowCount = (int)(size / meta.recordLength());
-        this.mapped = channel.map(FileChannel.MapMode.READ_ONLY, 0, size);
+        this.windowSize = windowSize;
+        this.windowStart = 0;
+        long mapSize = Math.min(size, windowSize);
+        this.windowBuf = channel.map(FileChannel.MapMode.READ_ONLY, windowStart, mapSize);
+        this.mapped = null; // legacy field unused now
     }
 
     public GridCursor open() {
@@ -45,11 +56,12 @@ public final class ISAMReader implements AutoCloseable {
 
     private RowVec rowAt(int index) {
         int recLen = meta.recordLength();
-        int position = index * recLen;
-        // create duplicate buffer slice for row
-        ByteBuffer rowBuf = mapped.duplicate();
-        rowBuf.position(position).limit(position + recLen);
-        ByteBuffer slice = rowBuf.slice();
+        long bytePos = (long) index * recLen;
+        ensureWindow(bytePos, recLen);
+        ByteBuffer dup = windowBuf.duplicate();
+        int offsetInWindow = (int) (bytePos - windowStart);
+        dup.position(offsetInWindow).limit(offsetInWindow + recLen);
+        ByteBuffer slice = dup.slice();
         List<Scalar> scalars = meta.columns();
         Vect0r<Cell> cells = Vect0r.of(scalars.size(), col -> {
             Scalar sc = scalars.get(col);
@@ -89,6 +101,21 @@ public final class ISAMReader implements AutoCloseable {
         int idx = filename.lastIndexOf('.');
         if(idx!=-1) filename = filename.substring(0, idx);
         return path.resolveSibling(filename + newExt);
+    }
+
+    private void ensureWindow(long bytePos, int length) {
+        if(bytePos < windowStart || bytePos + length > windowStart + windowBuf.capacity()) {
+            // remap window
+            windowStart = (bytePos / windowSize) * windowSize;
+            long remaining = 0;
+            try {
+                remaining = channel.size() - windowStart;
+                long mapSize = Math.min(windowSize, remaining);
+                windowBuf = channel.map(FileChannel.MapMode.READ_ONLY, windowStart, mapSize);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
     }
 
     @Override

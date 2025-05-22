@@ -115,4 +115,34 @@ public record GridCursor(Vect0r<RowVec> rows) {
         map.forEach((k, v) -> result.put(k, new GridCursor(Vect0r.fromList(v))));
         return java.util.Collections.unmodifiableMap(result);
     }
+
+    public GridCursor innerJoin(GridCursor other, String columnName) {
+        if (rowCount()==0 || other.rowCount()==0) return new GridCursor(Vect0r.of(0, i->null));
+        List<Scalar> leftScalars = getScalars();
+        List<Scalar> rightScalars = other.getScalars();
+        int leftIdx=-1,rightIdx=-1;
+        for(int i=0;i<leftScalars.size();i++) if(leftScalars.get(i).name().equals(columnName)) { leftIdx=i; break; }
+        for(int i=0;i<rightScalars.size();i++) if(rightScalars.get(i).name().equals(columnName)) { rightIdx=i; break; }
+        if(leftIdx==-1||rightIdx==-1) throw new IllegalArgumentException("Join column missing");
+        java.util.Map<Object, java.util.List<RowVec>> rightMap = new java.util.HashMap<>();
+        for(RowVec r: other.rows) {
+            Object key=r.get(rightIdx).value();
+            rightMap.computeIfAbsent(key,k->new java.util.ArrayList<>()).add(r);
+        }
+        java.util.List<RowVec> outRows = new java.util.ArrayList<>();
+        for(RowVec lrow: this.rows) {
+            Object key = lrow.get(leftIdx).value();
+            var matches = rightMap.get(key);
+            if(matches!=null) {
+                for(RowVec rrow: matches) {
+                    // concatenate cells
+                    java.util.List<Cell> combined = new java.util.ArrayList<>(lrow.columnCount()+rrow.columnCount());
+                    for(int i=0;i<lrow.columnCount();i++) combined.add(lrow.get(i));
+                    for(int j=0;j<rrow.columnCount();j++) combined.add(rrow.get(j));
+                    outRows.add(new RowVec(Vect0r.fromList(combined)));
+                }
+            }
+        }
+        return new GridCursor(Vect0r.fromList(outRows));
+    }
 }
