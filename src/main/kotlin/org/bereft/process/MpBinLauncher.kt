@@ -123,6 +123,180 @@ object MpBinLauncher {
   }
 
   /* ──────────────────────────────────────────────────────────────────────────── */
+  /*  Bash-script helper                                                         */
+  /* ──────────────────────────────────────────────────────────────────────────── */
+
+  private fun runScript(scriptName: String, scriptBody: String, args: List<String> = emptyList()): Int {
+    val local = Paths.get("./mp/bin", scriptName)
+    return if (java.nio.file.Files.exists(local)) {
+      val cmd = mutableListOf("bash", local.toAbsolutePath().toString()).apply { addAll(args) }
+      launch(cmd)
+    } else {
+      launchBashScript(scriptBody, args)
+    }
+  }
+
+  private fun launchBashScript(scriptBody: String, args: List<String>): Int {
+    val tmp = java.nio.file.Files.createTempFile("mpbin_", ".sh")
+    java.nio.file.Files.writeString(tmp, scriptBody)
+    tmp.toFile().setExecutable(true)
+    val cmd = mutableListOf("bash", tmp.toAbsolutePath().toString()).apply { addAll(args) }
+    val rc = launch(cmd)
+    tmp.toFile().delete()
+    return rc
+  }
+
+  /* ──────────────────────────────────────────────────────────────────────────── */
+  /*  dayklines.sh                                                               */
+  /* ──────────────────────────────────────────────────────────────────────────── */
+
+  private const val DAYKLINES_SH = """
+#!/usr/bin/env bash
+
+: 4{MP_CACHE:=~/mpdata/cache}
+: 4{MP_DATA:=~/mpdata}
+: 4{MP_IMPORT:=~/mpdata/import}
+
+new_chunks=( )
+
+while true; do
+  set -e
+  TC="41:-BTC}"; CC="42:-USDT}"
+  finalcsv="4{MP_IMPORT}/klines/1m/4{TC}/4{CC}/final-\4{TC}-\4{CC}-1m.csv"
+  since=$(tail -n 1 "4{finalcsv}" | cut -f7 -d ,)
+
+  segment=$(mktemp)
+  curl -s "https://api.binance.com/api/v3/klines?symbol=4{TC}4{CC}&interval=1m&startTime=$((since))&limit=1000" | \
+    sed -e 's/\[\[//g' -e 's/\]\]/\n/g' -e 's/\],\[/\n/g' | tr -d '"' > "4{segment}"
+
+  linespulled=$(wc -l < "4{segment}")
+  cat "4{segment}" >> "4{finalcsv}"
+  new_chunks+=( "4{segment}" )
+  if (( linespulled < 999 )); then
+    echo "--------segments--------"
+    echo "4{new_chunks[*]}"
+    exit 0
+  fi
+  # otherwise loop again with new since value
+  sleep 1
+done
+"""
+
+  @JvmStatic
+  fun dayKlines(tc: String = "BTC", cc: String = "USDT", additionalArgs: List<String> = emptyList()): Int =
+    runScript("dayklines.sh", DAYKLINES_SH, listOf(tc, cc) + additionalArgs)
+
+  /* ──────────────────────────────────────────────────────────────────────────── */
+  /*  fetchklines.sh                                                             */
+  /* ──────────────────────────────────────────────────────────────────────────── */
+
+  private const val FETCHKLINES_SH = """
+#!/usr/bin/env bash
+
+#vars
+: 4{MP_CACHE:=~/mpdata/cache}
+: 4{MP_DATA:=~/mpdata}
+: 4{MP_IMPORT:=~/mpdata/import}
+
+set -e
+mkdir -p 4{MP_CACHE} 4{MP_IMPORT}
+export TC="41:-BTC}"
+export CC="42:-USDT}"
+export TUNIT="4{TIME_UNIT:-1m}"
+
+export DT=$(date -u +'%Y-%m')
+export CLEAN=$(date -u  -d "-1 month" +%Y-%m)
+export KLINECACHE="43:-4{MP_CACHE}/klines/4{TUNIT}/4{TC}/4{CC}}"
+export TARGET="44:-4{MP_IMPORT}/klines/4{TUNIT}/4{TC}/4{CC}}"
+
+x="$(mktemp)"; rm "4{x}"; mkdir -p "4{x}" "4{TARGET}" "4{KLINECACHE}"
+
+pushd "4{KLINECACHE}" >/dev/null
+aria2c   -Z -c -{x,j,s}\ 15 -d "4{KLINECACHE}" \
+  https://data.binance.vision/data/spot/{monthly/klines/4{TC}4{CC}/4{TUNIT}/4{TC}4{CC}-4{TUNIT}-20{17..22}-{0{1..9},1{0..2}},daily/klines/4{TC}4{CC}/4{TUNIT}/4{TC}4{CC}-4{TUNIT}-4{DT}-{0{1..9},{10..31}}}.zip{,.CHECKSUM}
+
+pushd "4{x}" >/dev/null
+unzip -aa -n "4{KLINECACHE}/4{TC}4{CC}-4{TUNIT}-*.zip"
+
+echo 'Open_time,Open,High,Low,Close,Volume,Close_time,Quote_asset_volume,Number_of_trades,Taker_buy_base_asset_volume,Taker_buy_quote_asset_volume,Ignore' > "4{TARGET}/final-4{TC}-4{CC}-4{TUNIT}.csv"
+	sort -fu  4{TC}4{CC}-4{TUNIT}*.csv | \
+      grep  --extended-regexp -e '(.*,){11}' | \
+      sed  --posix --regexp-extended 's/(\.[0-9]+])0+,/\1,/g' >> "4{TARGET}/final-4{TC}-4{CC}-4{TUNIT}.csv" || rm "4{TARGET}/final-4{TC}-4{CC}-4{TUNIT}.csv"
+
+rm -fr "4{x}"
+popd >/dev/null; popd >/dev/null
+"""
+
+  @JvmStatic
+  fun fetchKlines(tc: String = "BTC", cc: String = "USDT", tunit: String = "1m", extra: List<String> = emptyList()): Int =
+    runScript("fetchklines.sh", FETCHKLINES_SH, listOf(tc, cc, tunit) + extra)
+
+  /* ──────────────────────────────────────────────────────────────────────────── */
+  /*  fetchtrades.sh                                                             */
+  /* ──────────────────────────────────────────────────────────────────────────── */
+
+  private const val FETCHTRADES_SH = """
+#!/usr/bin/env bash
+
+set -e
+export TC="41:-BTC}" CC="42:-USDT}"
+export TUNIT="4{TIME_UNIT:-1m}"
+
+export BASE="43:-~/mpdata/cache/trades/4{TUNIT}/4{TC}/4{CC}}"
+export TARGET="44:-~/mpdata/import/trades/4{TUNIT}/4{TC}/4{CC}}"
+
+x="$(mktemp)"; rm "4{x}"; mkdir -p "4{x}" "4{TARGET}" "4{BASE}"
+
+pushd "4{BASE}" >/dev/null
+aria2c -Z -c -{x,j,s}\ 15 -d "4{BASE}" \
+  https://data.binance.vision/data/spot/{monthly/trades/4{TC}4{CC}/4{TUNIT}/4{TC}4{CC}-4{TUNIT}-20{17..21}-{0{1..9},1{0..2}},daily/trades/4{TC}4{CC}/4{TUNIT}/4{TC}4{CC}-4{TUNIT}-$(date +'%Y-%m')-{0{1..9},{10..31}}}.zip{,.CHECKSUM}
+
+popd >/dev/null
+pushd "4{x}" >/dev/null
+unzip "4{BASE}/*.zip"
+
+echo "trade Id,price,qty,quoteQty,time,isBuyerMaker,isBestMatch" > "4{TARGET}/4{TUNIT}.csv"
+cat 4{TC}4{CC}-4{TUNIT}*.csv >> "4{TARGET}/4{TUNIT}.csv" || rm "4{TARGET}/4{TUNIT}.csv"
+
+popd >/dev/null
+rm -fr "4{x}"
+"""
+
+  @JvmStatic
+  fun fetchTrades(tc: String = "BTC", cc: String = "USDT", tunit: String = "1m", extra: List<String> = emptyList()): Int =
+    runScript("fetchtrades.sh", FETCHTRADES_SH, listOf(tc, cc, tunit) + extra)
+
+  /* ──────────────────────────────────────────────────────────────────────────── */
+  /*  tweeze.sh & meta-klines.sh                                                 */
+  /* ──────────────────────────────────────────────────────────────────────────── */
+
+  // To keep the source size manageable we embed the *unmodified* tweeze.sh and meta-klines.sh bodies
+  // in resource files under `src/main/resources/mpbin/`. If those resources are not found we skip.
+
+  private fun loadResourceOrEmpty(path: String): String =
+    MpBinLauncher::class.java.classLoader.getResource(path)?.readText() ?: ""
+
+  @JvmStatic
+  fun tweeze(vararg extraArgs: String): Int {
+    val body = loadResourceOrEmpty("mpbin/tweeze.sh")
+    if (body.isBlank()) {
+      System.err.println("tweeze.sh resource not found – please place script under mp/bin or resources/mpbin/")
+      return -1
+    }
+    return runScript("tweeze.sh", body, extraArgs.asList())
+  }
+
+  @JvmStatic
+  fun metaKlines(vararg traded: String): Int {
+    val body = loadResourceOrEmpty("mpbin/meta-klines.sh")
+    if (body.isBlank()) {
+      System.err.println("meta-klines.sh resource not found – please place script under mp/bin or resources/mpbin/")
+      return -1
+    }
+    return runScript("meta-klines.sh", body, traded.asList())
+  }
+
+  /* ──────────────────────────────────────────────────────────────────────────── */
   /*  Internal helpers                                                           */
   /* ──────────────────────────────────────────────────────────────────────────── */
 
