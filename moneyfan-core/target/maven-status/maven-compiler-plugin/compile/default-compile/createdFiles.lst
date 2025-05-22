@@ -1,1 +1,4 @@
 moneyfan/core/Pai2.class
+moneyfan/core/Scalar.class
+moneyfan/core/IOMemento.class
+moneyfan/core/CellMeta.class
