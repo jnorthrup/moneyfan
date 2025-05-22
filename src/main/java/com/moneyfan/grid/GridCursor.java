@@ -145,4 +145,70 @@ public record GridCursor(Vect0r<RowVec> rows) {
         }
         return new GridCursor(Vect0r.fromList(outRows));
     }
+
+    public GridCursor sumBy(String groupByColumn, String targetColumn, String resultColumnName) {
+        if (rowCount()==0) return this;
+        List<Scalar> scalars = getScalars();
+        int groupIdx=-1,targetIdx=-1;
+        for(int i=0;i<scalars.size();i++) {
+            if(scalars.get(i).name().equals(groupByColumn)) groupIdx=i;
+            if(scalars.get(i).name().equals(targetColumn)) targetIdx=i;
+        }
+        if(groupIdx==-1||targetIdx==-1) throw new IllegalArgumentException("Missing columns");
+        java.util.Map<Object, Double> sums = new java.util.HashMap<>();
+        for(RowVec row: rows) {
+            Object key = row.get(groupIdx).value();
+            double val = ((Number) row.get(targetIdx).value()).doubleValue();
+            sums.merge(key, val, Double::sum);
+        }
+        Scalar groupScalar = scalars.get(groupIdx);
+        Scalar sumScalar = com.moneyfan.core.Scalar.of(com.moneyfan.core.IOMemento.IO_DOUBLE, resultColumnName);
+        java.util.List<RowVec> outRows = new java.util.ArrayList<>(sums.size());
+        sums.forEach((k,v)->{
+            java.util.List<Cell> cells = java.util.List.of(
+                    new Cell(k, new com.moneyfan.core.CellMeta(() -> groupScalar)),
+                    new Cell(v, new com.moneyfan.core.CellMeta(() -> sumScalar))
+            );
+            outRows.add(new RowVec(Vect0r.fromList(cells)));
+        });
+        return new GridCursor(Vect0r.fromList(outRows));
+    }
+
+    public GridCursor leftOuterJoin(GridCursor right, String columnName) {
+        if (rowCount()==0) return this;
+        List<Scalar> leftScalars = getScalars();
+        List<Scalar> rightScalars = right.getScalars();
+        int leftIdx=-1,rightIdx=-1;
+        for(int i=0;i<leftScalars.size();i++) if(leftScalars.get(i).name().equals(columnName)) { leftIdx=i; break; }
+        for(int i=0;i<rightScalars.size();i++) if(rightScalars.get(i).name().equals(columnName)) { rightIdx=i; break; }
+        if(leftIdx==-1||rightIdx==-1) throw new IllegalArgumentException("Join column missing");
+        java.util.Map<Object, java.util.List<RowVec>> rightMap = new java.util.HashMap<>();
+        for(RowVec r: right.rows) {
+            Object key=r.get(rightIdx).value();
+            rightMap.computeIfAbsent(key,k->new java.util.ArrayList<>()).add(r);
+        }
+        java.util.List<RowVec> outRows = new java.util.ArrayList<>();
+        for(RowVec lrow: this.rows) {
+            Object key = lrow.get(leftIdx).value();
+            var matches = rightMap.get(key);
+            if(matches!=null) {
+                for(RowVec rrow: matches) {
+                    java.util.List<Cell> combined = new java.util.ArrayList<>(lrow.columnCount()+rrow.columnCount());
+                    for(int i=0;i<lrow.columnCount();i++) combined.add(lrow.get(i));
+                    for(int j=0;j<rrow.columnCount();j++) combined.add(rrow.get(j));
+                    outRows.add(new RowVec(Vect0r.fromList(combined)));
+                }
+            } else {
+                java.util.List<Cell> combined = new java.util.ArrayList<>(lrow.columnCount()+right.columnCount());
+                for(int i=0;i<lrow.columnCount();i++) combined.add(lrow.get(i));
+                // add nulls for right side
+                for(int j=0;j<right.columnCount();j++) {
+                    final int idx = j;
+                    combined.add(new Cell(null, new com.moneyfan.core.CellMeta(() -> rightScalars.get(idx))));
+                }
+                outRows.add(new RowVec(Vect0r.fromList(combined)));
+            }
+        }
+        return new GridCursor(Vect0r.fromList(outRows));
+    }
 }
