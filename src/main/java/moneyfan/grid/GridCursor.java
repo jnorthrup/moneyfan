@@ -1,8 +1,10 @@
 package moneyfan.grid;
 
 import java.util.List;
-import java.util.stream.Collectors;
 import moneyfan.core.Scalar;
+import moneyfan.grid.Cell;
+import moneyfan.grid.RowVec;
+import moneyfan.grid.Vect0r;
 
 public record GridCursor(Vect0r<RowVec> rows) {
     public int rowCount() {
@@ -19,8 +21,12 @@ public record GridCursor(Vect0r<RowVec> rows) {
 
     public List<Scalar> getScalars() {
         if (rowCount() == 0) return List.of();
-        return rows.get(0).cells().accessor()
-            .andThen(cell -> cell.meta().provider().get())
-            .apply(0).stream().collect(Collectors.toList());
+        RowVec firstRow = rows.get(0);
+        Vect0r<Cell> cells = firstRow.cells();
+        java.util.ArrayList<Scalar> scalars = new java.util.ArrayList<>(cells.size());
+        for (int i = 0; i < cells.size(); i++) {
+            scalars.add(cells.get(i).meta().provider().get());
+        }
+        return scalars;
     }
 }
