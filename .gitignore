@@ -1,1 +1,23 @@
 
+.aider.chat.history.md
+
+**/target/
+
+.idea/
+*.iml
+*.ipr
+*.iws
+*.class
+*.jar
+*.war
+*.ear
+*.db
+*.log
+*.hprof
+*.swp       
+*.swo
+*.swn           
+*.DS_Store
+*.class
+*.jar
+*.war

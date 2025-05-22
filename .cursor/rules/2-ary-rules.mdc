@@ -1,0 +1,23 @@
+---
+description: 
+globs: *.java,*.kt,*.py
+alwaysApply: false
+---
+/**
+ * MONEYFAN DESIGN PRINCIPLE:
+ * 
+ * This system is fundamentally built upon the JPair<F,S> 2-ary tuple as its atomic unit.
+ * All components MUST leverage this pattern to enable:
+ * 
+ * 1. Strong identity formation through paired relationships
+ * 2. Type-driven dispatch for specialized implementations
+ * 3. Uniform composition patterns while preserving type safety
+ * 4. Maximum pointer hoisting for JIT optimization
+ * 
+ * Factory methods SHOULD examine pair types to select optimal implementations.
+ * New components MUST extend this pattern rather than create alternative structures.
+ * 
+ * This principle is non-negotiable and central to maintaining system coherence.
+
+ This comment should be included at the top of core Java files, particularly JPair.java and any primary factory classes.
+ */
