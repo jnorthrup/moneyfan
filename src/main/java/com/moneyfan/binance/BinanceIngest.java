@@ -37,4 +37,29 @@ public final class BinanceIngest {
                 Scalar.of(IOMemento.IO_DOUBLE, "taker_buy_quote_volume")
         );
     }
+
+    public static Path downloadDailyKlines(String symbol,String interval, java.time.LocalDate date, Path destDir) throws Exception {
+        java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd");
+        String dateStr = fmt.format(date);
+        String fileName = symbol+"-"+interval+"-"+dateStr+".zip";
+        String url = "https://data.binance.vision/data/spot/daily/klines/"+symbol+"/"+interval+"/"+fileName;
+        java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
+        java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder(java.net.URI.create(url)).build();
+        java.net.http.HttpResponse<byte[]> resp = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofByteArray());
+        if(resp.statusCode()!=200) throw new RuntimeException("Failed to download: "+url+" status="+resp.statusCode());
+        Path zipPath = destDir.resolve(fileName);
+        java.nio.file.Files.write(zipPath, resp.body());
+        // unzip
+        Path csvOutput = null;
+        try (java.util.zip.ZipInputStream zis = new java.util.zip.ZipInputStream(java.nio.file.Files.newInputStream(zipPath))) {
+            java.util.zip.ZipEntry entry;
+            while((entry=zis.getNextEntry())!=null) {
+                if(entry.isDirectory()) continue;
+                Path out = destDir.resolve(entry.getName());
+                java.nio.file.Files.copy(zis, out, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                csvOutput = out;
+            }
+        }
+        return csvOutput;
+    }
 }

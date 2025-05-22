@@ -144,10 +144,51 @@ public record GridCursor(Vect0r<RowVec> rows) {
         return new GridCursor(Vect0r.fromList(outRows));
     }
 
-    public GridCursor fullOuterJoin(GridCursor other, String columnName) {
-        GridCursor leftOuter = this.leftOuterJoin(other, columnName);
-        GridCursor rightOnly = other.leftOuterJoin(this, columnName)
-                .filter(row -> row.get(this.columnCount()).value()==null); // rows with no match on left
+    public GridCursor leftOuterJoin(GridCursor right, String... columns) {
+        if (rowCount()==0) return this;
+        java.util.Set<String> columnSet = java.util.Set.of(columns);
+        java.util.List<Scalar> leftScalars = getScalars();
+        java.util.List<Scalar> rightScalars = right.getScalars();
+        int[] leftIdx = columnsToIndices(leftScalars, columnSet);
+        int[] rightIdx = columnsToIndices(rightScalars, columnSet);
+
+        java.util.Map<java.util.List<Object>, java.util.List<RowVec>> rightMap = new java.util.HashMap<>();
+        for(RowVec r: right.rows) {
+            java.util.List<Object> key = buildKey(r, rightIdx);
+            rightMap.computeIfAbsent(key,k->new java.util.ArrayList<>()).add(r);
+        }
+        java.util.List<RowVec> outRows = new java.util.ArrayList<>();
+        for(RowVec lrow: this.rows) {
+            java.util.List<Object> key = buildKey(lrow, leftIdx);
+            var matches = rightMap.get(key);
+            if(matches!=null) {
+                for(RowVec rrow: matches) {
+                    java.util.List<Cell> combined = new java.util.ArrayList<>(lrow.columnCount()+rrow.columnCount());
+                    for(int i=0;i<lrow.columnCount();i++) combined.add(lrow.get(i));
+                    for(int j=0;j<rrow.columnCount();j++) combined.add(rrow.get(j));
+                    outRows.add(new RowVec(Vect0r.fromList(combined)));
+                }
+            } else {
+                java.util.List<Cell> combined = new java.util.ArrayList<>(lrow.columnCount()+right.columnCount());
+                for(int i=0;i<lrow.columnCount();i++) combined.add(lrow.get(i));
+                for(int j=0;j<right.columnCount();j++) {
+                    final int idx=j;
+                    combined.add(new Cell(null, new com.moneyfan.core.CellMeta(() -> rightScalars.get(idx))));
+                }
+                outRows.add(new RowVec(Vect0r.fromList(combined)));
+            }
+        }
+        return new GridCursor(Vect0r.fromList(outRows));
+    }
+
+    public GridCursor fullOuterJoin(GridCursor other, String... columns) {
+        GridCursor leftOuter = this.leftOuterJoin(other, columns);
+        GridCursor rightOnly = other.leftOuterJoin(this, columns)
+                .filter(row -> {
+                    // determine if left part is null, rely on size
+                    for(int i=0;i<this.columnCount();i++) if(row.get(i).value()!=null) return false;
+                    return true;
+                });
         return leftOuter.concat(rightOnly);
     }
 
@@ -195,44 +236,6 @@ public record GridCursor(Vect0r<RowVec> rows) {
             );
             outRows.add(new RowVec(Vect0r.fromList(cells)));
         });
-        return new GridCursor(Vect0r.fromList(outRows));
-    }
-
-    public GridCursor leftOuterJoin(GridCursor right, String columnName) {
-        if (rowCount()==0) return this;
-        List<Scalar> leftScalars = getScalars();
-        List<Scalar> rightScalars = right.getScalars();
-        int leftIdx=-1,rightIdx=-1;
-        for(int i=0;i<leftScalars.size();i++) if(leftScalars.get(i).name().equals(columnName)) { leftIdx=i; break; }
-        for(int i=0;i<rightScalars.size();i++) if(rightScalars.get(i).name().equals(columnName)) { rightIdx=i; break; }
-        if(leftIdx==-1||rightIdx==-1) throw new IllegalArgumentException("Join column missing");
-        java.util.Map<Object, java.util.List<RowVec>> rightMap = new java.util.HashMap<>();
-        for(RowVec r: right.rows) {
-            Object key=r.get(rightIdx).value();
-            rightMap.computeIfAbsent(key,k->new java.util.ArrayList<>()).add(r);
-        }
-        java.util.List<RowVec> outRows = new java.util.ArrayList<>();
-        for(RowVec lrow: this.rows) {
-            Object key = lrow.get(leftIdx).value();
-            var matches = rightMap.get(key);
-            if(matches!=null) {
-                for(RowVec rrow: matches) {
-                    java.util.List<Cell> combined = new java.util.ArrayList<>(lrow.columnCount()+rrow.columnCount());
-                    for(int i=0;i<lrow.columnCount();i++) combined.add(lrow.get(i));
-                    for(int j=0;j<rrow.columnCount();j++) combined.add(rrow.get(j));
-                    outRows.add(new RowVec(Vect0r.fromList(combined)));
-                }
-            } else {
-                java.util.List<Cell> combined = new java.util.ArrayList<>(lrow.columnCount()+right.columnCount());
-                for(int i=0;i<lrow.columnCount();i++) combined.add(lrow.get(i));
-                // add nulls for right side
-                for(int j=0;j<right.columnCount();j++) {
-                    final int idx = j;
-                    combined.add(new Cell(null, new com.moneyfan.core.CellMeta(() -> rightScalars.get(idx))));
-                }
-                outRows.add(new RowVec(Vect0r.fromList(combined)));
-            }
-        }
         return new GridCursor(Vect0r.fromList(outRows));
     }
 }
