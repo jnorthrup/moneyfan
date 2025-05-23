@@ -2,17 +2,11 @@ package com.moneyfan.dsel;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Iterator;
 import java.util.List;
-import java.util.NoSuchElementException;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
-/**
- * A basic, immutable, list-backed implementation of {@link DSEL_Cursor}.
- * Operations create new instances, preserving immutability and enabling composition.
- */
 class ListBackedCursor<F, S> implements DSEL_Cursor<F, S> {
     private final List<Join<F, S>> data;
 
@@ -23,49 +17,54 @@ class ListBackedCursor<F, S> implements DSEL_Cursor<F, S> {
 
     @Override
     public <R> DSEL_Cursor<R, S> mapFirst(Function<? super F, ? extends R> mapper) {
-        return new ListBackedCursor<R, S>(data.stream()
-            .map(join -> join.mapFirst(mapper))
-            .collect(Collectors.toList()));
+        List<Join<R, S>> newData = data.stream()
+            .map(join -> new Join<>(mapper.apply(join.getFirst()), join.getSecond()))
+            .collect(Collectors.toList());
+        return new ListBackedCursor<>(newData);
     }
 
     @Override
     public <R> DSEL_Cursor<F, R> mapSecond(Function<? super S, ? extends R> mapper) {
-        return new ListBackedCursor<F, R>(data.stream()
-            .map(join -> join.mapSecond(mapper))
-            .collect(Collectors.toList()));
+        List<Join<F, R>> newData = data.stream()
+            .map(join -> new Join<>(join.getFirst(), mapper.apply(join.getSecond())))
+            .collect(Collectors.toList());
+        return new ListBackedCursor<>(newData);
     }
 
     @Override
     public <R1, R2> DSEL_Cursor<R1, R2> mapBoth(
         Function<? super F, ? extends R1> firstMapper,
         Function<? super S, ? extends R2> secondMapper) {
-        return new ListBackedCursor<R1, R2>(data.stream()
-            .map(join -> join.mapBoth(firstMapper, secondMapper))
-            .collect(Collectors.toList()));
+        List<Join<R1, R2>> newData = data.stream()
+            .map(join -> new Join<>(firstMapper.apply(join.getFirst()), secondMapper.apply(join.getSecond())))
+            .collect(Collectors.toList());
+        return new ListBackedCursor<>(newData);
     }
 
     @Override
     public DSEL_Cursor<S, F> swap() {
-        return new ListBackedCursor<S, F>(data.stream()
+        List<Join<S, F>> newData = data.stream()
             .map(Join::swap)
-            .collect(Collectors.toList()));
+            .collect(Collectors.toList());
+        return new ListBackedCursor<>(newData);
     }
 
     @Override
     public DSEL_Cursor<F, S> filter(Predicate<Join<F, S>> predicate) {
-        return new ListBackedCursor<>(data.stream()
+        List<Join<F, S>> newData = data.stream()
             .filter(predicate)
-            .collect(Collectors.toList()));
+            .collect(Collectors.toList());
+        return new ListBackedCursor<>(newData);
     }
 
     @Override
     public DSEL_Cursor<F, S> filterFirst(Predicate<? super F> predicate) {
-        return filter(join -> predicate.test(join.first()));
+        return filter(join -> predicate.test(join.getFirst()));
     }
 
     @Override
     public DSEL_Cursor<F, S> filterSecond(Predicate<? super S> predicate) {
-        return filter(join -> predicate.test(join.second()));
+        return filter(join -> predicate.test(join.getSecond()));
     }
 
     @Override
@@ -81,7 +80,7 @@ class ListBackedCursor<F, S> implements DSEL_Cursor<F, S> {
     @Override
     public Join<F, S> firstJoin() {
         if (data.isEmpty()) {
-            throw new NoSuchElementException("Cursor is empty");
+            throw new java.util.NoSuchElementException("Cursor is empty");
         }
         return data.get(0);
     }
@@ -96,11 +95,6 @@ class ListBackedCursor<F, S> implements DSEL_Cursor<F, S> {
     public DSEL_Cursor<F, S> tail(int n) {
         if (n < 0) throw new IllegalArgumentException("N must be non-negative");
         return new ListBackedCursor<>(data.subList(Math.max(0, data.size() - n), data.size()));
-    }
-
-    @Override
-    public Iterator<Join<F, S>> iterator() {
-        return data.iterator(); // The list itself is unmodifiable, so its iterator is safe.
     }
 
     @Override
@@ -123,13 +117,7 @@ class ListBackedCursor<F, S> implements DSEL_Cursor<F, S> {
     }
 
     @Override
-    public String toString() {
-        if (data.isEmpty()) {
-            return "ListBackedCursor[size=0]";
-        } else if (data.size() == 1) {
-            return "ListBackedCursor[size=1, head=" + data.get(0) + "]";
-        } else {
-            return "ListBackedCursor[size=" + data.size() + ", head=" + data.get(0) + ", ...]";
-        }
+    public java.util.Iterator<Join<F, S>> iterator() {
+        return data.iterator(); // The list itself is unmodifiable, so its iterator is safe.
     }
 }
