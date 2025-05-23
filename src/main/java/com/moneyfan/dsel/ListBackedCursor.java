@@ -14,108 +14,88 @@ class ListBackedCursor<F, S> implements DSEL_Cursor<F, S> {
         // Ensure internal list is unmodifiable and a copy is made if mutable list is passed.
         this.data = Collections.unmodifiableList(new ArrayList<>(data));
     }
-@Override
-public <R> DSEL_Cursor<R, S> mapFirst(Function<? super F, ? extends R> mapper) {
-    List<Join<R, S>> newData = data.stream()
-        .map(join -> new Join<>(mapper.apply(join.first()), join.second()))
-        .toList();
-    return new ListBackedCursor<>(newData);
-}
 
-@Override
-public <R> DSEL_Cursor<F, R> mapSecond(Function<? super S, ? extends R> mapper) {
-    List<Join<F, R>> newData = data.stream()
-        .map(join -> new Join<>(join.first(), mapper.apply(join.second())))
-        .toList();
-    return new ListBackedCursor<>(newData);
-}
+    @Override
+    public <R> DSEL_Cursor<R, S> mapFirst(Function<? super F, ? extends R> mapper) {
+        List<Join<R, S>> newList = data.stream()
+            .map(join -> new Join<>(mapper.apply(join.first()), join.second()))
+            .collect(Collectors.toList());
+        return new ListBackedCursor<>(newList);
+    }
+
+    @Override
+    public <R> DSEL_Cursor<F, R> mapSecond(Function<? super S, ? extends R> mapper) {
+        List<Join<F, R>> newList = data.stream()
+            .map(join -> new Join<>(join.first(), mapper.apply(join.second())))
+            .collect(Collectors.toList());
+        return new ListBackedCursor<>(newList);
+    }
+
     @Override
     public <R1, R2> DSEL_Cursor<R1, R2> mapBoth(
         Function<? super F, ? extends R1> firstMapper,
         Function<? super S, ? extends R2> secondMapper) {
-        List<Join<R1, R2>> newData = data.stream()
+        List<Join<R1, R2>> newList = data.stream()
             .map(join -> new Join<>(firstMapper.apply(join.first()), secondMapper.apply(join.second())))
             .collect(Collectors.toList());
-        return new ListBackedCursor<>(newData);
+        return new ListBackedCursor<>(newList);
     }
 
     @Override
     public DSEL_Cursor<S, F> swap() {
-        List<Join<S, F>> newData = data.stream()
+        List<Join<S, F>> newList = data.stream()
             .map(Join::swap)
             .collect(Collectors.toList());
-        return new ListBackedCursor<>(newData);
+        return new ListBackedCursor<>(newList);
     }
 
     @Override
     public DSEL_Cursor<F, S> filter(Predicate<Join<F, S>> predicate) {
-        List<Join<F, S>> newData = data.stream()
+        List<Join<F, S>> newList = data.stream()
             .filter(predicate)
             .collect(Collectors.toList());
-        return new ListBackedCursor<>(newData);
+        return new ListBackedCursor<>(newList);
     }
 
     @Override
     public DSEL_Cursor<F, S> filterFirst(Predicate<? super F> predicate) {
-        return filter(join -> predicate.test(join.getFirst()));
+        return filter(join -> predicate.test(join.first()));
     }
 
     @Override
     public DSEL_Cursor<F, S> filterSecond(Predicate<? super S> predicate) {
-        return filter(join -> predicate.test(join.getSecond()));
+        return filter(join -> predicate.test(join.second()));
     }
 
-    @Override
-    public List<Join<F, S>> collect() {
-        return new ArrayList<>(data); // Return a mutable copy as per typical collect behavior
+    public List<Join<F, S>> toList() {
+        return data; // Already an immutable copy from constructor
     }
 
-    @Override
-    public long count() {
-        return data.size();
+    /** Gets a list of all first elements. Addresses: {@code [60,50] cannot find symbol getFirst()}. */
+    public List<F> getFirsts() { // Renamed from getFirstColumn for clarity
+        return data.stream()
+                   .map(Join::first) // Line 60: Uses record accessor `first()`.
+                    .collect(Collectors.toList());
     }
 
-    @Override
-    public Join<F, S> firstJoin() {
-        if (data.isEmpty()) {
-            throw new java.util.NoSuchElementException("Cursor is empty");
-        }
-        return data.get(0);
+    /** Gets a list of all second elements. Addresses: {@code [65,50] cannot find symbol getSecond()}. */
+    public List<S> getSeconds() { // Renamed from getSecondColumn for clarity
+        return data.stream()
+                   .map(Join::second) // Line 65: Uses record accessor `second()`.
+                    .collect(Collectors.toList());
     }
 
-    @Override
-    public DSEL_Cursor<F, S> head(int n) {
-        if (n < 0) throw new IllegalArgumentException("N must be non-negative");
-        return new ListBackedCursor<>(data.subList(0, Math.min(n, data.size())));
-    }
-
-    @Override
-    public DSEL_Cursor<F, S> tail(int n) {
-        if (n < 0) throw new IllegalArgumentException("N must be non-negative");
-        return new ListBackedCursor<>(data.subList(Math.max(0, data.size() - n), data.size()));
-    }
-
-    @Override
-    public DSEL_Cursor<F, S> print(int N) {
-        System.out.println("Cursor (showing up to " + N + " elements):");
-        if (data.isEmpty()) {
-            System.out.println("  <empty>");
-        } else {
-            data.stream().limit(N).forEach(join -> System.out.println("  " + join));
-            if (data.size() > N) {
-                System.out.println("  ... and " + (data.size() - N) + " more");
-            }
-        }
-        return this; // Return self to allow chaining
-    }
-
-    @Override
-    public boolean isEmpty() {
-        return data.isEmpty();
-    }
-
-    @Override
-    public java.util.Iterator<Join<F, S>> iterator() {
-        return data.iterator(); // The list itself is unmodifiable, so its iterator is safe.
-    }
+    // Glyphs (shorthands) as per request - examples
+    /** Glyph for {@link #mapFirst(Function)}. */
+    public <R> ListBackedCursor<R, S> mF(Function<? super F, ? extends R> fn) { return mapFirst(fn); }
+    /** Glyph for {@link #mapSecond(Function)}. */
+    public <R> ListBackedCursor<F, R> mS(Function<? super S, ? extends R> fn) { return mapSecond(fn); }
+    /** Glyph for {@link #swap()}. */
+    public ListBackedCursor<S, F> swA() { return swap(); }
+    /** Glyph for {@link #mapBoth(Function, Function)}. */
+    public <R1, R2> ListBackedCursor<R1, R2> mJ(Function<? super Join<F, S>, ? extends Join<R1, R2>> fn) { return mapBoth(fn); }  // Adjusted based on context
+    /** Glyph for {@link #getFirsts()}. */
+    public List<F> fL() { return getFirsts(); } // Firsts List
+    /** Glyph for {@link #getSeconds()}. */
+    public List<S> sL() { return getSeconds(); } // Seconds List
 }
