@@ -22,7 +22,7 @@ public class ListBackedCursor<F, S> implements DSEL_Cursor<F, S> {
     @Override
     public <R> DSEL_Cursor<R, S> mf(Function<? super F, ? extends R> mapper) {
         List<Join<R, S>> result = data.stream()
-                .map(join -> new Join<>(mapper.apply(join.first()), join.second())) // Reverted to explicit Join creation to help type inference
+                .map(join -> new Join<>(mapper.apply(join.first()), join.second()))
                 .collect(Collectors.toList());
         return new ListBackedCursor<>(result);
     }
@@ -30,7 +30,7 @@ public class ListBackedCursor<F, S> implements DSEL_Cursor<F, S> {
     @Override
     public <R> DSEL_Cursor<F, R> ms(Function<? super S, ? extends R> mapper) {
         List<Join<F, R>> result = data.stream()
-                .map(join -> new Join<>(join.first(), mapper.apply(join.second()))) // Reverted to explicit Join creation to help type inference
+                .map(join -> new Join<>(join.first(), mapper.apply(join.second())))
                 .collect(Collectors.toList());
         return new ListBackedCursor<>(result);
     }
@@ -93,5 +93,15 @@ public class ListBackedCursor<F, S> implements DSEL_Cursor<F, S> {
     @Override
     public Iterator<Join<F, S>> iterator() {
         return data.iterator();
+    }
+
+    @Override
+    public boolean isEmp() {
+        return data.isEmpty();
+    }
+
+    @Override
+    public java.util.Optional<Join<F, S>> fstJ() {
+        return data.isEmpty() ? java.util.Optional.empty() : java.util.Optional.of(data.get(0));
     }
 }
