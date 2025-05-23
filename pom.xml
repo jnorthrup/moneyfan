@@ -42,6 +42,17 @@
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>exec-maven-plugin</artifactId>
                 <version>3.3.0</version>
+                <executions>
+                    <execution>
+                        <id>run-simulator</id>
+                        <goals>
+                            <goal>java</goal>
+                        </goals>
+                        <configuration>
+                            <mainClass>com.moneyfan.simulator.Simulator</mainClass>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -95,8 +106,5 @@
             </plugins>
         </pluginManagement>
     </build>
-    
-    <modules>
-        <module>dsel</module>
-    </modules>
+
 </project>
