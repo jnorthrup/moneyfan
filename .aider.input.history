@@ -1,0 +1,834 @@
+
+# 2025-05-23 00:51:17.488374
++Okay, I'll address the `ClassNotFoundException` in your Maven build and then lay the groundwork for the DSEL based on your specifications.
++
++The `java.lang.ClassNotFoundException: com.moneyfan.App` typically occurs when the `exec-maven-plugin` tries to run a main class that it cannot find on its classpath, or the class is not specified correctly.
++
++Here's a unified context diff:
++
++```diff
++--- a/pom.xml
+++++ b/pom.xml
++@@ -1,19 +1,91 @@
++ <?xml version="1.0" encoding="UTF-8"?>
++-<project xmlns="http://maven.apache.org/POM/4.1.0" >
+++<project xmlns="http://maven.apache.org/POM/4.0.0"
+++         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+++         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
++     <modelVersion>4.0.0</modelVersion>
++ 
++-    <artifactId>bfneat</artifactId>
++-    <version>1.5.0-SNAPSHOT</version>
++-    <groupId>pairwise.method</groupId>
+++    <groupId>com.moneyfan</groupId>
+++    <artifactId>moneyfan</artifactId>
+++    <version>1.0.0-SNAPSHOT</version>
+++    <packaging>jar</packaging>
+++
+++    <name>MoneyFan Trading Simulator DSEL</name>
+++
+++    <properties>
+++        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+++        <maven.compiler.source>21</maven.compiler.source>
+++        <maven.compiler.target>21</maven.compiler.target>
+++        <junit.jupiter.version>5.10.2</junit.jupiter.version>
+++    </properties>
++ 
++     <repositories>
++         <repository>
++             <id>central</id>
++             <url>https://repo1.maven.org/maven2</url>
++         </repository>
++-        <repository>
++-            <id>kotlin-eap</id>
++-            <url>https://maven.pkg.jetbrains.space/public/p/kotlin/eap</url>
++-        </repository>
++     </repositories>
++ 
++     <dependencies>
++         <dependency>
++-            <groupId>com.vsiwest</groupId>
++-            <artifactId>columnar</artifactId>
++-            <version>1.5.0-SNAPSHOT</version>
++-        </dependency>
++-        <dependency>
++-            <groupId>pkg.random</groupId>
++-            <artifactId>control</artifactId>
++-            <version>1.5.0-SNAPSHOT</version>
++-        </dependency>
++-        <dependency>
++-            <groupId>org.jetbrains.kotlin</groupId>
++-            <artifactId>kotlin-stdlib-jdk8</artifactId>
++-            <version>2.2.0-RC</version>
++-        </dependency>
++-        <dependency>
++-            <groupId>org.jetbrains.kotlin</groupId>
++-            <artifactId>kotlin-test-junit5</artifactId>
++-            <version>2.2.0-RC</version>
++-            <scope>test</scope>
++-        </dependency>
++-        <dependency>
++             <groupId>org.junit.jupiter</groupId>
++             <artifactId>junit-jupiter-api</artifactId>
++-            <version>5.13.0-RC1</version>
+++            <version>${junit.jupiter.version}</version>
++             <scope>test</scope>
++         </dependency>
++         <dependency>
++             <groupId>org.junit.jupiter</groupId>
++             <artifactId>junit-jupiter-engine</artifactId>
++-            <version>5.13.0-RC1</version>
+++            <version>${junit.jupiter.version}</version>
++             <scope>test</scope>
++         </dependency>
++     </dependencies>
++ 
++     <build>
+++        <pluginManagement>
+++            <plugins>
+++                <plugin>
+++                    <groupId>org.apache.maven.plugins</groupId>
+++                    <artifactId>maven-clean-plugin</artifactId>
+++                    <version>3.3.2</version>
+++                </plugin>
+++                <plugin>
+++                    <groupId>org.apache.maven.plugins</groupId>
+++                    <artifactId>maven-resources-plugin</artifactId>
+++                    <version>3.3.1</version>
+++                </plugin>
+++                <plugin>
+++                    <groupId>org.apache.maven.plugins</groupId>
+++                    <artifactId>maven-compiler-plugin</artifactId>
+++                    <version>3.13.0</version>
+++                </plugin>
+++                <plugin>
+++                    <groupId>org.apache.maven.plugins</groupId>
+++                    <artifactId>maven-surefire-plugin</artifactId>
+++                    <version>3.2.5</version>
+++                </plugin>
+++                <plugin>
+++                    <groupId>org.apache.maven.plugins</groupId>
+++                    <artifactId>maven-jar-plugin</artifactId>
+++                    <version>3.4.1</version>
+++                </plugin>
+++                <plugin>
+++                    <groupId>org.apache.maven.plugins</groupId>
+++                    <artifactId>maven-install-plugin</artifactId>
+++                    <version>3.1.1</version>
+++                </plugin>
+++                 <plugin>
+++                    <groupId>org.codehaus.mojo</groupId>
+++                    <artifactId>exec-maven-plugin</artifactId>
+++                    <version>3.2.0</version>
+++                </plugin>
+++            </plugins>
+++        </pluginManagement>
++         <plugins>
++             <plugin>
++-                <groupId>org.jetbrains.kotlin</groupId>
++-                <artifactId>kotlin-maven-plugin</artifactId>
++-                <version>2.2.0-RC</version>
++-                <executions>
++-                    <execution>
++-                        <id>compile</id>
++-                        <phase>compile</phase>
++-                        <goals>
++-                            <goal>compile</goal>
++-                        </goals>
++-                    </execution>
++-                    <execution>
++-                        <id>test-compile</id>
++-                        <phase>test-compile</phase>
++-                        <goals>
++-                            <goal>test-compile</goal>
++-                        </goals>
++-                    </execution>
++-                </executions>
++-                <configuration>
++-                    <jvmTarget>21</jvmTarget>
++-                </configuration>
++-            </plugin>
++-            <plugin>
++                 <groupId>org.apache.maven.plugins</groupId>
++                 <artifactId>maven-compiler-plugin</artifactId>
++-                <version>3.11.0</version>
++-                <executions>
++-                    <execution>
++-                        <id>compile</id>
++-                        <phase>compile</phase>
++-                        <goals>
++-                            <goal>compile</goal>
++-                        </goals>
++-                    </execution>
++-                    <execution>
++-                        <id>testCompile</id>
++-                        <phase>test-compile</phase>
++-                        <goals>
++-                            <goal>testCompile</goal>
++-                        </goals>
++-                    </execution>
++-                </executions>
++                 <configuration>
++-                    <source>21</source>
++-                    <target>21</target>
+++                    <source>${maven.compiler.source}</source>
+++                    <target>${maven.compiler.target}</target>
+++                </configuration>
+++            </plugin>
+++            <plugin>
+++                <groupId>org.codehaus.mojo</groupId>
+++                <artifactId>exec-maven-plugin</artifactId>
+++                <configuration>
+++                    <mainClass>com.moneyfan.App</mainClass>
++                 </configuration>
++             </plugin>
++         </plugins>
++     </build>
++ </project>
+++
++--- /dev/null
+++++ b/src/main/java/com/moneyfan/App.java
++@@ -0,0 +1,58 @@
+++package com.moneyfan;
+++
+++import com.moneyfan.dsel.DSEL;
+++import com.moneyfan.dsel.DSEL_Cursor;
+++import com.moneyfan.dsel.Join;
+++import com.moneyfan.dsel.OpUtils;
+++
+++import java.util.List;
+++
+++public class App {
+++    public static void main(String[] args) {
+++        System.out.println("MoneyFan DSEL Demo Start");
+++
+++        Join<String, Integer> j1 = Join.of("Alice", 30);
+++        Join<String, Integer> j2 = Join.of("Bob", 25);
+++        Join<String, Integer> j3 = Join.of("Charlie", 35);
+++        Join<String, Integer> j4 = Join.of("David", 20);
+++
+++        DSEL_Cursor<String, Integer> users = DSEL.INSTANCE.of(j1, j2, j3, j4);
+++        System.out.println("Initial Users: " + users);
+++
+++        // Shorthand mapFirst (mfst)
+++        DSEL_Cursor<Integer, Integer> nameLengths = users.mfst(String::length);
+++        System.out.println("Name Lengths to Age: " + nameLengths);
+++
+++        // Shorthand mapSecond (msnd)
+++        DSEL_Cursor<String, String> userAgesStr = users.msnd(age -> "Age: " + age);
+++        System.out.println("User Ages as String: " + userAgesStr);
+++
+++        // Shorthand filter (flt)
+++        DSEL_Cursor<String, Integer> usersOver25 = users.flt(user -> user.second() > 25);
+++        System.out.println("Users over 25: " + usersOver25);
+++
+++        // Shorthand filterFirst (fltFst)
+++        DSEL_Cursor<String, Integer> usersShortName = users.fltFst(name -> name.length() < 5);
+++        System.out.println("Users with short names (<5 chars): " + usersShortName);
+++
+++        // Shorthand swap (swp)
+++        DSEL_Cursor<Integer, String> ageToUser = users.swp();
+++        System.out.println("Age to User: " + ageToUser);
+++
+++        // Chaining with shorthands
+++        List<Join<Integer, String>> processed = DSEL.INSTANCE.of(
+++                Join.of("Eve", 28), Join.of("Frank", 40), Join.of("Grace", 22), Join.of("Ivy", 33)
+++            )
+++            .fltSnd(age -> age >= 25) // filterSecond: keep users age 25+
+++            .mbth( // mapBoth
+++                name -> name.toUpperCase(),
+++                age -> age * 2
+++            )
+++            .swp() // swap: Join<Integer, String> (age*2, NAME)
+++            .fltFst(doubledAge -> doubledAge < 70) // filterFirst: keep if doubledAge < 70
+++            .col(); // collect
+++
+++        System.out.println("Processed & Collected List:");
+++        processed.forEach(System.out::println);
+++        System.out.println("MoneyFan DSEL Demo End");
+++    }
+++}
++--- /dev/null
+++++ b/src/main/java/com/moneyfan/dsel/CommonOps.java
++@@ -0,0 +1,36 @@
+++package com.moneyfan.dsel;
+++
+++import java.util.function.Function;
+++import java.util.function.Predicate;
+++
+++/**
+++ * Enum bags for common Predicates and Functions.
+++ */
+++public enum CommonOps {; // Utility class, not instantiable via constructor
+++
+++    public enum Predicates {
+++        IS_POSITIVE_INTEGER(obj -> obj instanceof Integer && (Integer) obj > 0),
+++        IS_NON_EMPTY_STRING(obj -> obj instanceof String && !((String) obj).isEmpty()),
+++        IS_NULL(obj -> obj == null),
+++        IS_NOT_NULL(obj -> obj != null);
+++
+++        private final Predicate<Object> predicate;
+++        Predicates(Predicate<Object> predicate) { this.predicate = predicate; }
+++        @SuppressWarnings("unchecked")
+++        public <T> Predicate<T> get() { return (Predicate<T>) predicate; }
+++    }
+++
+++    public enum Functions {
+++        TO_STRING_SAFE(obj -> obj == null ? "null" : obj.toString()),
+++        STRING_TO_LENGTH(obj -> (obj instanceof String) ? ((String)obj).length() : -1),
+++        IDENTITY(Function.identity());
+++
+++
+++        private final Function<Object, ?> function;
+++        Functions(Function<Object, ?> function) { this.function = function; }
+++        
+++        @SuppressWarnings("unchecked")
+++        public <T, R> Function<T, R> get() { return (Function<T, R>) function; }
+++    }
+++}
+++
++--- /dev/null
+++++ b/src/main/java/com/moneyfan/dsel/DSEL.java
++@@ -0,0 +1,27 @@
+++package com.moneyfan.dsel;
+++
+++import java.util.Arrays;
+++import java.util.List;
+++import java.util.stream.Stream;
+++
+++/**
+++ * DSEL (Domain Specific Embedded Language) entry point.
+++ * Provides factory methods for creating {@link DSEL_Cursor} instances.
+++ * Implemented as a singleton enum as per the design request.
+++ */
+++public enum DSEL {
+++    INSTANCE; // Singleton entry point
+++
+++    public <F, S> DSEL_Cursor<F, S> from(List<Join<F, S>> list) {
+++        return new ListBackedCursor<>(list);
+++    }
+++
+++    @SafeVarargs
+++    public final <F, S> DSEL_Cursor<F, S> of(Join<F, S>... joins) {
+++        return new ListBackedCursor<>(Arrays.asList(joins));
+++    }
+++
+++    public <F, S> DSEL_Cursor<F, S> fromStream(Stream<Join<F, S>> stream) {
+++        return new ListBackedCursor<>(stream.toList());
+++    }
+++}
++--- /dev/null
+++++ b/src/main/java/com/moneyfan/dsel/DSEL_Cursor.java
++@@ -0,0 +1,111 @@
+++package com.moneyfan.dsel;
+++
+++import java.util.List;
+++import java.util.function.Function;
+++import java.util.function.Predicate;
+++
+++/**
+++ * Abstract interface for a cursor over a sequence of {@link Join} tuples.
+++ * This forms the core of the DSEL, providing operations inspired by Pandas Series/DataFrames
+++ * but strictly adhering to the 2-ary tuple composition.
+++ *
+++ * All operations are designed to be unary from the perspective of the cursor
+++ * (i.e., they take one cursor and produce one cursor or a terminal value),
+++ * promoting compositional purity.
+++ */
+++public interface DSEL_Cursor<F, S> extends Iterable<Join<F, S>> {
+++
+++    // --- Core Transformation Operations ---
+++
+++    /** Maps the first element of each Join tuple. Glyph: mfst */
+++    <R> DSEL_Cursor<R, S> mapFirst(Function<? super F, ? extends R> mapper);
+++    default <R> DSEL_Cursor<R, S> mfst(Function<? super F, ? extends R> mapper) { return mapFirst(mapper); }
+++
+++    /** Maps the second element of each Join tuple. Glyph: msnd */
+++    <R> DSEL_Cursor<F, R> mapSecond(Function<? super S, ? extends R> mapper);
+++    default <R> DSEL_Cursor<F, R> msnd(Function<? super S, ? extends R> mapper) { return mapSecond(mapper); }
+++
+++    /** Maps both elements of each Join tuple. Glyph: mbth */
+++    <R1, R2> DSEL_Cursor<R1, R2> mapBoth(
+++        Function<? super F, ? extends R1> firstMapper,
+++        Function<? super S, ? extends R2> secondMapper
+++    );
+++    default <R1, R2> DSEL_Cursor<R1, R2> mbth(
+++        Function<? super F, ? extends R1> firstMapper,
+++        Function<? super S, ? extends R2> secondMapper
+++    ) { return mapBoth(firstMapper, secondMapper); }
+++
+++    /** Swaps the elements of each Join tuple. Glyph: swp */
+++    DSEL_Cursor<S, F> swap();
+++    default DSEL_Cursor<S, F> swp() { return swap(); }
+++
+++    // --- Filtering Operations ---
+++
+++    /** Filters the cursor based on a predicate applied to the whole Join tuple. Glyph: flt */
+++    DSEL_Cursor<F, S> filter(Predicate<Join<F, S>> predicate);
+++    default DSEL_Cursor<F, S> flt(Predicate<Join<F, S>> predicate) { return filter(predicate); }
+++
+++    /** Filters the cursor based on a predicate applied to the first element. Glyph: fltFst */
+++    DSEL_Cursor<F, S> filterFirst(Predicate<? super F> predicate);
+++    default DSEL_Cursor<F, S> fltFst(Predicate<? super F> predicate) { return filterFirst(predicate); }
+++
+++    /** Filters the cursor based on a predicate applied to the second element. Glyph: fltSnd */
+++    DSEL_Cursor<F, S> filterSecond(Predicate<? super S> predicate);
+++    default DSEL_Cursor<F, S> fltSnd(Predicate<? super S> predicate) { return filterSecond(predicate); }
+++
+++    // --- Terminal Operations ---
+++
+++    /** Collects all Join tuples into a List. Glyph: col */
+++    List<Join<F, S>> collect();
+++    default List<Join<F, S>> col() { return collect(); }
+++
+++    /** Counts the number of Join tuples in the cursor. Glyph: cnt */
+++    long count();
+++    default long cnt() { return count(); }
+++
+++    /** Returns the first Join tuple, or throws if empty. Glyph: fstJ / headJ */
+++    Join<F,S> firstJoin();
+++    default Join<F,S> fstJ() { return firstJoin(); }
+++
+++    /** Returns the first N Join tuples as a new cursor. Glyph: headC */
+++    DSEL_Cursor<F,S> head(int n);
+++
+++    /** Returns the last N Join tuples as a new cursor. Glyph: tailC */
+++    DSEL_Cursor<F,S> tail(int n);
+++
+++    // --- Higher-Order Operations (Examples for future expansion) ---
+++    // These would be fundamental for Pandas-like capabilities.
+++
+++    /**
+++     * Groups elements by a key extracted from the first element.
+++     * Returns a cursor of Joins, where the first element is the key
+++     * and the second element is a new cursor containing all Joins for that key.
+++     * Glyph: grpFst
+++     */
+++    // <K> DSEL_Cursor<K, DSEL_Cursor<F, S>> groupByFirst(Function<? super F, ? extends K> keyExtractor);
+++    // default <K> DSEL_Cursor<K, DSEL_Cursor<F, S>> grpFst(Function<? super F, ? extends K> keyExtractor) { return groupByFirst(keyExtractor); }
+++
+++    /**
+++     * General group by operation.
+++     * Glyph: grpBy
+++     */
+++    // <K> DSEL_Cursor<K, DSEL_Cursor<F, S>> groupBy(Function<Join<F, S>, ? extends K> keyExtractor);
+++    // default <K> DSEL_Cursor<K, DSEL_Cursor<F, S>> grpBy(Function<Join<F, S>, ? extends K> keyExtractor) { return groupBy(keyExtractor); }
+++
+++    // --- Utility ---
+++    /**
+++     * Prints a sample of the cursor to System.out for debugging.
+++     * Glyph: prn / peek
+++     */
+++    DSEL_Cursor<F, S> print(int N);
+++    default DSEL_Cursor<F, S> prn(int N) { return print(N); }
+++    default DSEL_Cursor<F, S> peek(int N) { return print(N); }
+++
+++    /**
+++     * Checks if the cursor is empty. Glyph: isEmp
+++     */
+++    boolean isEmpty();
+++    default boolean isEmp() { return isEmpty(); }
+++}
++--- /dev/null
+++++ b/src/main/java/com/moneyfan/dsel/Join.java
++@@ -0,0 +1,42 @@
+++package com.moneyfan.dsel;
+++
+++import java.util.function.Function;
+++
+++/**
+++ * The core immutable 2-ary tuple (Pair) for the DSEL.
+++ * This record is the fundamental data structure. All operations in the DSEL
+++ * will revolve around consuming and producing Joins or Cursors of Joins.
+++ *
+++ * It serves as a "voluntary metaclass" in the sense that its instances are
+++ * the primary citizens of the DSEL, and the DSEL defines how they are manipulated.
+++ *
+++ * @param <F> Type of the first element.
+++ * @param <S> Type of the second element.
+++ */
+++public record Join<F, S>(F first, S second) {
+++
+++    /** Static factory method for convenience. */
+++    public static <F_TYPE, S_TYPE> Join<F_TYPE, S_TYPE> of(F_TYPE first, S_TYPE second) {
+++        return new Join<>(first, second);
+++    }
+++
+++    /** Swaps the elements of the tuple, returning a new Join. */
+++    public Join<S, F> swap() {
+++        return new Join<>(second, first);
+++    }
+++
+++    /** Applies a function to the first element, returning a new Join. */
+++    public <R> Join<R, S> mapFirst(Function<? super F, ? extends R> mapper) {
+++        return new Join<>(mapper.apply(first), second);
+++    }
+++
+++    /** Applies a function to the second element, returning a new Join. */
+++    public <R> Join<F, R> mapSecond(Function<? super S, ? extends R> mapper) {
+++        return new Join<>(first, mapper.apply(second));
+++    }
+++
+++    /** Applies functions to both elements, returning a new Join. */
+++    public <R1, R2> Join<R1, R2> mapBoth(
+++        Function<? super F, ? extends R1> firstMapper,
+++        Function<? super S, ? extends R2> secondMapper) {
+++        return new Join<>(firstMapper.apply(first), secondMapper.apply(second));
+++    }
+++}
++--- /dev/null
+++++ b/src/main/java/com/moneyfan/dsel/ListBackedCursor.java
++@@ -0,0 +1,129 @@
+++package com.moneyfan.dsel;
+++
+++import java.util.ArrayList;
+++import java.util.Collections;
+++import java.util.Iterator;
+++import java.util.List;
+++import java.util.NoSuchElementException;
+++import java.util.function.Function;
+++import java.util.function.Predicate;
+++import java.util.stream.Collectors;
+++
+++/**
+++ * A basic, immutable, list-backed implementation of {@link DSEL_Cursor}.
+++ * Operations create new instances, preserving immutability and enabling composition.
+++ */
+++class ListBackedCursor<F, S> implements DSEL_Cursor<F, S> {
+++    private final List<Join<F, S>> data;
+++
+++    public ListBackedCursor(List<Join<F, S>> data) {
+++        // Ensure internal list is unmodifiable and a copy is made if mutable list is passed.
+++        this.data = Collections.unmodifiableList(new ArrayList<>(data));
+++    }
+++
+++    @Override
+++    public <R> DSEL_Cursor<R, S> mapFirst(Function<? super F, ? extends R> mapper) {
+++        return new ListBackedCursor<>(data.stream()
+++            .map(join -> join.mapFirst(mapper))
+++            .collect(Collectors.toList()));
+++    }
+++
+++    @Override
+++    public <R> DSEL_Cursor<F, R> mapSecond(Function<? super S, ? extends R> mapper) {
+++        return new ListBackedCursor<>(data.stream()
+++            .map(join -> join.mapSecond(mapper))
+++            .collect(Collectors.toList()));
+++    }
+++
+++    @Override
+++    public <R1, R2> DSEL_Cursor<R1, R2> mapBoth(
+++        Function<? super F, ? extends R1> firstMapper,
+++        Function<? super S, ? extends R2> secondMapper) {
+++        return new ListBackedCursor<>(data.stream()
+++            .map(join -> join.mapBoth(firstMapper, secondMapper))
+++            .collect(Collectors.toList()));
+++    }
+++
+++    @Override
+++    public DSEL_Cursor<S, F> swap() {
+++        return new ListBackedCursor<>(data.stream()
+++            .map(Join::swap)
+++            .collect(Collectors.toList()));
+++    }
+++
+++    @Override
+++    public DSEL_Cursor<F, S> filter(Predicate<Join<F, S>> predicate) {
+++        return new ListBackedCursor<>(data.stream()
+++            .filter(predicate)
+++            .collect(Collectors.toList()));
+++    }
+++
+++    @Override
+++    public DSEL_Cursor<F, S> filterFirst(Predicate<? super F> predicate) {
+++        return filter(join -> predicate.test(join.first()));
+++    }
+++
+++    @Override
+++    public DSEL_Cursor<F, S> filterSecond(Predicate<? super S> predicate) {
+++        return filter(join -> predicate.test(join.second()));
+++    }
+++
+++    @Override
+++    public List<Join<F, S>> collect() {
+++        return new ArrayList<>(data); // Return a mutable copy as per typical collect behavior
+++    }
+++
+++    @Override
+++    public long count() {
+++        return data.size();
+++    }
+++
+++    @Override
+++    public Join<F, S> firstJoin() {
+++        if (data.isEmpty()) {
+++            throw new NoSuchElementException("Cursor is empty");
+++        }
+++        return data.get(0);
+++    }
+++
+++    @Override
+++    public DSEL_Cursor<F, S> head(int n) {
+++        if (n < 0) throw new IllegalArgumentException("N must be non-negative");
+++        return new ListBackedCursor<>(data.subList(0, Math.min(n, data.size())));
+++    }
+++
+++    @Override
+++    public DSEL_Cursor<F, S> tail(int n) {
+++        if (n < 0) throw new IllegalArgumentException("N must be non-negative");
+++        return new ListBackedCursor<>(data.subList(Math.max(0, data.size() - n), data.size()));
+++    }
+++
+++    @Override
+++    public Iterator<Join<F, S>> iterator() {
+++        return data.iterator(); // The list itself is unmodifiable, so its iterator is safe.
+++    }
+++
+++    @Override
+++    public DSEL_Cursor<F, S> print(int N) {
+++        System.out.println("Cursor (showing up to " + N + " elements):");
+++        if (data.isEmpty()) {
+++            System.out.println("  <empty>");
+++        } else {
+++            data.stream().limit(N).forEach(join -> System.out.println("  " + join));
+++            if (data.size() > N) {
+++                System.out.println("  ... and " + (data.size() - N) + " more");
+++            }
+++        }
+++        return this; // Return self to allow chaining
+++    }
+++
+++    @Override
+++    public boolean isEmpty() {
+++        return data.isEmpty();
+++    }
+++
+++    @Override
+++    public String toString() {
+++        // A concise representation for debugging, not showing all data for large cursors
+++        return "ListBackedCursor[size=" + data.size() + (data.isEmpty() ? "]" : ", head=" + data.get(0) + (data.size() > 1 ? ", ...]" : "])");
+++    }
+++}
++--- /dev/null
+++++ b/src/main/java/com/moneyfan/dsel/OpUtils.java
++@@ -0,0 +1,20 @@
+++package com.moneyfan.dsel;
+++
+++import java.util.function.Function;
+++import java.util.function.Predicate;
+++
+++/**
+++ * Placeholder for utility functions or enum-based operations if needed later.
+++ * For now, most operations are directly on DSEL_Cursor or Join.
+++ * The CommonOps enum provides pre-defined predicates and functions.
+++ *
+++ * This enum demonstrates the "enum as a bag of code elements" for singleton objects
+++ * or collections of related static utility methods, if desired.
+++ */
+++public enum OpUtils {
+++    INSTANCE; // Singleton instance if this enum were to hold state or be a true singleton service
+++
+++    // Example of a higher-order function that could be part of OpUtils
+++    public static <T, U, R> Function<Join<T, U>, R> applyToFirst(Function<T, R> func) {
+++        return join -> func.apply(join.first());
+++    }
+++}
++--- /dev/null
+++++ b/src/test/java/com/moneyfan/dsel/DSEL_CursorTest.java
++@@ -0,0 +1,102 @@
+++package com.moneyfan.dsel;
+++
+++import org.junit.jupiter.api.BeforeEach;
+++import org.junit.jupiter.api.Test;
+++
+++import java.util.List;
+++import java.util.NoSuchElementException;
+++
+++import static org.junit.jupiter.api.Assertions.*;
+++
+++class DSEL_CursorTest {
+++
+++    private DSEL_Cursor<String, Integer> emptyCursor;
+++    private DSEL_Cursor<String, Integer> singleElementCursor;
+++    private DSEL_Cursor<String, Integer> multiElementCursor;
+++
+++    @BeforeEach
+++    void setUp() {
+++        emptyCursor = DSEL.INSTANCE.of();
+++        singleElementCursor = DSEL.INSTANCE.of(Join.of("A", 1));
+++        multiElementCursor = DSEL.INSTANCE.of(
+++            Join.of("Alice", 30),
+++            Join.of("Bob", 25),
+++            Join.of("Charlie", 35)
+++        );
+++    }
+++
+++    @Test
+++    void testMapFirst() {
+++        DSEL_Cursor<Integer, Integer> lengths = multiElementCursor.mfst(String::length);
+++        assertEquals(3, lengths.count());
+++        assertEquals(List.of(Join.of(5, 30), Join.of(3, 25), Join.of(7, 35)), lengths.collect());
+++        assertTrue(emptyCursor.mfst(String::length).isEmpty());
+++    }
+++
+++    @Test
+++    void testMapSecond() {
+++        DSEL_Cursor<String, Integer> incrementedAges = multiElementCursor.msnd(age -> age + 1);
+++        assertEquals(3, incrementedAges.count());
+++        assertEquals(List.of(Join.of("Alice", 31), Join.of("Bob", 26), Join.of("Charlie", 36)), incrementedAges.collect());
+++    }
+++
+++    @Test
+++    void testMapBoth() {
+++        DSEL_Cursor<Integer, String> transformed = multiElementCursor.mbth(
+++            String::length,
+++            age -> "Age:" + age
+++        );
+++        assertEquals(List.of(Join.of(5, "Age:30"), Join.of(3, "Age:25"), Join.of(7, "Age:35")), transformed.collect());
+++    }
+++
+++    @Test
+++    void testSwap() {
+++        DSEL_Cursor<Integer, String> swapped = multiElementCursor.swp();
+++        assertEquals(List.of(Join.of(30, "Alice"), Join.of(25, "Bob"), Join.of(35, "Charlie")), swapped.collect());
+++    }
+++
+++    @Test
+++    void testFilter() {
+++        DSEL_Cursor<String, Integer> filtered = multiElementCursor.flt(join -> join.second() > 25);
+++        assertEquals(2, filtered.count());
+++        assertEquals(List.of(Join.of("Alice", 30), Join.of("Charlie", 35)), filtered.collect());
+++    }
+++
+++    @Test
+++    void testFilterFirst() {
+++        DSEL_Cursor<String, Integer> filtered = multiElementCursor.fltFst(name -> name.startsWith("A"));
+++        assertEquals(List.of(Join.of("Alice", 30)), filtered.collect());
+++    }
+++
+++    @Test
+++    void testFilterSecond() {
+++        DSEL_Cursor<String, Integer> filtered = multiElementCursor.fltSnd(age -> age < 30);
+++        assertEquals(List.of(Join.of("Bob", 25)), filtered.collect());
+++    }
+++
+++    @Test
+++    void testCollect() {
+++        List<Join<String, Integer>> collected = multiElementCursor.col();
+++        assertEquals(3, collected.size());
+++        assertEquals(Join.of("Bob", 25), collected.get(1));
+++    }
+++
+++    @Test
+++    void testCount() {
+++        assertEquals(0, emptyCursor.cnt());
+++        assertEquals(1, singleElementCursor.cnt());
+++        assertEquals(3, multiElementCursor.cnt());
+++    }
+++
+++    @Test
+++    void testIsEmpty() {
+++        assertTrue(emptyCursor.isEmp());
+++        assertFalse(singleElementCursor.isEmp());
+++    }
+++
+++    @Test
+++    void testFirstJoin() {
+++        assertEquals(Join.of("A",1), singleElementCursor.fstJ());
+++        assertThrows(NoSuchElementException.class, () -> emptyCursor.firstJoin());
+++    }
+++}
+++
++```
++
++**Explanation of Changes and Design Choices:**
++
++1.  **`pom.xml`:**
++    *   Corrected to be a standard Java project POM.
++    *   Added `pluginManagement` to define versions for common plugins (addresses Maven warnings).
++    *   Configured `exec-maven-plugin` with `<mainClass>com.moneyfan.App</mainClass>` to fix the `ClassNotFoundException`.
++    *   Set Java version to 21.
++
++2.  **`com.moneyfan.dsel.Join<F, S>`:**
++    *   A `public record` for an immutable 2-ary tuple. This is the "main vehicle."
++    *   Includes `of()` factory, `swap()`, `mapFirst()`, `mapSecond()`, `mapBoth()` methods directly on the `Join` record, aligning with "Join do all."
++
++3.  **`com.moneyfan.dsel.DSEL_Cursor<F, S>`:**
++    *   The core DSEL interface for operating on sequences of `Join`s.
++    *   Methods like `mapFirst`, `mapSecond`, `filter`, `swap`, etc., are defined. These are "unary operators" from the cursor's perspective.
++    *   Includes default methods for the "n-letter unambiguous roots" (e.g., `mfst` as an alias for `mapFirst`).
++    *   All transformation methods return a new `DSEL_Cursor`, promoting compositional purity.
++
++4.  **`com.moneyfan.dsel.ListBackedCursor<F, S>`:**
++    *   A concrete, immutable implementation of `DSEL_Cursor` using an internal `List`.
++    *   Operations create new `ListBackedCursor` instances.
++
++5.  **`com.moneyfan.dsel.DSEL` (enum):**
++    *   A singleton enum providing factory methods (`of`, `from`) to create `DSEL_Cursor` instances. This houses the entry point to the DSEL as requested.
++
++6.  **`com.moneyfan.dsel.CommonOps` (enum bag):**
++    *   Nested enums `Predicates` and `Functions` demonstrate "enums for bags of code elements." These provide reusable, type-safe (with internal casting) predicate and function objects.
++    *   Example: `CommonOps.Predicates.IS_NON_EMPTY_STRING.get()`
++
++7.  **`com.moneyfan.dsel.OpUtils` (enum):**
++    *   Another example of an enum as a singleton or utility class namespace, as requested for housing orthogonal logic or singleton objects.
++
++8.  **`com.moneyfan.App`:**
++    *   A simple main class to demonstrate the DSEL usage. It will now be found by the `exec-maven-plugin`.
++
++9.  **`com.moneyfan.dsel.DSEL_CursorTest`:**
++    *   Basic JUnit 5 tests for the DSEL cursor operations.
++
++**Design Philosophy Adherence:**
++
++*   **Pure Java w/Maven:** Yes.
++*   **2-ary tuple `Join`:** Central.
++*   **Compositional Purity & Immutability:** Cursors and Joins are immutable; operations produce new instances.
++*   **Unary Operators:** Cursor methods are unary on the cursor.
++*   **`Join` do all:** `Join` has its own mapping/swapping methods, used by cursor operations.
++*   **Enums for bags/singletons:** `DSEL`, `CommonOps`, `OpUtils`.
++*   **Shorthand Glyphs:** Provided as default methods on `DSEL_Cursor`.
++*   **Protective DSL:** The `DSEL_Cursor` fluent API and `DSEL` entry point.
++
++This structure provides a foundation for the pandas-like DSEL. Further development would involve adding more complex operations like grouping, aggregation, joining cursors, window functions, and potentially more sophisticated cursor implementations (e.g., lazy, stream-backed for very large datasets).
++
++For the **trading simulator context**:
++*   **Data Ingest:** Binance CSVs would be read, each row transformed into a `Join` (e.g., `Join<Timestamp, CandleData>`), where `CandleData` itself could be nested `Join`s like `Join<Open, Join<High, Join<Low, Join<Close, Volume>>>>`. This stream of `Join`s would form a `DSEL_Cursor`.
++*   **Time Series Access:** The ISAM would feed data into such cursors.
++*   **Agents:** Would consume these cursors, applying DSEL operations to calculate indicators and make decisions.
++*   **Concurrency:** Immutability of `Join` and `DSEL_Cursor` simplifies concurrent processing by agents.
++
++This setup should resolve your Maven execution issue and give you a solid starting point for the DSEL.
+
+# 2025-05-23 00:53:59.824929
++/run mvn clean install exec:java
+
+# 2025-05-23 00:54:03.175037
++What's wrong? Fix
+
+# 2025-05-23 00:54:39.127274
++/run mvn clean install exec:java
+
+# 2025-05-23 00:54:43.325915
++What's wrong? Fix
+
+# 2025-05-23 00:57:30.921026
++/run mvn clean install exec:java
+
+# 2025-05-23 00:57:37.141903
++What's wrong? Fix
+
+# 2025-05-23 00:58:29.849618
++/lint
+
+# 2025-05-23 00:58:48.747164
++/lint 
+
+# 2025-05-23 00:58:52.600525
++What's wrong? Fix
+
+# 2025-05-23 00:59:00.608984
++/run mvn clean install exec:java
+
+# 2025-05-23 00:59:02.843697
++What's wrong? Fix
