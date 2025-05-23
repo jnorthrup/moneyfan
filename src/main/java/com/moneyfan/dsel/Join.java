@@ -5,4 +5,4 @@
  * @param <F> Type of the first element.
  * @param <S> Type of the second element.
  */
-public record Join<F, S>(F first, S second) {}
+public record Join<F, S>(F first, S second) { }
