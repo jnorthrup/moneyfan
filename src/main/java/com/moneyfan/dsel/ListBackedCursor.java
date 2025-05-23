@@ -93,7 +93,7 @@ class ListBackedCursor<F, S> implements DSEL_Cursor<F, S> {
     /** Glyph for {@link #swap()}. */
     public ListBackedCursor<S, F> swA() { return swap(); }
     /** Glyph for {@link #mapBoth(Function, Function)}. */
-    public <R1, R2> ListBackedCursor<R1, R2> mJ(Function<? super Join<F, S>, ? extends Join<R1, R2>> fn) { return mapBoth(fn); }  // Adjusted based on context
+    public <R1, R2> ListBackedCursor<R1, R2> mJ(Function<? super Join<F, S>, ? extends Join<R1, R2>> fn) { return mapBoth(fn); }
     /** Glyph for {@link #getFirsts()}. */
     public List<F> fL() { return getFirsts(); } // Firsts List
     /** Glyph for {@link #getSeconds()}. */
