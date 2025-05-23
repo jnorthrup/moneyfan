@@ -62,4 +62,10 @@ public interface DSEL_Cursor<F, S> extends Iterable<Join<F, S>> {
     default DSEL_Cursor<S, F> swp() {
         return this.mb((f, s) -> JoinOps.cj(s, f));
     }
+
+    // Check if cursor is empty: isEmp
+    boolean isEmp();
+
+    // Get first Join element: fstJ (returns Optional to handle empty cursors)
+    java.util.Optional<Join<F, S>> fstJ();
 }

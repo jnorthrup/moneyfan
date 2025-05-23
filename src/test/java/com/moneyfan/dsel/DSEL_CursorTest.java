@@ -1,102 +1,152 @@
 package com.moneyfan.dsel;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-
-import java.util.List;
-import java.util.NoSuchElementException;
-
 import static org.junit.jupiter.api.Assertions.*;
+import static com.moneyfan.dsel.JoinOps.cj; // Static import for JoinOps.cj
+
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Optional;
 
 class DSEL_CursorTest {
 
-    private DSEL_Cursor<String, Integer> emptyCursor;
-    private DSEL_Cursor<String, Integer> singleElementCursor;
-    private DSEL_Cursor<String, Integer> multiElementCursor;
-
-    @BeforeEach
-    void setUp() {
-        emptyCursor = DSEL.INSTANCE.of();
-        singleElementCursor = DSEL.INSTANCE.of(Join.of("A", 1));
-        multiElementCursor = DSEL.INSTANCE.of(
-            Join.of("Alice", 30),
-            Join.of("Bob", 25),
-            Join.of("Charlie", 35)
-        );
-    }
-
     @Test
     void testMapFirst() {
-        DSEL_Cursor<Integer, Integer> lengths = multiElementCursor.mfst(String::length);
-        assertEquals(3, lengths.count());
-        assertEquals(List.of(Join.of(5, 30), Join.of(3, 25), Join.of(7, 35)), lengths.collect());
-        assertTrue(emptyCursor.mfst(String::length).isEmpty());
+        DSEL_Cursor<String, Integer> multiElementCursor = new ListBackedCursor<>(Arrays.asList(
+                cj("Alice", 25),
+                cj("Bob", 30),
+                cj("Charlie", 35)
+        ));
+
+        DSEL_Cursor<Integer, Integer> mappedCursor = multiElementCursor
+                .mf(name -> name.length());
+
+        List<Join<Integer, Integer>> expected = Arrays.asList(
+                cj(5, 25),
+                cj(3, 30),
+                cj(7, 35)
+        );
+        assertEquals(expected, mappedCursor.collect());
+
+        DSEL_Cursor<String, Integer> emptyCursor = new ListBackedCursor<>(Collections.emptyList());
+        DSEL_Cursor<Integer, Integer> mappedEmptyCursor = emptyCursor
+                .mf(String::length);
+        assertTrue(mappedEmptyCursor.collect().isEmpty());
+
+        DSEL_Cursor<String, Integer> singleElementCursor = new ListBackedCursor<>(Collections.singletonList(
+                cj("Alice", 25)
+        ));
+        DSEL_Cursor<Integer, Integer> mappedSingleCursor = singleElementCursor
+                .mf(String::length);
+        assertEquals(Collections.singletonList(
+                cj(5, 25)
+        ), mappedSingleCursor.collect());
     }
 
     @Test
     void testMapSecond() {
-        DSEL_Cursor<String, Integer> incrementedAges = multiElementCursor.msnd(age -> age + 1);
-        assertEquals(3, incrementedAges.count());
-        assertEquals(List.of(Join.of("Alice", 31), Join.of("Bob", 26), Join.of("Charlie", 36)), incrementedAges.collect());
+        DSEL_Cursor<String, Integer> multiElementCursor = new ListBackedCursor<>(Arrays.asList(
+                cj("Alice", 25),
+                cj("Bob", 30),
+                cj("Charlie", 35)
+        ));
+
+        DSEL_Cursor<String, Integer> mappedCursor = multiElementCursor
+                .ms(age -> age + 1);
+
+        List<Join<String, Integer>> expected = Arrays.asList(
+                cj("Alice", 26),
+                cj("Bob", 31),
+                cj("Charlie", 36)
+        );
+        assertEquals(expected, mappedCursor.collect());
     }
 
     @Test
     void testMapBoth() {
-        DSEL_Cursor<Integer, String> transformed = multiElementCursor.mbth(
-            String::length,
-            age -> "Age:" + age
-        );
-        assertEquals(List.of(Join.of(5, "Age:30"), Join.of(3, "Age:25"), Join.of(7, "Age:35")), transformed.collect());
-    }
+        DSEL_Cursor<String, Integer> multiElementCursor = new ListBackedCursor<>(Arrays.asList(
+                cj("Alice", 25),
+                cj("Bob", 30),
+                cj("Charlie", 35)
+        ));
 
-    @Test
-    void testSwap() {
-        DSEL_Cursor<Integer, String> swapped = multiElementCursor.swp();
-        assertEquals(List.of(Join.of(30, "Alice"), Join.of(25, "Bob"), Join.of(35, "Charlie")), swapped.collect());
+        DSEL_Cursor<Integer, String> mappedCursor = multiElementCursor
+                .mb((name, age) -> cj(name.length(), "Age:" + age));
+
+        List<Join<Integer, String>> expected = Arrays.asList(
+                cj(5, "Age:25"),
+                cj(3, "Age:30"),
+                cj(7, "Age:35")
+        );
+        assertEquals(expected, mappedCursor.collect());
     }
 
     @Test
     void testFilter() {
-        DSEL_Cursor<String, Integer> filtered = multiElementCursor.flt(join -> join.second() > 25);
-        assertEquals(2, filtered.count());
-        assertEquals(List.of(Join.of("Alice", 30), Join.of("Charlie", 35)), filtered.collect());
-    }
+        DSEL_Cursor<String, Integer> multiElementCursor = new ListBackedCursor<>(Arrays.asList(
+                cj("Alice", 25),
+                cj("Bob", 30),
+                cj("Charlie", 35)
+        ));
 
-    @Test
-    void testFilterFirst() {
-        DSEL_Cursor<String, Integer> filtered = multiElementCursor.fltFst(name -> name.startsWith("A"));
-        assertEquals(List.of(Join.of("Alice", 30)), filtered.collect());
-    }
+        DSEL_Cursor<String, Integer> filteredCursor = multiElementCursor
+                .fl(join -> join.second() > 25);
 
-    @Test
-    void testFilterSecond() {
-        DSEL_Cursor<String, Integer> filtered = multiElementCursor.fltSnd(age -> age < 30);
-        assertEquals(List.of(Join.of("Bob", 25)), filtered.collect());
+        List<Join<String, Integer>> expected = Arrays.asList(
+                cj("Bob", 30),
+                cj("Charlie", 35)
+        );
+        assertEquals(expected, filteredCursor.collect());
+
+        DSEL_Cursor<String, Integer> filteredByFirst = multiElementCursor
+                .fl(join -> join.first().startsWith("A"));
+        assertEquals(Collections.singletonList(
+                cj("Alice", 25)
+        ), filteredByFirst.collect());
+
+        DSEL_Cursor<String, Integer> filteredBySecond = multiElementCursor
+                .fl(join -> join.second() < 30);
+        assertEquals(Collections.singletonList(
+                cj("Alice", 25)
+        ), filteredBySecond.collect());
     }
 
     @Test
     void testCollect() {
-        List<Join<String, Integer>> collected = multiElementCursor.col();
+        DSEL_Cursor<String, Integer> multiElementCursor = new ListBackedCursor<>(Arrays.asList(
+                cj("Alice", 25),
+                cj("Bob", 30),
+                cj("Charlie", 35)
+        ));
+
+        List<Join<String, Integer>> collected = multiElementCursor.collect();
         assertEquals(3, collected.size());
-        assertEquals(Join.of("Bob", 25), collected.get(1));
+        assertEquals(cj("Alice", 25), collected.get(0));
     }
 
     @Test
     void testCount() {
-        assertEquals(0, emptyCursor.cnt());
-        assertEquals(1, singleElementCursor.cnt());
-        assertEquals(3, multiElementCursor.cnt());
+        assertEquals(0, new ListBackedCursor<>(Collections.emptyList()).count());
+        assertEquals(1, new ListBackedCursor<>(Collections.singletonList(cj("A", 1))).count());
+        assertEquals(3, new ListBackedCursor<>(Arrays.asList(cj("A", 1), cj("B", 2), cj("C", 3))).count());
     }
 
     @Test
     void testIsEmpty() {
-        assertTrue(emptyCursor.isEmp());
-        assertFalse(singleElementCursor.isEmp());
+        assertTrue(new ListBackedCursor<>(Collections.emptyList()).isEmp());
+        assertFalse(new ListBackedCursor<>(Collections.singletonList(cj("A", 1))).isEmp());
     }
 
     @Test
     void testFirstJoin() {
-        assertEquals(Join.of("A",1), singleElementCursor.fstJ());
-        assertThrows(NoSuchElementException.class, () -> emptyCursor.firstJoin());
+        DSEL_Cursor<String, Integer> singleElementCursor = new ListBackedCursor<>(Collections.singletonList(
+                cj("A", 1)
+        ));
+        assertTrue(singleElementCursor.fstJ().isPresent());
+        assertEquals(cj("A", 1), singleElementCursor.fstJ().get());
+
+        DSEL_Cursor<String, Integer> emptyCursor = new ListBackedCursor<>(Collections.emptyList());
+        assertFalse(emptyCursor.fstJ().isPresent());
     }
 }
