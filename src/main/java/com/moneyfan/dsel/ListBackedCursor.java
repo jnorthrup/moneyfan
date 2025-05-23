@@ -20,17 +20,19 @@ public class ListBackedCursor<F, S> implements DSEL_Cursor<F, S> {
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public <R> DSEL_Cursor<R, S> mf(Function<? super F, ? extends R> mapper) {
-        List<Join<R, S>> result = data.stream()
-                .map(join -> new Join<>(mapper.apply(join.first()), join.second()))
+        List<Join<R, S>> result = (List<Join<R, S>>) (List<?>) data.stream()
+                .map(join -> join.mf(mapper))
                 .collect(Collectors.toList());
         return new ListBackedCursor<>(result);
     }
     
     @Override
+    @SuppressWarnings("unchecked")
     public <R> DSEL_Cursor<F, R> ms(Function<? super S, ? extends R> mapper) {
-        List<Join<F, R>> result = data.stream()
-                .map(join -> new Join<>(join.first(), mapper.apply(join.second())))
+        List<Join<F, R>> result = (List<Join<F, R>>) (List<?>) data.stream()
+                .map(join -> join.ms(mapper))
                 .collect(Collectors.toList());
         return new ListBackedCursor<>(result);
     }
@@ -81,7 +83,7 @@ public class ListBackedCursor<F, S> implements DSEL_Cursor<F, S> {
 
     @Override
     public DSEL_Cursor<F, S> print(int count) {
-        data.stream().limit(count).forEach(System.out::println);
+        data.stream().limit(Math.max(0, count)).forEach(System.out::println);
         return this;
     }
 
