@@ -10,10 +10,9 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-public class ListBackedCursor<F, S> implements DSEL_Cursor<F, S> { // Added <F,S> for clarity
-    // Underlying data store; effectively final after construction or private modification
+public class ListBackedCursor<F, S> implements DSEL_Cursor<F, S> {
     private List<Join<F, S>> data;
-    private int cursorPosition; // For emulating head/tail without list modification for performance
+    private int cursorPosition;
 
     public ListBackedCursor(List<Join<F, S>> data) {
         this.data = Objects.requireNonNull(data, "Data list cannot be null.");
@@ -43,29 +42,35 @@ public class ListBackedCursor<F, S> implements DSEL_Cursor<F, S> { // Added <F,S
     }
 
     @Override
-    public Join<F, S> head() {
-        if (isEmpty()) {
-            throw new java.util.NoSuchElementException("Cursor is empty or past the end.");
+    public Join<F, S> head(int index) {
+        int targetPosition = cursorPosition + index;
+        if (targetPosition < cursorPosition || targetPosition >= data.size()) {
+            throw new IndexOutOfBoundsException("Index " + index + " is out of bounds for cursor at position " + cursorPosition + " with size " + (data.size() - cursorPosition));
         }
-        return data.get(cursorPosition);
+        return data.get(targetPosition);
     }
 
     @Override
-    public DSEL_Cursor<F, S> tail() {
-        if (isEmpty()) {
-            throw new java.util.NoSuchElementException("Cursor is empty.");
+    public DSEL_Cursor<F, S> tail(int count) {
+        if (count < 0) {
+            throw new IllegalArgumentException("Count for tail cannot be negative.");
         }
-        return new ListBackedCursor<>(new ArrayList<>(this.data), this.cursorPosition + 1);
+        int newPosition = cursorPosition + count + 1;  // +1 because tail is "after"
+        if (newPosition > data.size()) {
+            newPosition = data.size();  // Effectively an empty cursor
+        }
+        return new ListBackedCursor<>(this.data, newPosition);
     }
 
     @Override
-    public Stream<Join<F, S>> stream() {
-        return data.subList(cursorPosition, data.size()).stream();
-    }
-
-    @Override
-    public List<Join<F, S>> collect() {
-        return stream().collect(Collectors.toUnmodifiableList());
+    public void print(int i) {
+        System.out.println("Printing next " + i + " elements from cursor:");
+        List<Join<F, S>> toPrint = stream().limit(i).collect(Collectors.toList());
+        if (toPrint.isEmpty()) {
+            System.out.println("(No elements to print or cursor is empty)");
+        } else {
+            toPrint.forEach(join -> System.out.println(JoinOps.str(join)));
+        }
     }
 
     @Override
@@ -113,15 +118,26 @@ public class ListBackedCursor<F, S> implements DSEL_Cursor<F, S> { // Added <F,S
         return stream().iterator();
     }
 
-    // Enum for shorthand operations / factory methods as requested
-    public enum JoinOps {
-        ; // No instances for this utility enum
+    public Stream<Join<F, S>> stream() {
+        if (isEmpty()) {
+            return Stream.empty();
+        }
+        return data.subList(cursorPosition, data.size()).stream();
+    }
 
-        /**
-         * Shorthand for creating a new Join. Glyph: j
-         */
+    public List<Join<F, S>> toList() {
+        return stream().collect(Collectors.toUnmodifiableList());
+    }
+
+    public enum JoinOps {
+        ;
+
         public static <F, S> Join<F, S> j(F first, S second) {
             return new Join<>(first, second);
+        }
+
+        public static <F, S> String str(Join<F, S> join) {
+            return (join == null) ? "null" : join.first() + " :: " + join.second();
         }
     }
 }

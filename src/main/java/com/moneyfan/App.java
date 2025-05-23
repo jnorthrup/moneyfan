@@ -22,33 +22,33 @@ public class App {
         ListBackedCursor<String, Integer> cursor = ListBackedCursor.of(initialData);
 
         System.out.println("Original Cursor:");
-        cursor.toList().forEach(join -> System.out.println(join.first() + " -> " + join.second()));
+        cursor.toList().forEach(join -> System.out.println(JoinOps.str(join)));
 
         // Map first element (String to its length)
         ListBackedCursor<Integer, Integer> mappedFirst = cursor.mapFirst(String::length);
         System.out.println("\nCursor after mapFirst (string to length):");
-        mappedFirst.toList().forEach(s -> System.out.println("len:" + s.first() + ", val:" + s.second()));
+        mappedFirst.toList().forEach(join -> System.out.println(JoinOps.str(join)));
 
         // Map second element (Integer to String representation)
         ListBackedCursor<String, String> mappedSecond = cursor.mapSecond(val -> "Value: " + val);
         System.out.println("\nCursor after mapSecond (int to string):");
-        mappedSecond.toList().forEach(s -> System.out.println(s.first() + " -> " + s.second()));
+        mappedSecond.toList().forEach(join -> System.out.println(JoinOps.str(join)));
 
         // Swap elements
         ListBackedCursor<Integer, String> swapped = cursor.swap();
         System.out.println("\nCursor after swap:");
-        swapped.toList().forEach(s -> System.out.println(s.first() + " (was second) -> " + s.second() + " (was first)"));
+        swapped.toList().forEach(join -> System.out.println(JoinOps.str(join)));
 
         // Filter (e.g., only elements where second > 250)
         ListBackedCursor<String, Integer> filtered = cursor.filter(join -> join.second() > 250);
         System.out.println("\nCursor after filter (second > 250):");
-        filtered.toList().forEach(s -> System.out.println(s.first() + " -> " + s.second()));
+        filtered.toList().forEach(join -> System.out.println(JoinOps.str(join)));
 
         // Demonstrate head and tail (iterating through the cursor)
         System.out.println("\nIterating with head() and tail():");
         DSEL_Cursor<String, Integer> current = cursor;
         while (!current.isEmpty()) {
-            System.out.println("Head: " + current.head());
+            System.out.println("Head: " + JoinOps.str(current.head()));
             current = current.tail();
         }
     }
