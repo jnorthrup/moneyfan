@@ -16,8 +16,8 @@ public enum JoinOps {
     // --- Shorthand Unary Operators ---
 
     // SWap Pair elements
-    public static <F, S> UnaryOperator<Join<F, S>> swp() {
-        return j -> j.sw(); // Delegates to Join's own swap method
+    public static <F, S> Function<Join<F, S>, Join<S, F>> swp() { // Corrected: Use Function for type change (F,S -> S,F)
+        return Join::sw; // Using method reference for conciseness
     }
 
     // --- Shorthand Function-based Mappers ---
