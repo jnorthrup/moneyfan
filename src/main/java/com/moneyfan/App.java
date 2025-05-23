@@ -1,59 +1,55 @@
 package com.moneyfan;
 
-import com.moneyfan.dsel.DSEL;
 import com.moneyfan.dsel.DSEL_Cursor;
 import com.moneyfan.dsel.Join;
-import com.moneyfan.dsel.OpUtils;
+import com.moneyfan.dsel.ListBackedCursor;
 
+import java.util.Arrays;
 import java.util.List;
 
+/**
+ * Main application entry point for demonstrating the DSEL.
+ */
 public class App {
     public static void main(String[] args) {
-        System.out.println("MoneyFan DSEL Demo Start");
+        // Example usage for Join and ListBackedCursor
+        List<Join<String, Integer>> initialData = Arrays.asList(
+            JoinOps.j("Alpha", 100),
+            JoinOps.j("Beta", 200),
+            JoinOps.j("Gamma", 300),
+            JoinOps.j("Delta", 400)
+        );
+        ListBackedCursor<String, Integer> cursor = ListBackedCursor.of(initialData);
 
-        Join<String, Integer> j1 = Join.of("Alice", 30);
-        Join<String, Integer> j2 = Join.of("Bob", 25);
-        Join<String, Integer> j3 = Join.of("Charlie", 35);
-        Join<String, Integer> j4 = Join.of("David", 20);
+        System.out.println("Original Cursor:");
+        cursor.toList().forEach(join -> System.out.println(join.first() + " -> " + join.second()));
 
-        DSEL_Cursor<String, Integer> users = DSEL.INSTANCE.of(j1, j2, j3, j4);
-        System.out.println("Initial Users: " + users);
+        // Map first element (String to its length)
+        ListBackedCursor<Integer, Integer> mappedFirst = cursor.mapFirst(String::length);
+        System.out.println("\nCursor after mapFirst (string to length):");
+        mappedFirst.toList().forEach(s -> System.out.println("len:" + s.first() + ", val:" + s.second()));
 
-        // Shorthand mapFirst (mfst)
-        DSEL_Cursor<Integer, Integer> nameLengths = users.mfst(String::length);
-        System.out.println("Name Lengths to Age: " + nameLengths);
+        // Map second element (Integer to String representation)
+        ListBackedCursor<String, String> mappedSecond = cursor.mapSecond(val -> "Value: " + val);
+        System.out.println("\nCursor after mapSecond (int to string):");
+        mappedSecond.toList().forEach(s -> System.out.println(s.first() + " -> " + s.second()));
 
-        // Shorthand mapSecond (msnd)
-        DSEL_Cursor<String, String> userAgesStr = users.msnd(age -> "Age: " + age);
-        System.out.println("User Ages as String: " + userAgesStr);
+        // Swap elements
+        ListBackedCursor<Integer, String> swapped = cursor.swap();
+        System.out.println("\nCursor after swap:");
+        swapped.toList().forEach(s -> System.out.println(s.first() + " (was second) -> " + s.second() + " (was first)"));
 
-        // Shorthand filter (flt)
-        DSEL_Cursor<String, Integer> usersOver25 = users.flt(user -> user.second() > 25);
-        System.out.println("Users over 25: " + usersOver25);
+        // Filter (e.g., only elements where second > 250)
+        ListBackedCursor<String, Integer> filtered = cursor.filter(join -> join.second() > 250);
+        System.out.println("\nCursor after filter (second > 250):");
+        filtered.toList().forEach(s -> System.out.println(s.first() + " -> " + s.second()));
 
-        // Shorthand filterFirst (fltFst)
-        DSEL_Cursor<String, Integer> usersShortName = users.fltFst(name -> name.length() < 5);
-        System.out.println("Users with short names (<5 chars): " + usersShortName);
-
-        // Shorthand swap (swp)
-        DSEL_Cursor<Integer, String> ageToUser = users.swp();
-        System.out.println("Age to User: " + ageToUser);
-
-        // Chaining with shorthands
-        List<Join<Integer, String>> processed = DSEL.INSTANCE.of(
-                Join.of("Eve", 28), Join.of("Frank", 40), Join.of("Grace", 22), Join.of("Ivy", 33)
-            )
-            .fltSnd(age -> age >= 25) // filterSecond: keep users age 25+
-            .mbth( // mapBoth
-                name -> name.toUpperCase(),
-                age -> age * 2
-            )
-            .swp() // swap: Join<Integer, String> (age*2, NAME)
-            .fltFst(doubledAge -> doubledAge < 70) // filterFirst: keep if doubledAge < 70
-            .col(); // collect
-
-        System.out.println("Processed & Collected List:");
-        processed.forEach(System.out::println);
-        System.out.println("MoneyFan DSEL Demo End");
+        // Demonstrate head and tail (iterating through the cursor)
+        System.out.println("\nIterating with head() and tail():");
+        DSEL_Cursor<String, Integer> current = cursor;
+        while (!current.isEmpty()) {
+            System.out.println("Head: " + current.head());
+            current = current.tail();
+        }
     }
 }

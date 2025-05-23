@@ -2,100 +2,126 @@ package com.moneyfan.dsel;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Objects;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
-class ListBackedCursor<F, S> implements DSEL_Cursor<F, S> {
-    private final List<Join<F, S>> data;
+public class ListBackedCursor<F, S> implements DSEL_Cursor<F, S> { // Added <F,S> for clarity
+    // Underlying data store; effectively final after construction or private modification
+    private List<Join<F, S>> data;
+    private int cursorPosition; // For emulating head/tail without list modification for performance
 
     public ListBackedCursor(List<Join<F, S>> data) {
-        // Ensure internal list is unmodifiable and a copy is made if mutable list is passed.
-        this.data = Collections.unmodifiableList(new ArrayList<>(data));
+        this.data = Objects.requireNonNull(data, "Data list cannot be null.");
+        this.cursorPosition = 0;
+    }
+
+    private ListBackedCursor(List<Join<F, S>> data, int cursorPosition) {
+        this.data = data;
+        this.cursorPosition = cursorPosition;
+        if (this.data == null) {
+            throw new IllegalArgumentException("Data list cannot be null.");
+        }
+    }
+
+    public static <F, S> ListBackedCursor<F, S> of(List<Join<F, S>> list) {
+        return new ListBackedCursor<>(list);
+    }
+
+    @SafeVarargs
+    public static <F, S> ListBackedCursor<F, S> of(Join<F, S>... joins) {
+        return new ListBackedCursor<>(List.of(joins));
     }
 
     @Override
-    public <R> DSEL_Cursor<R, S> mapFirst(Function<? super F, ? extends R> mapper) {
-        List<Join<R, S>> newList = data.stream()
-            .map(join -> new Join<>(mapper.apply(join.first()), join.second()))
-            .collect(Collectors.toList());
-        return new ListBackedCursor<>(newList);
+    public boolean isEmpty() {
+        return cursorPosition >= data.size();
     }
 
     @Override
-    public <R> DSEL_Cursor<F, R> mapSecond(Function<? super S, ? extends R> mapper) {
-        List<Join<F, R>> newList = data.stream()
-            .map(join -> new Join<>(join.first(), mapper.apply(join.second())))
-            .collect(Collectors.toList());
-        return new ListBackedCursor<>(newList);
+    public Join<F, S> head() {
+        if (isEmpty()) {
+            throw new java.util.NoSuchElementException("Cursor is empty or past the end.");
+        }
+        return data.get(cursorPosition);
     }
 
     @Override
-    public <R1, R2> DSEL_Cursor<R1, R2> mapBoth(
-        Function<? super F, ? extends R1> firstMapper,
-        Function<? super S, ? extends R2> secondMapper) {
-        List<Join<R1, R2>> newList = data.stream()
-            .map(join -> new Join<>(firstMapper.apply(join.first()), secondMapper.apply(join.second())))
-            .collect(Collectors.toList());
-        return new ListBackedCursor<>(newList);
+    public DSEL_Cursor<F, S> tail() {
+        if (isEmpty()) {
+            throw new java.util.NoSuchElementException("Cursor is empty.");
+        }
+        return new ListBackedCursor<>(new ArrayList<>(this.data), this.cursorPosition + 1);
     }
 
     @Override
-    public DSEL_Cursor<S, F> swap() {
-        List<Join<S, F>> newList = data.stream()
-            .map(Join::swap)
-            .collect(Collectors.toList());
-        return new ListBackedCursor<>(newList);
+    public Stream<Join<F, S>> stream() {
+        return data.subList(cursorPosition, data.size()).stream();
     }
 
     @Override
-    public DSEL_Cursor<F, S> filter(Predicate<Join<F, S>> predicate) {
-        List<Join<F, S>> newList = data.stream()
-            .filter(predicate)
-            .collect(Collectors.toList());
-        return new ListBackedCursor<>(newList);
+    public List<Join<F, S>> collect() {
+        return stream().collect(Collectors.toUnmodifiableList());
     }
 
     @Override
-    public DSEL_Cursor<F, S> filterFirst(Predicate<? super F> predicate) {
-        return filter(join -> predicate.test(join.first()));
+    public <R> ListBackedCursor<R, S> mapFirst(Function<? super F, ? extends R> fn) {
+        List<Join<R, S>> mappedData = stream()
+                .map(join -> JoinOps.j(fn.apply(join.first()), join.second()))
+                .collect(Collectors.toList());
+        return new ListBackedCursor<>(mappedData);
     }
 
     @Override
-    public DSEL_Cursor<F, S> filterSecond(Predicate<? super S> predicate) {
-        return filter(join -> predicate.test(join.second()));
+    public <R> ListBackedCursor<F, R> mapSecond(Function<? super S, ? extends R> fn) {
+        List<Join<F, R>> mappedData = stream()
+                .map(join -> JoinOps.j(join.first(), fn.apply(join.second())))
+                .collect(Collectors.toList());
+        return new ListBackedCursor<>(mappedData);
     }
 
-    public List<Join<F, S>> toList() {
-        return data; // Already an immutable copy from constructor
+    @Override
+    public <R1, R2> ListBackedCursor<R1, R2> mapBoth(Function<? super F, ? extends R1> fn1, Function<? super S, ? extends R2> fn2) {
+        List<Join<R1, R2>> mappedData = stream()
+                .map(join -> JoinOps.j(fn1.apply(join.first()), fn2.apply(join.second())))
+                .collect(Collectors.toList());
+        return new ListBackedCursor<>(mappedData);
     }
 
-    /** Gets a list of all first elements. Addresses: {@code [60,50] cannot find symbol getFirst()}. */
-    public List<F> getFirsts() { // Renamed from getFirstColumn for clarity
-        return data.stream()
-                   .map(Join::first) // Line 60: Uses record accessor `first()`.
-                    .collect(Collectors.toList());
+    @Override
+    public ListBackedCursor<S, F> swap() {
+        List<Join<S, F>> swappedData = stream()
+                .map(join -> JoinOps.j(join.second(), join.first()))
+                .collect(Collectors.toList());
+        return new ListBackedCursor<>(swappedData);
     }
 
-    /** Gets a list of all second elements. Addresses: {@code [65,50] cannot find symbol getSecond()}. */
-    public List<S> getSeconds() { // Renamed from getSecondColumn for clarity
-        return data.stream()
-                   .map(Join::second) // Line 65: Uses record accessor `second()`.
-                    .collect(Collectors.toList());
+    @Override
+    public ListBackedCursor<F, S> filter(Predicate<? super Join<F, S>> predicate) {
+        List<Join<F, S>> filteredData = stream()
+                .filter(predicate)
+                .collect(Collectors.toList());
+        return new ListBackedCursor<>(filteredData);
     }
 
-    // Glyphs (shorthands) as per request - examples
-    /** Glyph for {@link #mapFirst(Function)}. */
-    public <R> ListBackedCursor<R, S> mF(Function<? super F, ? extends R> fn) { return mapFirst(fn); }
-    /** Glyph for {@link #mapSecond(Function)}. */
-    public <R> ListBackedCursor<F, R> mS(Function<? super S, ? extends R> fn) { return mapSecond(fn); }
-    /** Glyph for {@link #swap()}. */
-    public ListBackedCursor<S, F> swA() { return swap(); }
-    /** Glyph for {@link #mapBoth(Function, Function)}. */
-    public <R1, R2> ListBackedCursor<R1, R2> mJ(Function<? super Join<F, S>, ? extends Join<R1, R2>> fn) { return mapBoth(fn); }
-    /** Glyph for {@link #getFirsts()}. */
-    public List<F> fL() { return getFirsts(); } // Firsts List
-    /** Glyph for {@link #getSeconds()}. */
-    public List<S> sL() { return getSeconds(); } // Seconds List
+    @Override
+    public Iterator<Join<F, S>> iterator() {
+        return stream().iterator();
+    }
+
+    // Enum for shorthand operations / factory methods as requested
+    public enum JoinOps {
+        ; // No instances for this utility enum
+
+        /**
+         * Shorthand for creating a new Join. Glyph: j
+         */
+        public static <F, S> Join<F, S> j(F first, S second) {
+            return new Join<>(first, second);
+        }
+    }
 }
