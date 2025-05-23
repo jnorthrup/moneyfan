@@ -2,7 +2,7 @@ package com.moneyfan.dsel;
 
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
-import static com.moneyfan.dsel.JoinOps.cj; // Static import for JoinOps.cj
+import static com.moneyfan.dsel.JoinOps.cj;
 
 import java.util.Arrays;
 import java.util.Collections;
