@@ -1,47 +1,18 @@
-package com.moneyfan.dsel;
-
-public interface Join<F, S> {
-    F first();
-
-    S second();
-
-    /**
-     * Static factory method to create an immutable Join instance.
-     * This provides a simple, insulated entry point without exposing the core class.
-     */
-    static <F, S> Join<F, S> of(F first, S second) {
-        return new jrec<>(first, second);  // Delegates to a simple implementation
-    }
+/**
+ * An immutable 2-ary tuple record.
+ *
+ * @param <F> the type of the first element
+ * @param <S> the type of the second element
+ */
+public record Join<F, S>(F first, S second) {
 
     /**
-     * Static factory method to create an immutable Join instance.
-     * This provides a simple, insulated entry point without exposing the core class.
+     * Swaps the elements of the tuple.
+     * @return a new Join with the elements swapped.
      */
-    record jrec<F, S>(F f, S s) implements Join<F, S> {
-        @Override
-        public F first() {
-            return f;
-        }
-
-        @Override
-        public S second() {
-            return s;
-        }
+    public Join<S, F> swap() {
+        return new Join<>(second, first);
     }
 
-    /**
-     * just in case those records need a benchmark
-     */
-    static <F, S> Join<F, S> lite(F f, S s) {
-        return new Join<>() {
-            @Override
-            public F first() {
-                return f;
-            }
-
-            public S second() {
-                return s;
-            }
-        };
-    }
+    public static <FT, ST> Join<FT, ST> j(FT first, ST second) { return new Join<>(first, second); }
 }
