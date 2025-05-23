@@ -3,36 +3,32 @@ package com.moneyfan.dsel;
 import java.util.function.Function;
 
 /**
- * Enum housing common operations or acting as singletons for logic.
- * This demonstrates the "enums for bags of code elements" concept.
+ * DSEL operations, potentially housed in an enum as per style guide.
+ * This enum can serve as a collection of utility functions or operator singletons.
  */
 public enum DselOps {
-    // Example: An operation that might be used in a groupBy or key extraction
-    IDENTITY_KEY_EXTRACTOR {
-        // This could be a Function<T, T> if T is the key itself
-        public <T> Function<T, T> asKey() {
-            return t -> t;
-        };
-    },
-
-    // The original SWAP_JOIN is a good example of an operation on a Join
-    // However, join.swap() is often more direct.
-    // This enum form is useful if you want to pass the *operation itself* around.
-    SWAP_JOIN {
-        public <F, S> Function<Join<F, S>, Join<S, F>> asFunction() {
-            return Join::swap;
-        }
-
-        // Direct application if preferred for some contexts
-        public <F, S> Join<S, F> apply(Join<F, S> join) {
-            return join.swap();
-        }
-    };
+    SWAP_OPERATION; // Example enum constant for grouping or representing operations
 
     /**
-     * Enum constants can provide methods that return specific functional interfaces
-     * or perform direct actions. This is more flexible than a single abstract method.
+     * Provides a function that swaps elements in a Join.
+     * This demonstrates using the instance method reference from the Join record.
+     * This addresses error: /Users/jim/work/moneyfan/src/main/java/com/moneyfan/dsel/DselOps.java:[23,20] invalid method reference
      */
-    // Example of a more specific abstract method if all ops shared a very common signature:
-    // public abstract <T, R> Function<T, R> getMapper();
+    public static <F, S> Function<Join<F, S>, Join<S, F>> getSwapFunction() {
+        // Assuming line 23 was: Function<Join<F,S>, Join<S,F>> s = Join::swap;
+        // With Join record's instance swap(), Join::swap is a valid method reference.
+        return Join::swap;
+    }
+
+    /**
+     * Directly swaps elements in a given Join instance using its swap method.
+     * This addresses error: /Users/jim/work/moneyfan/src/main/java/com/moneyfan/dsel/DselOps.java:[28,24] cannot find symbol swap()
+     */
+    public static <F, S> Join<S, F> performSwap(Join<F, S> join) {
+        // Assuming line 28 was: Join<S,F> swapped = join.swap();
+        // With Join record's instance swap(), this is a valid call.
+        return join.swap();
+    }
+
+    // Other DSEL operations can be added here.
 }
