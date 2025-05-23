@@ -14,29 +14,27 @@ class ListBackedCursor<F, S> implements DSEL_Cursor<F, S> {
         // Ensure internal list is unmodifiable and a copy is made if mutable list is passed.
         this.data = Collections.unmodifiableList(new ArrayList<>(data));
     }
+@Override
+public <R> DSEL_Cursor<R, S> mapFirst(Function<? super F, ? extends R> mapper) {
+    List<Join<R, S>> newData = data.stream()
+        .map(join -> new Join<>(mapper.apply(join.first()), join.second()))
+        .toList();
+    return new ListBackedCursor<>(newData);
+}
 
-    @Override
-    public <R> DSEL_Cursor<R, S> mapFirst(Function<? super F, ? extends R> mapper) {
-        List<Join<R, S>> newData = data.stream()
-            .map(join -> new Join<>(mapper.apply(join.getFirst()), join.getSecond()))
-            .collect(Collectors.toList());
-        return new ListBackedCursor<>(newData);
-    }
-
-    @Override
-    public <R> DSEL_Cursor<F, R> mapSecond(Function<? super S, ? extends R> mapper) {
-        List<Join<F, R>> newData = data.stream()
-            .map(join -> new Join<>(join.getFirst(), mapper.apply(join.getSecond())))
-            .collect(Collectors.toList());
-        return new ListBackedCursor<>(newData);
-    }
-
+@Override
+public <R> DSEL_Cursor<F, R> mapSecond(Function<? super S, ? extends R> mapper) {
+    List<Join<F, R>> newData = data.stream()
+        .map(join -> new Join<>(join.first(), mapper.apply(join.second())))
+        .toList();
+    return new ListBackedCursor<>(newData);
+}
     @Override
     public <R1, R2> DSEL_Cursor<R1, R2> mapBoth(
         Function<? super F, ? extends R1> firstMapper,
         Function<? super S, ? extends R2> secondMapper) {
         List<Join<R1, R2>> newData = data.stream()
-            .map(join -> new Join<>(firstMapper.apply(join.getFirst()), secondMapper.apply(join.getSecond())))
+            .map(join -> new Join<>(firstMapper.apply(join.first()), secondMapper.apply(join.second())))
             .collect(Collectors.toList());
         return new ListBackedCursor<>(newData);
     }
