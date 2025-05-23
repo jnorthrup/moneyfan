@@ -111,7 +111,7 @@ public class Simulator {
             if (side == SimOrder.OrderSide.BUY && orderPrice >= low) {
                 fillPrice = Math.min(orderPrice, currentClose);
                 filled = true;
-            } else if (side == SimOrder.OrderSide.SELL && orderPrice <= high) {
+            } else if (side == SimOrder.OrderSide.SELL && orderPrice <= high) { // FIXED: Changed SimOrder.OrderType.SELL to SimOrder.OrderSide.SELL
                 fillPrice = Math.max(orderPrice, currentClose);
                 filled = true;
             }

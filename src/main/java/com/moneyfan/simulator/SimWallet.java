@@ -3,7 +3,7 @@ package com.moneyfan.simulator;
 import com.moneyfan.dsel.D;
 import com.moneyfan.dsel.core.Join;
 import com.moneyfan.simulator.model.AssetKey;
-import com.moneyfan.simulator.model.SimOrder;
+import com.moneyfan.simulator.model.SimOrder; // FIXED: Added import
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -65,12 +65,14 @@ public class SimWallet {
             if(entry.getKey().quoteAsset().equals(referenceQuoteAsset.baseAsset())) {
                 totalValue += entry.getValue();
             } else {
+                // FIXED: Changed AssetKey.of call to concatenate strings
                 AssetKey conversionPair = AssetKey.of(entry.getKey().quoteAsset() + "/" + referenceQuoteAsset.baseAsset());
                 totalValue += entry.getValue() * currentPrices.getOrDefault(conversionPair, 0.0);
             }
         }
         for(Map.Entry<AssetKey, Double> entry : baseBalances.entrySet()){
             AssetKey pair = entry.getKey();
+            // FIXED: Changed AssetKey.of call to concatenate strings
             AssetKey conversionPair = AssetKey.of(pair.baseAsset() + "/" + referenceQuoteAsset.baseAsset());
             totalValue += entry.getValue() * currentPrices.getOrDefault(conversionPair, 0.0);
         }
