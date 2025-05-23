@@ -22,15 +22,15 @@ public class ListBackedCursor<F, S> implements DSEL_Cursor<F, S> {
     @Override
     public <R> DSEL_Cursor<R, S> mf(Function<? super F, ? extends R> mapper) {
         List<Join<R, S>> result = data.stream()
-                .map(join -> join.mf(mapper))
+                .map(join -> new Join<>(mapper.apply(join.first()), join.second())) // Reverted to explicit Join creation to help type inference
                 .collect(Collectors.toList());
         return new ListBackedCursor<>(result);
     }
-
+    
     @Override
     public <R> DSEL_Cursor<F, R> ms(Function<? super S, ? extends R> mapper) {
         List<Join<F, R>> result = data.stream()
-                .map(join -> join.ms(mapper))
+                .map(join -> new Join<>(join.first(), mapper.apply(join.second()))) // Reverted to explicit Join creation to help type inference
                 .collect(Collectors.toList());
         return new ListBackedCursor<>(result);
     }
