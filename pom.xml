@@ -4,77 +4,36 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>com.yourdomain</groupId> <!-- Replace with your actual domain/group -->
-    <artifactId>dsel-bbcursive-parent</artifactId>
-    <version>1.0-SNAPSHOT</version>
-    <packaging>pom</packaging>
+    <parent>
+        <groupId>com.yourdomain</groupId>
+        <artifactId>dsel-bbcursive-parent</artifactId>
+        <version>1.0-SNAPSHOT</version>
+    </parent>
 
-    <name>DSEL-BBCursive Parent</name>
-    <description>Parent project for bbcursive (ByteBuffer parsing library) and bikeshed (Data Science Expression Language).</description>
+    <artifactId>bbcursive</artifactId>
+    <packaging>jar</packaging>
 
-    <properties>
-        <java.version>17</java.version> <!-- Or your preferred Java version (11+ for DSEL's lambdas) -->
-        <maven.compiler.source>${java.version}</maven.compiler.source>
-        <maven.compiler.target>${java.version}</maven.compiler.target>
-        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <junit.jupiter.version>5.9.2</junit.jupiter.version> <!-- For JUnit 5 -->
-    </properties>
+    <name>bbcursive - ByteBuffer Parsing Combinator Library</name>
+    <description>A minimal, modern, zero-copy ByteBuffer parsing combinator library.</description>
 
-    <modules>
-        <module>bbcursive</module>
-        <module>bikeshed</module>
-    </modules>
+    <dependencies>
+        <!-- JetBrains annotations (managed by parent) -->
+        <dependency>
+            <groupId>org.jetbrains</groupId>
+            <artifactId>annotations</artifactId>
+        </dependency>
 
-    <dependencyManagement>
-        <dependencies>
-            <!-- JUnit 5 for testing -->
-            <dependency>
-                <groupId>org.junit.jupiter</groupId>
-                <artifactId>junit-jupiter-api</artifactId>
-                <version>${junit.jupiter.version}</version>
-                <scope>test</scope>
-            </dependency>
-            <dependency>
-                <groupId>org.junit.jupiter</groupId>
-                <artifactId>junit-jupiter-engine</artifactId>
-                <version>${junit.jupiter.version}</version>
-                <scope>test</scope>
-            </dependency>
-            <dependency>
-                <groupId>org.junit.jupiter</groupId>
-                <artifactId>junit-jupiter-params</artifactId>
-                <version>${junit.jupiter.version}</version>
-                <scope>test</scope>
-            </dependency>
-             <!-- Optional: JetBrains annotations for @NotNull, @Nullable if used -->
-            <dependency>
-                <groupId>org.jetbrains</groupId>
-                <artifactId>annotations</artifactId>
-                <version>23.0.0</version> <!-- Check for latest version -->
-                <scope>compile</scope> <!-- Or provided if you don't want it in final jar -->
-            </dependency>
-        </dependencies>
-    </dependencyManagement>
-
-    <build>
-        <pluginManagement>
-            <plugins>
-                <plugin>
-                    <groupId>org.apache.maven.plugins</groupId>
-                    <artifactId>maven-compiler-plugin</artifactId>
-                    <version>3.10.1</version>
-                    <configuration>
-                        <source>${java.version}</source>
-                        <target>${java.version}</target>
-                    </configuration>
-                </plugin>
-                <plugin>
-                    <groupId>org.apache.maven.plugins</groupId>
-                    <artifactId>maven-surefire-plugin</artifactId>
-                    <version>3.0.0-M7</version>
-                </plugin>
-            </plugins>
-        </pluginManagement>
-    </build>
+        <!-- JUnit 5 for testing (managed by parent) -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-api</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-engine</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
 
 </project>
