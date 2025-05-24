@@ -404,6 +404,29 @@ public enum D {
     public static String colName(RowVec rv, int colIdx) { return rowVecGetColName(rv,colIdx); }
     public static TypeMemento colType(RowVec rv, int colIdx) { return rowVecGetColType(rv,colIdx); }
 
+    // New overloaded methods for RowVec by column name
+    public static Object get(RowVec rv, String colName) {
+        Objects.requireNonNull(rv, "RowVec cannot be null");
+        Objects.requireNonNull(colName, "Column name cannot be null");
+        for (int i = 0; i < sz(rv); i++) {
+            if (colName.equals(colName(rv, i))) {
+                return get(rv, i);
+            }
+        }
+        throw new IllegalArgumentException("Column '" + colName + "' not found in RowVec.");
+    }
+
+    public static TypeMemento colType(RowVec rv, String colName) {
+        Objects.requireNonNull(rv, "RowVec cannot be null");
+        Objects.requireNonNull(colName, "Column name cannot be null");
+        for (int i = 0; i < sz(rv); i++) {
+            if (colName.equals(colName(rv, i))) {
+                return colType(rv, i);
+            }
+        }
+        throw new IllegalArgumentException("Column '" + colName + "' not found in RowVec.");
+    }
+
 
     // --- Cursor Operations ---
     public static RowVec cursorGetRow(Cursor c, int rowIdx) { return get(c, rowIdx); }
@@ -804,9 +827,11 @@ public enum D {
                 Object typedValue;
                 try {
                      typedValue = convertCsvStringToTypedValue(csvStrValue, cm.s());
-                } catch (Exception e) {
-                    // System.err.println("Warning: Could not convert '" + csvStrValue + "' to " + cm.s().getTypeName() + " for col " + cm.f() + " line " + (i+1) + ". Using raw string. Error: " + e.getMessage());
-                    typedValue = csvStrValue; // Fallback to raw string if conversion fails
+                } catch (IllegalArgumentException e) { // Catch specific parsing errors
+                    // If conversion fails for a non-string type, treat as null.
+                    // If it's a string type, convertCsvStringToTypedValue would have returned the original string.
+                    System.err.println("Warning: Could not convert '" + csvStrValue + "' to " + cm.s().getTypeName() + " for col " + cm.f() + " line " + (i+1) + ". Using null. Error: " + e.getMessage());
+                    typedValue = null;
                 }
                 Supplier<ColumnMeta> cmSupplier = () -> cm;
                 return jn(typedValue, cmSupplier);
@@ -877,21 +902,18 @@ public enum D {
     }
 
     private static Object convertCsvStringToTypedValue(String csvValue, TypeMemento targetType) {
-        String trimmedCsvValue = (csvValue == null) ? "" : csvValue.trim(); // Handle null csvValue
-
-        if (trimmedCsvValue.isEmpty()) {
-            // How to represent empty for different types?
-            // For numbers, could be 0 or throw error. For boolean, false. For String, empty string.
-            // For ISAM, nulls are often represented by specific patterns (all zeros, specific sentinel).
-            // Here, let's be simple: if it's empty, it's "null-equivalent" for non-string types.
-            String typeName = targetType.getTypeName();
-            if (TypeMemento.Basic.STRING.getTypeName().equals(typeName)) return "";
-            if (TypeMemento.Basic.BOOLEAN.getTypeName().equals(typeName)) return false; // Default for empty
-            // For numeric types, parsing "" will fail. ISAM writeValueToBuffer handles null by writing zeros.
-            return null; 
-        }
+        String trimmedCsvValue = (csvValue == null) ? "" : csvValue.trim();
 
         String typeName = targetType.getTypeName();
+
+        if (trimmedCsvValue.isEmpty()) {
+            if (TypeMemento.Basic.STRING.getTypeName().equals(typeName)) return "";
+            if (TypeMemento.Basic.BOOLEAN.getTypeName().equals(typeName)) return false; // Default for empty
+            // For numeric, char, binary types, an empty string means no value, so return null.
+            // writeValueToBuffer will handle null by writing zeros.
+            return null;
+        }
+
         try {
             if (TypeMemento.Basic.STRING.getTypeName().equals(typeName)) {
                 return csvValue; // Keep original for string, not trimmed, as spaces might be intentional
@@ -922,6 +944,10 @@ public enum D {
                 throw new IllegalArgumentException("Unsupported type for CSV conversion: " + targetType.getTypeName());
             }
         } catch (NumberFormatException e) {
+            // For numeric types, if parsing fails, it's an invalid value.
+            // For CHAR, if length is not 1, it's an invalid value.
+            // For BINARY_BLOB, if not base64, it's invalid.
+            // These should throw IllegalArgumentException.
             throw new IllegalArgumentException("Cannot parse '" + trimmedCsvValue + "' as " + targetType.getTypeName(), e);
         }
     }
