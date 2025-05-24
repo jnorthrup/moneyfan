@@ -59,10 +59,16 @@
                     <configuration>
                         <source>${maven.compiler.source}</source>
                         <target>${maven.compiler.target}</target>
-                        <!-- Enable preview features if using a newer Java version and features -->
-                        <!-- <compilerArgs>
+                        <!--
+                            Uncomment the <compilerArgs> block below to enable Java preview features.
+                            Ensure your Maven compiler source/target is set to a Java version
+                            that supports preview features (e.g., 17, 18, 19 with --enable-preview).
+                        -->
+                        <!--
+                        <compilerArgs>
                             <arg>--enable-preview</arg>
-                        </compilerArgs> -->
+                        </compilerArgs>
+                        -->
                     </configuration>
                 </plugin>
                 <plugin>
@@ -70,8 +76,12 @@
                     <artifactId>maven-surefire-plugin</artifactId>
                     <version>3.1.2</version>
                     <configuration>
-                        <!-- Enable preview features for tests if needed -->
-                        <!-- <argLine>--enable-preview</argLine> -->
+                        <!--
+                            Uncomment the <argLine> below to enable Java preview features for tests.
+                        -->
+                        <!--
+                        <argLine>--enable-preview</argLine>
+                        -->
                     </configuration>
                 </plugin>
             </plugins>
