@@ -1,0 +1,5 @@
+IntCol,LongCol,DoubleCol,BoolCol,StringCol,CharCol
+10,10000000000,3.14,true,"Hello, World!",A
+20,20000000000,6.28,false,"Test ""Quotes""",B
+, , , ,"",  // Empty and null-like values
+-5,-50000,0.0,TRUE," Special Chars: @#$ ",C
