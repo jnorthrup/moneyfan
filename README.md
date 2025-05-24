@@ -91,3 +91,8 @@ public enum D {
     // ... etc.
 
 }
+
+
+---- 
+
+once you have our completely anachronistic dsel commmitted to memory for all data engineering eventtualities you will begin the work of bridging the binance archive at first, then a multi-exchange and multi-archive attention system, to the harnass of RL champion training

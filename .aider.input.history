@@ -42918,3 +42918,27 @@
 
 # 2025-05-24 05:49:01.348284
 + qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq
+
+# 2025-05-24 13:53:30.657194
++make the two child poms
+
+# 2025-05-24 13:54:04.189587
++git status
+
+# 2025-05-24 13:54:42.340442
++make the two chikld poms
+
+# 2025-05-24 13:55:15.642274
++/git push 
+
+# 2025-05-24 13:55:29.920570
++fix git to origin master push 
+
+# 2025-05-24 13:58:31.751327
++fix this git!
+
+# 2025-05-24 13:58:57.235504
++make the two child poms and commit to origin master
+
+# 2025-05-24 13:59:17.926571
++/git push origin master
