@@ -1,25 +1,32 @@
 package com.yourdomain.bikeshed.core;
 
-import com.yourdomain.bikeshed.type.ColumnMeta;
-import org.jetbrains.annotations.NotNull;
-
-import java.util.List;
+import com.yourdomain.bikeshed.types.ColumnMeta;
+import java.util.Objects;
+import java.util.function.Function;
+import java.util.function.IntFunction;
 import java.util.function.Supplier;
 
-/**
- * Represents a row of data, where each element is a {@link Join} of a value and a
- * {@link Supplier} for its {@link ColumnMeta}. This allows for lazy retrieval of metadata.
- *
- * In Kotlin: `typealias RowVec = Series<Join<Any?, () -> ColumnMeta>>`
- */
-public interface RowVec extends Series<Join<Object, Supplier<ColumnMeta>>> {
+public class RowVec extends Series<Join<Object, Supplier<ColumnMeta>>> {
+    public RowVec(int size, IntFunction<Join<Object, Supplier<ColumnMeta>>> provider) {
+        super(size, provider);
+    }
 
-    /**
-     * Factory method to create a RowVec from a list of value-metadata pairs.
-     * @param valuesAndMeta A list of Join instances, each containing a value and its ColumnMeta supplier.
-     * @return A new RowVec instance.
-     */
-    static @NotNull RowVec of(@NotNull List<Join<Object, Supplier<ColumnMeta>>> valuesAndMeta) {
-        return Series.of(valuesAndMeta.size(), valuesAndMeta::get);
+    @SafeVarargs
+    public static RowVec of(Join<Object, Supplier<ColumnMeta>>... valuesAndMeta) {
+        Objects.requireNonNull(valuesAndMeta, "valuesAndMeta array must not be null");
+        return new RowVec(valuesAndMeta.length, i -> valuesAndMeta[i]);
+    }
+
+    public Object getValue(int index) {
+        return get(index).first();
+    }
+
+    public ColumnMeta getMeta(int index) {
+        return get(index).second().get();
+    }
+
+    public <R> Series<R> mapValues(Function<Object, R> mapper) {
+        Objects.requireNonNull(mapper, "mapper must not be null");
+        return this.map(join -> mapper.apply(join.first()));
     }
 }
