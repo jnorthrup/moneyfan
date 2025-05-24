@@ -1,5 +1,0 @@
-Name,Age,Active,Score
-Alice,30,true,
-Bob,,false,95.5
-Charlie,25,true,70
-,0,FALSE,0.0  // Test explicit empty and zero for comparison
