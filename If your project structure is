@@ -1,0 +1,6 @@
+moneyfan/
+├── pom.xml (dsel-bbcursive-parent)
+├── bbcursive/
+│   └── pom.xml
+└── bikeshed/
+    └── pom.xml
