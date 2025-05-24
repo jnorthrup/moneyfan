@@ -1,135 +1,48 @@
 package com.yourdomain.bikeshed.core;
 
-import org.jetbrains.annotations.NotNull;
-
 import java.util.Objects;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 
-/**
- * The foundational immutable 2-tuple primitive for the DSEL.
- * All operations on Join or its derived types must produce new instances.
- *
- * @param <F> The type of the first element.
- * @param <S> The type of the second element.
- */
-public interface Join<F, S> {
+public record Join<F, S>(F first, S second) {
 
-    /**
-     * Returns the first element of this Join.
-     * @return The first element.
-     */
-    F fst();
-
-    /**
-     * Returns the second element of this Join.
-     * @return The second element.
-     */
-    S snd();
-
-    /**
-     * Factory method to create a new Join instance.
-     *
-     * @param f The first element.
-     * @param s The second element.
-     * @param <F> The type of the first element.
-     * @param <S> The type of the second element.
-     * @return A new immutable Join instance.
-     */
-    static <F, S> @NotNull Join<F, S> of(F f, S s) {
-        return new ImmutableJoin<>(f, s);
+    public static <F, S> Join<F, S> of(F f, S s) {
+        return new Join<>(f, s);
     }
 
-    /**
-     * Applies a function to the first element, producing a new Join instance.
-     *
-     * @param mapper The function to apply to the first element.
-     * @param <R> The new type of the first element.
-     * @return A new Join instance with the transformed first element.
-     */
-    default <R> @NotNull Join<R, S> mapFst(@NotNull Function<F, R> mapper) {
-        return Join.of(mapper.apply(fst()), snd());
+    public <R> Join<R, S> mapFst(Function<? super F, ? extends R> mapper) {
+        Objects.requireNonNull(mapper, "mapper must not be null");
+        return new Join<>(mapper.apply(first), second);
     }
 
-    /**
-     * Applies a function to the second element, producing a new Join instance.
-     *
-     * @param mapper The function to apply to the second element.
-     * @param <R> The new type of the second element.
-     * @return A new Join instance with the transformed second element.
-     */
-    default <R> @NotNull Join<F, R> mapSnd(@NotNull Function<S, R> mapper) {
-        return Join.of(fst(), mapper.apply(snd()));
+    public <R> Join<F, R> mapSnd(Function<? super S, ? extends R> mapper) {
+        Objects.requireNonNull(mapper, "mapper must not be null");
+        return new Join<>(first, mapper.apply(second));
     }
 
-    /**
-     * Applies two functions to both elements, producing a new Join instance.
-     *
-     * @param fstMapper The function to apply to the first element.
-     * @param sndMapper The function to apply to the second element.
-     * @param <R1> The new type of the first element.
-     * @param <R2> The new type of the second element.
-     * @return A new Join instance with both elements transformed.
-     */
-    default <R1, R2> @NotNull Join<R1, R2> mapBoth(@NotNull Function<F, R1> fstMapper, @NotNull Function<S, R2> sndMapper) {
-        return Join.of(fstMapper.apply(fst()), sndMapper.apply(snd()));
+    public <R1, R2> Join<R1, R2> mapBoth(Function<? super F, ? extends R1> fstMapper, Function<? super S, ? extends R2> sndMapper) {
+        Objects.requireNonNull(fstMapper, "fstMapper must not be null");
+        Objects.requireNonNull(sndMapper, "sndMapper must not be null");
+        return new Join<>(fstMapper.apply(first), sndMapper.apply(second));
     }
 
-    /**
-     * Swaps the positions of the two elements, producing a new Join instance.
-     *
-     * @return A new Join instance with elements swapped.
-     */
-    default @NotNull Join<S, F> swap() {
-        return Join.of(snd(), fst());
+    public Join<S, F> swap() {
+        return new Join<>(second, first);
     }
 
-    /**
-     * Applies a function to both elements to produce a single result.
-     * @param mapper The function to combine both elements.
-     * @param <R> The type of the combined result.
-     * @return The result of applying the mapper to both elements.
-     */
-    default <R> @NotNull R combine(@NotNull BiFunction<F, S, R> mapper) {
-        return mapper.apply(fst(), snd());
+    public <F2, S2> Join<Join<F, S>, Join<F2, S2>> plus(Join<F2, S2> other) {
+        Objects.requireNonNull(other, "other Join must not be null");
+        return Join.of(this, other);
     }
 
-    // Inner class for the immutable implementation
-    final class ImmutableJoin<F, S> implements Join<F, S> {
-        private final F fst;
-        private final S snd;
+    public Object get(int index) {
+        if (index == 0) return first;
+        if (index == 1) return second;
+        throw new IndexOutOfBoundsException("Index " + index + " out of bounds for Join (0-1)");
+    }
 
-        private ImmutableJoin(F fst, S snd) {
-            this.fst = fst;
-            this.snd = snd;
-        }
-
-        @Override
-        public F fst() {
-            return fst;
-        }
-
-        @Override
-        public S snd() {
-            return snd;
-        }
-
-        @Override
-        public String toString() {
-            return "(" + fst + ", " + snd + ")";
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            ImmutableJoin<?, ?> that = (ImmutableJoin<?, ?>) o;
-            return Objects.equals(fst, that.fst) && Objects.equals(snd, that.snd);
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(fst, snd);
-        }
+    public <R> R map(BiFunction<? super F, ? super S, ? extends R> mapper) {
+        Objects.requireNonNull(mapper, "mapper must not be null");
+        return mapper.apply(first, second);
     }
 }

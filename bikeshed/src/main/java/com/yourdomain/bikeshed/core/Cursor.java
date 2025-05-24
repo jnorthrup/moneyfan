@@ -100,7 +100,7 @@ public interface Cursor extends Series<RowVec> {
      * @param rowPredicate The predicate to filter RowVecs.
      * @return A new Cursor containing only rows that satisfy the predicate.
      */
-    default @NotNull Cursor filterRows(@NotNull java.util.function.Predicate<RowVec> rowPredicate) {
+    default @NotNull Cursor filterRows(@NotNull Predicate<RowVec> rowPredicate) {
         return this.filter(rowPredicate);
     }
 }
