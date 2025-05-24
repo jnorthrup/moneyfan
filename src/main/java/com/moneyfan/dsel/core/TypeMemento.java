@@ -47,7 +47,8 @@ public interface TypeMemento {
         private final String typeName;
         private final int fixedSize;
 
-        CustomType(String typeName, int fixedSize) {
+        // Make the constructor public
+        public CustomType(String typeName, int fixedSize) {
             this.typeName = Objects.requireNonNull(typeName);
             this.fixedSize = fixedSize;
         }
