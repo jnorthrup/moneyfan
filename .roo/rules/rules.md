@@ -61,10 +61,10 @@ Address the following requirements for a concurrent trading simulator, demonstra
 
 ```java
 // Example structure for D.java
-package com.yourdomain.bikeshed.dsel;
+package com.vsiwest.bikeshed.dsel;
 
-import com.yourdomain.bikeshed.core.Join;
-import com.yourdomain.bikeshed.core.Series;
+import com.vsiwest.bikeshed.core.Join;
+import com.vsiwest.bikeshed.core.Series;
 // ... other necessary imports
 
 public enum D {
