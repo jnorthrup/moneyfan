@@ -5,19 +5,13 @@ import com.vsiwest.moneyfan.bikeshed.core.Series;
 import java.util.function.Function;
 import java.util.function.IntFunction;
 import java.util.function.Predicate;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-import java.util.List;
 
 /**
- * DSEL-specific extension of the core Series interface.
- * This class provides a concrete implementation of the Series interface
- * and can be used as the return type for DSEL operations that produce Series.
- * It delegates most of its functionality to the core Series implementation.
- *
- * @param <T> The type of elements in the series.
+ * DSEL-specific `Series` providing additional convenience methods and adhering
+ * to the `bbcursive` DSEL's philosophy.
+ * It is effectively an alias for {@link com.vsiwest.moneyfan.bikeshed.core.Series}.
  */
-public class Series<T> extends com.vsiwest.moneyfan.bikeshed.core.Series.SeriesImpl<T> {
+public class Series<T> extends com.vsiwest.moneyfan.bikeshed.core.Series.ImmutableSeries<T> {
 
     protected Series(Integer size, IntFunction<T> provider) {
         super(size, provider);
@@ -28,52 +22,29 @@ public class Series<T> extends com.vsiwest.moneyfan.bikeshed.core.Series.SeriesI
         return new Series<>(size, provider);
     }
 
-    @Override
-    public T get(int index) {
-        return super.get(index);
-    }
-
     /**
-     * Returns a new DSEL Series representing a slice of elements from this Series.
-     * This method overrides the default slice in core.Series to return a DSEL.Series.
+     * Glyph for map/transform (`α`).
+     * Maps each element of the Series to a new type.
+     * Compositional: returns a new Series instance.
      *
-     * @param startIndex The inclusive starting index.
-     * @param endIndex The exclusive ending index.
-     * @return A new DSEL Series representing the slice.
-     */
-    public Series<T> get(int startIndex, int endIndex) {
-        // Delegate to the core slice method, then wrap the result in a DSEL.Series
-        return Series.of(endIndex - startIndex, i -> super.get(startIndex + i));
-    }
-
-    /**
-     * Applies a function to each element of the Series, producing a new Series with transformed elements.
-     * This is an "alpha conversion" or "map" operation, emphasizing compositional purity.
-     *
-     * @param mapper The function to apply to each element.
-     * @param <R> The type of the new elements.
+     * @param mapper Function to apply to each element.
+     * @param <R>    New type of elements.
      * @return A new Series with transformed elements.
      */
-    public <R> Series<R> alpha(Function<? super T, ? extends R> mapper) {
-        return map(mapper); // Delegate to the core map method
+    public <R> Series<R> α(Function<? super T, ? extends R> mapper) {
+        return map(mapper);
     }
 
     /**
-     * Filters elements of the Series based on a predicate, producing a new Series.
-     * Note: This operation might not be strictly "cursor-based" in memory terms
-     * if the underlying elements are not contiguous after filtering. For true
-     * cursor semantics on filtered data, a new backing index would be required.
-     * For simplicity, this returns a materialized list wrapped as a Series.
+     * Glyph for filter (`filter`).
+     * Filters elements of the Series based on a predicate.
+     * Compositional: returns a new Series instance (may be smaller).
      *
-     * @param predicate The predicate to filter elements.
+     * @param predicate Predicate to test each element.
      * @return A new Series containing only elements that satisfy the predicate.
      */
     public Series<T> filter(Predicate<? super T> predicate) {
-        List<T> filteredList = IntStream.range(0, size())
-                .mapToObj(this::get)
-                .filter(predicate)
-                .collect(Collectors.toList());
-        return Series.of(filteredList.size(), filteredList::get);
+        return super.filter(predicate);
     }
 
     /**
@@ -94,6 +65,31 @@ public class Series<T> extends com.vsiwest.moneyfan.bikeshed.core.Series.SeriesI
     }
 
     /**
+     * Operator-like method: `get(index)`.
+     * Direct element access by index.
+     *
+     * @param index The index.
+     * @return The element at the index.
+     */
+    public T get(int index) {
+        return super.get(index);
+    }
+
+    /**
+     * Operator-like method: `get(range)`.
+     * Slices the Series. For simplicity in Java, we'll use an explicit `IntRange` or similar.
+     * For now, delegating to `slice(int, int)`.
+     *
+     * @param startIndex Inclusive start index.
+     * @param endIndex Exclusive end index.
+     * @return A new Series representing the slice.
+     */
+    public Series<T> get(int startIndex, int endIndex) {
+        return super.slice(startIndex, endIndex);
+    }
+
+    /**
+     * Glyph: `▶` (iterator)
      * Provides an Iterable view of the Series.
      *
      * @return An Iterable for this Series.

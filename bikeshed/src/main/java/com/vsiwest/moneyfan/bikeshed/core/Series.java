@@ -3,18 +3,23 @@ package com.vsiwest.moneyfan.bikeshed.core;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.Iterator;
+import java.util.List;
 import java.util.Objects;
 import java.util.function.Function;
 import java.util.function.IntFunction;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 /**
- * Represents an immutable, lazily-evaluated sequence of elements.
- * This is a functional data structure, where operations return new Series instances
- * without modifying the original. It's optimized for cursor-based access patterns.
+ * A cursor-based collection, representing a sequence of elements of type T.
+ * Implemented as a {@code Join<Integer, Function<Integer, T>>} where the first element
+ * is the size and the second is a provider function (like a getter by index).
+ * This enables lazy evaluation for element access.
  *
- * @param <T> The type of elements in the series.
+ * @param <T> The type of elements in the Series.
  */
-public interface Series<T> extends Join<Integer, IntFunction<T>>, Iterable<T> {
+public interface Series<T> extends Join<Integer, Function<Integer, T>>, Iterable<T> {
 
     /**
      * Factory method to create a new Series instance.
@@ -24,17 +29,16 @@ public interface Series<T> extends Join<Integer, IntFunction<T>>, Iterable<T> {
      * @param <T> The type of elements.
      * @return A new Series instance.
      */
-    static <T> Series<T> of(int size, IntFunction<T> provider) {
+    static <T> @NotNull Series<T> of(int size, @NotNull Function<Integer, T> provider) {
         Objects.requireNonNull(provider, "provider must not be null");
         if (size < 0) {
             throw new IllegalArgumentException("Size cannot be negative: " + size);
         }
-        return new SeriesImpl<>(size, provider);
+        return new ImmutableSeries<>(size, provider);
     }
 
     /**
-     * Returns the number of elements in this series.
-     *
+     * Returns the number of elements in this Series.
      * @return The size of the series.
      */
     default int size() {
@@ -42,47 +46,24 @@ public interface Series<T> extends Join<Integer, IntFunction<T>>, Iterable<T> {
     }
 
     /**
-     * Returns the provider function for this series.
-     *
-     * @return The provider function.
-     */
-    default IntFunction<T> provider() {
-        return second();
-    }
-
-    /**
-     * Gets the element at the specified index.
-     *
-     * @param index The index of the element to retrieve.
+     * Returns the element at the specified index.
+     * @param index The index of the element.
      * @return The element at the given index.
-     * @throws IndexOutOfBoundsException if the index is out of bounds.
+     * @throws IndexOutOfBoundsException if the index is out of range (index < 0 || index >= size()).
      */
     default T get(int index) {
         if (index < 0 || index >= size()) {
             throw new IndexOutOfBoundsException("Index " + index + " out of bounds for Series of size " + size());
         }
-        return provider().apply(index);
+        return second().apply(index);
     }
 
     /**
-     * Creates a new Series by applying a function to each element of this series.
+     * Returns a new Series containing elements from this Series within the specified range.
+     * This operation is compositional; it creates a new view rather than modifying the original.
      *
-     * @param mapper The function to apply to each element.
-     * @param <R> The type of elements in the new series.
-     * @return A new Series with transformed elements.
-     */
-    default <R> Series<R> map(@NotNull Function<? super T, ? extends R> mapper) {
-        Objects.requireNonNull(mapper, "mapper must not be null");
-        return Series.of(size(), index -> mapper.apply(get(index)));
-    }
-
-    /**
-     * Returns a new Series containing elements from this series within the specified range.
-     * The new series is a view, not a copy of elements.
-     *
-     * @param range The inclusive range of indices to slice.
+     * @param range The range of indices to include.
      * @return A new Series representing the slice.
-     * @throws IndexOutOfBoundsException if the range is invalid (e.g., start < 0 or end > size).
      */
     default @NotNull Series<T> slice(@NotNull IntRange range) {
         int start = Math.max(0, range.from);
@@ -93,32 +74,44 @@ public interface Series<T> extends Join<Integer, IntFunction<T>>, Iterable<T> {
     }
 
     /**
-     * Returns a new Series containing elements from this series within the specified range.
-     * The new series is a view, not a copy of elements.
+     * Applies a function to each element of the Series, producing a new Series with transformed elements.
+     * This is an "alpha conversion" or "map" operation, emphasizing compositional purity.
      *
-     * @param startIndex The inclusive starting index.
-     * @param endIndex The exclusive ending index.
-     * @return A new Series representing the slice.
-     * @throws IndexOutOfBoundsException if the range is invalid.
+     * @param mapper The function to apply to each element.
+     * @param <R> The type of the new elements.
+     * @return A new Series with transformed elements.
      */
-    default @NotNull Series<T> slice(int startIndex, int endIndex) {
-        if (startIndex < 0 || endIndex > size() || startIndex > endIndex) {
-            throw new IndexOutOfBoundsException("Invalid slice range: [" + startIndex + ", " + endIndex + ") for Series of size " + size());
-        }
-        int newSize = endIndex - startIndex;
-        return Series.of(newSize, index -> get(startIndex + index));
+    default <R> @NotNull Series<R> alpha(@NotNull Function<T, R> mapper) {
+        return Series.of(size(), index -> mapper.apply(get(index)));
     }
 
     /**
-     * Returns an iterator over the elements in this series.
+     * Filters elements of the Series based on a predicate, producing a new Series.
+     * Note: This operation might not be strictly "cursor-based" in memory terms
+     * if the underlying elements are not contiguous after filtering. For true
+     * cursor semantics on filtered data, a new backing index would be required.
+     * For simplicity, this returns a materialized list wrapped as a Series.
      *
+     * @param predicate The predicate to filter elements.
+     * @return A new Series containing only elements that satisfy the predicate.
+     */
+    default @NotNull Series<T> filter(@NotNull Predicate<T> predicate) {
+        List<T> filteredList = IntStream.range(0, size())
+                .mapToObj(this::get)
+                .filter(predicate)
+                .collect(Collectors.toList());
+        return Series.of(filteredList.size(), filteredList::get);
+    }
+
+    /**
+     * Provides an iterator over the elements of this Series.
      * @return An iterator.
      */
+    @NotNull
     @Override
-    default @NotNull Iterator<T> iterator() {
-        return new Iterator<>() {
+    default Iterator<T> iterator() {
+        return new Iterator<T>() {
             private int currentIndex = 0;
-
             @Override
             public boolean hasNext() {
                 return currentIndex < size();
@@ -135,18 +128,74 @@ public interface Series<T> extends Join<Integer, IntFunction<T>>, Iterable<T> {
     }
 
     /**
-     * Private inner class implementing the Series interface.
-     * This is where the actual data (size and provider) is stored.
+     * Converts the Series to a List.
+     * @return A new List containing all elements of the Series.
      */
-    record SeriesImpl<T>(Integer first, IntFunction<T> second) implements Series<T> {
-        // The record automatically provides constructor, accessors (first(), second()),
-        // equals(), hashCode(), and toString().
-        // No additional implementation needed here as the default methods in the interface
-        // delegate to first() and second().
+    default @NotNull List<T> toList() {
+        return IntStream.range(0, size()).mapToObj(this::get).collect(Collectors.toList());
     }
 
     /**
-     * Represents an inclusive integer range.
+     * Returns the first element of the Series.
+     * @return The first element.
+     * @throws java.util.NoSuchElementException if the Series is empty.
+     */
+    default T first() {
+        if (size() == 0) throw new java.util.NoSuchElementException("Series is empty.");
+        return get(0);
+    }
+
+    /**
+     * Returns the last element of the Series.
+     * @return The last element.
+     * @throws java.util.NoSuchElementException if the Series is empty.
+     */
+    default T last() {
+        if (size() == 0) throw new java.util.NoSuchElementException("Series is empty.");
+        return get(size() - 1);
+    }
+
+    /**
+     * Returns a new Series containing elements from the beginning up to (but not including) the specified end index.
+     * @param exclusiveEnd The exclusive end index.
+     * @return A new Series representing the head.
+     */
+    default @NotNull Series<T> head(int exclusiveEnd) {
+        return slice(new IntRange(0, exclusiveEnd - 1));
+    }
+
+    /**
+     * Returns a new Series containing elements from the specified start index to the end.
+     * @param inclusiveStart The inclusive start index.
+     * @return A new Series representing the tail.
+     */
+    default @NotNull Series<T> tail(int inclusiveStart) {
+        return slice(new IntRange(inclusiveStart, size() - 1));
+    }
+
+    /**
+     * Returns a new Series skipping the first 'n' elements.
+     * @param n The number of elements to skip.
+     * @return A new Series with elements skipped.
+     */
+    default @NotNull Series<T> skip(int n) {
+        return slice(new IntRange(n, size() - 1));
+    }
+
+    /**
+     * Executes an action for each element in the Series.
+     * @param action The action to perform.
+     */
+    default void each(@NotNull java.util.function.Consumer<T> action) {
+        for (T item : this) {
+            action.accept(item);
+        }
+    }
+
+    /**
+     * Represents an inclusive range of integers, useful for slicing.
+     * In Java, `IntStream.range` is exclusive of the end, so `to` needs `+1`.
+     * This custom `IntRange` makes it inclusive of `to`.
      */
     final class IntRange {
         public final int from;
@@ -158,8 +207,23 @@ public interface Series<T> extends Join<Integer, IntFunction<T>>, Iterable<T> {
             if (from > to) {
                 // Handle empty or invalid ranges gracefully, depending on desired semantics
                 // For slicing, an empty range can be represented by from > to.
-                // Or throw IllegalArgumentException if strictly valid ranges are required.
             }
+        }
+
+        public static @NotNull IntRange of(int from, int to) {
+            return new IntRange(from, to);
+        }
+
+        @Override
+        public String toString() {
+            return "[" + from + ".." + to + "]";
+        }
+    }
+
+    // Inner class for the immutable implementation
+    final class ImmutableSeries<T> extends Join.ImmutableJoin<Integer, Function<Integer, T>> implements Series<T> {
+        private ImmutableSeries(Integer size, Function<Integer, T> provider) {
+            super(size, provider);
         }
     }
 }

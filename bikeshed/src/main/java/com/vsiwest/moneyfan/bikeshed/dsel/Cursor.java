@@ -10,6 +10,11 @@ import java.util.stream.Collectors;
 import java.util.function.Predicate;
 import java.util.stream.IntStream;
 
+/**
+ * `Cursor` represents a collection of `RowVec`s, providing columnar abstraction.
+ * This is the primary interface for tabular data within the DSEL.
+ * It is conceptually a `Series<RowVec>`.
+ */
 public class Cursor extends Series<RowVec> {
 
     // Constructor to align with Series<T> where T is RowVec
@@ -20,12 +25,12 @@ public class Cursor extends Series<RowVec> {
     /**
      * Factory method for `Cursor`.
      *
-     * @param size The number of rows in the cursor.
-     * @param provider A function that provides a RowVec given its row index.
+     * @param numRows The number of rows in the cursor.
+     * @param rowProvider A function providing a RowVec for each row index.
      * @return A new Cursor instance.
      */
-    public static Cursor of(int size, IntFunction<RowVec> provider) {
-        return new Cursor(size, provider);
+    public static Cursor of(int numRows, IntFunction<RowVec> rowProvider) {
+        return new Cursor(numRows, rowProvider);
     }
 
     /**
@@ -39,10 +44,10 @@ public class Cursor extends Series<RowVec> {
     }
 
     /**
-     * Gets the RowVec at the specified row index.
-     *
-     * @param rowIndex The index of the row to retrieve.
-     * @return The RowVec at the given index.
+     * Gets a row by its index.
+     * Glyph: `at` or `row`.
+     * @param rowIndex The index of the row.
+     * @return The RowVec at the specified row index.
      */
     public RowVec at(int rowIndex) {
         return get(rowIndex);
@@ -58,23 +63,21 @@ public class Cursor extends Series<RowVec> {
     }
 
     /**
-     * Returns a new Cursor representing a slice of rows from this Cursor.
-     *
-     * @param startIndex The inclusive starting row index.
-     * @param endIndex The exclusive ending row index.
-     * @return A new Cursor representing the row slice.
+     * Gets a sub-Cursor containing a range of rows.
+     * @param startIndex The inclusive start index of the rows.
+     * @param endIndex The exclusive end index of the rows.
+     * @return A new Cursor containing the specified range of rows.
      */
     public Cursor get(int startIndex, int endIndex) {
-        // Delegating to the DSEL-specific Series.of for Cursor creation
         return D.sr(endIndex - startIndex, i -> get(startIndex + i));
     }
 
     /**
-     * Returns a new Cursor representing a projection of columns from this Cursor.
-     * This operation creates a new RowVec for each row, containing only the specified columns.
-     *
-     * @param columnIndices An array of column indices to include in the new Cursor.
-     * @return A new Cursor with the projected columns.
+     * Gets a sub-Cursor containing a selection of columns.
+     * Note: This materializes selected columns for simplicity; a lazy columnar projection
+     * would be more performant for very wide tables.
+     * @param columnIndices An array of column indices to select.
+     * @return A new Cursor with only the specified columns.
      */
     public Cursor get(int... columnIndices) {
         // This is a row-major approach to columnar selection.
@@ -84,7 +87,6 @@ public class Cursor extends Series<RowVec> {
             RowVec originalRow = this.get(rowIndex);
             return RowVec.of(columnIndices.length, colIndex -> {
                 int originalColIndex = columnIndices[colIndex];
-                // Assuming originalRow.get(originalColIndex) returns a Join<Object, Function<Void, ColumnMeta>>
                 return originalRow.get(originalColIndex); // Get the original Join<Object, () -> ColumnMeta>
             });
         });
@@ -95,7 +97,7 @@ public class Cursor extends Series<RowVec> {
      * @return A Series of ColumnMeta for all columns.
      */
     public Series<ColumnMeta> getMetaData() {
-        if (this.size() == 0) {
+        if (this.isEmpty()) {
             return D.sr(0, i -> { throw new IllegalStateException("Cannot get metadata from empty cursor."); });
         }
         RowVec firstRow = this.get(0);
@@ -109,8 +111,8 @@ public class Cursor extends Series<RowVec> {
      * @return A new Cursor containing only rows that satisfy the predicate.
      */
     public Cursor filterRows(Predicate<RowVec> predicate) {
-        List<RowVec> filteredRows = IntStream.range(0, size())
-                .mapToObj(this::get)
+        List<RowVec> filteredRows = D.toList(this) // Materialize to filter
+                .stream()
                 .filter(predicate)
                 .collect(Collectors.toList());
         return D.sr(filteredRows.size(), filteredRows::get);
@@ -123,8 +125,8 @@ public class Cursor extends Series<RowVec> {
      * @return A new Cursor with mapped rows.
      */
     public <R extends RowVec> Cursor mapRows(Function<RowVec, R> rowMapper) {
-        List<R> mappedRows = IntStream.range(0, size())
-                .mapToObj(this::get)
+        List<R> mappedRows = D.toList(this) // Materialize to map
+                .stream()
                 .map(rowMapper)
                 .collect(Collectors.toList());
         return D.sr(mappedRows.size(), mappedRows::get);

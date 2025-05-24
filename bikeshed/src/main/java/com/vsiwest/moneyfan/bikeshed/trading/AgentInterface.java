@@ -1,11 +1,12 @@
 package com.vsiwest.moneyfan.bikeshed.trading;
 
 import com.vsiwest.moneyfan.bikeshed.dsel.Cursor;
+import com.vsiwest.moneyfan.bikeshed.core.Series; // Corrected import based on new package structure
 import org.jetbrains.annotations.NotNull;
 
 /**
  * Represents a trading agent that operates on market data.
- * Agents interact with the DSEL through {@link Cursor} for data access.
+ * Agents interact with the DSEL through {@link Cursor} and {@link Series} for data access.
  * The output is an array of Doubles, representing actions (e.g., allocation for different assets).
  */
 public interface AgentInterface {
@@ -20,4 +21,8 @@ public interface AgentInterface {
      */
     @NotNull double[] decideAction(@NotNull Cursor currentMarketData);
 
+    // Placeholder for reward-based visibility. This would involve injecting a predicate
+    // or a filtered Cursor view into the agent's context based on external performance metrics.
+    // For example, the simulation controller could provide:
+    // void setMarketDataView(@NotNull Cursor filteredMarketData);
 }
