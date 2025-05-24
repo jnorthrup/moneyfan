@@ -1,6 +1,0 @@
----
-description: 
-globs: *.kts
-alwaysApply: false
----
-you should delete this gradle file because it confuses intellij.  we use maven exclusively
