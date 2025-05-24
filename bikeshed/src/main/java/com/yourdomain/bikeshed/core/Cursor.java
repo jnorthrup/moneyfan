@@ -72,35 +72,3 @@ public interface Cursor extends Series<RowVec> {
             String targetName = columnNames[i];
             boolean found = false;
             for (int j = 0; j < currentMeta.size(); j++) {
-                if (currentMeta.get(j).name().equals(targetName)) {
-                    columnIndices[i] = j;
-                    found = true;
-                    break;
-                }
-            }
-            if (!found) {
-                throw new IllegalArgumentException("Column '" + targetName + "' not found in Cursor.");
-            }
-        }
-        return selectColumns(columnIndices);
-    }
-
-    /**
-     * Applies a function to each {@link RowVec} in the Cursor, producing a new Cursor with transformed rows.
-     * @param rowMapper The function to apply to each RowVec.
-     * @param <R> The type of the new RowVecs.
-     * @return A new Cursor with transformed rows.
-     */
-    default <R extends RowVec> @NotNull Cursor mapRows(@NotNull Function<RowVec, R> rowMapper) {
-        return this.alpha(rowMapper);
-    }
-
-    /**
-     * Filters {@link RowVec}s in the Cursor based on a predicate, producing a new Cursor.
-     * @param rowPredicate The predicate to filter RowVecs.
-     * @return A new Cursor containing only rows that satisfy the predicate.
-     */
-    default @NotNull Cursor filterRows(@NotNull Predicate<RowVec> rowPredicate) {
-        return this.filter(rowPredicate);
-    }
-}
