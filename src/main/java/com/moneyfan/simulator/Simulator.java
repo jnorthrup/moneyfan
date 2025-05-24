@@ -3,6 +3,7 @@ package com.moneyfan.simulator;
 import com.moneyfan.dsel.D;
 import com.moneyfan.dsel.core.RowVec;
 import com.moneyfan.dsel.core.Join;
+import com.moneyfan.dsel.core.Series;
 import com.moneyfan.simulator.agent.TradingAgent;
 import com.moneyfan.simulator.model.AssetKey;
 import com.moneyfan.simulator.model.AssetMutation;
@@ -13,13 +14,18 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 public class Simulator {
     private final Map<AssetKey, MarketDataStream> marketDataStreams = new TreeMap<>();
     private final List<Join<TradingAgent, AssetKey>> agentAssignments = new ArrayList<>();
-    private final Map<String, SimWallet> agentWallets = new HashMap<>();
+    private Map<String, SimWallet> agentWallets = new HashMap<>();
     private long currentTick = 0;
     private final AssetKey referenceFiat = AssetKey.of("USDT/USDT");
+    private final ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
+    private final AgentDataHub dataHub = new AgentDataHub();
 
     public void addMarketData(MarketDataStream stream) {
         marketDataStreams.put(stream.assetKey, stream);
@@ -27,9 +33,11 @@ public class Simulator {
 
     public void registerAgent(TradingAgent agent, AssetKey assetToTrade, double initialBase, double initialQuote) {
         SimWallet wallet = agentWallets.computeIfAbsent(agent.getId(), SimWallet::new);
-        wallet.initializeBalance(assetToTrade, initialBase, initialQuote);
-        agent.initialize(wallet, assetToTrade);
+        SimWallet updatedWallet = wallet.initializeBalance(assetToTrade, initialBase, initialQuote);
+        agentWallets.put(agent.getId(), updatedWallet);
+        agent.initialize(updatedWallet, assetToTrade);
         agentAssignments.add(D.jn(agent, assetToTrade));
+        dataHub.registerAgent(agent.getId());
     }
 
     public void runSimulation(long totalTicks) {
@@ -64,19 +72,35 @@ public class Simulator {
         marketDataStreams.forEach((assetKey, stream) -> {
             if (stream.hasNext()) currentKlines.put(assetKey, stream.nextKline());
         });
+        List<Future<?>> futures = new ArrayList<>();
+        Map<String, SimWallet> updatedWallets = new HashMap<>(agentWallets);
         for (Join<TradingAgent, AssetKey> assignment : agentAssignments) {
             TradingAgent agent = assignment.f();
             AssetKey assetKey = assignment.s();
             SimWallet wallet = agentWallets.get(agent.getId());
             RowVec kline = currentKlines.get(assetKey);
             if (kline != null && wallet != null) {
-                AssetOutput output = agent.decide(assetKey, kline, wallet);
-                processAgentAction(agent, assetKey, output, kline, wallet);
+                futures.add(executorService.submit(() -> {
+                    AssetOutput output = agent.decide(assetKey, kline, wallet, dataHub.getSharedData());
+                    // After decision, collect data for sharing if agent publishes
+                    agent.publishData(output != null ? output.getReward() : 0.0);
+                    synchronized (updatedWallets) {
+                        processAgentAction(agent, assetKey, output, kline, updatedWallets.get(agent.getId()), updatedWallets);
+                    }
+                }));
             }
         }
+        for (Future<?> future : futures) {
+            try {
+                future.get(); // Wait for all agent decisions to complete
+            } catch (Exception e) {
+                System.err.println("Error in agent decision: " + e.getMessage());
+            }
+        }
+        agentWallets = updatedWallets; // Update wallets after all decisions are processed
     }
 
-    private void processAgentAction(TradingAgent agent, AssetKey assetKey, AssetOutput action, RowVec kline, SimWallet wallet) {
+    private void processAgentAction(TradingAgent agent, AssetKey assetKey, AssetOutput action, RowVec kline, SimWallet wallet, Map<String, SimWallet> updatedWallets) {
         AssetMutation primaryAction = AssetMutation.HOLD_ACTION;
         if (action.get(AssetMutation.BUY_ACTION) > 0.5 && action.get(AssetMutation.BUY_ACTION) >= action.get(AssetMutation.SELL_ACTION)) {
             primaryAction = AssetMutation.BUY_ACTION;
@@ -111,13 +135,15 @@ public class Simulator {
             if (side == SimOrder.OrderSide.BUY && orderPrice >= low) {
                 fillPrice = Math.min(orderPrice, currentClose);
                 filled = true;
-            } else if (side == SimOrder.OrderSide.SELL && orderPrice <= high) { // FIXED: Changed SimOrder.OrderType.SELL to SimOrder.OrderSide.SELL
+            } else if (side == SimOrder.OrderSide.SELL && orderPrice <= high) {
                 fillPrice = Math.max(orderPrice, currentClose);
                 filled = true;
             }
         }
         if (filled) {
-            if(wallet.applyTrade(side, assetKey, quantity, fillPrice)) {
+            Join<Boolean, SimWallet> result = wallet.applyTrade(side, assetKey, quantity, fillPrice);
+            if (result.f()) {
+                updatedWallets.put(agent.getId(), result.s());
                 System.out.printf("[%s] %s: FILLED ORDER %s at price %.4f\n", agent.getId(), assetKey.toPairString(), order.type(), fillPrice);
             } else {
                 System.out.printf("[%s] %s: FAILED TO FILL ORDER (Wallet rejected) %s at price %.4f\n", agent.getId(), assetKey.toPairString(), order.type(), fillPrice);
