@@ -1,108 +1,33 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
-  
-  <groupId>com.vsiwest</groupId>
-  <artifactId>dsel-bbcursive-parent</artifactId>
-  <version>1.0.0-SNAPSHOT</version>
-  <packaging>pom</packaging>
-  
-  <name>Domain-Specific Embedded Language - Parent Project</name>
-  <description>DSEL BBCursive high-performance data processing framework</description>
-  
-  <modules>
-    <module>bbcursive</module>
-    <module>bikeshed</module>
-  </modules>
-  
-  <properties>
-    <java.version>21</java.version>
-    <maven.compiler.source>${java.version}</maven.compiler.source>
-    <maven.compiler.target>${java.version}</maven.compiler.target>
-    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <junit.jupiter.version>5.10.0</junit.jupiter.version>
-    <commons.lang3.version>3.12.0</commons.lang3.version>
-    <log4j2.version>2.17.1</log4j2.version>
-  </properties>
-  
-  <dependencyManagement>
-    <dependencies>
-      <!-- Testing dependencies -->
-      <dependency>
-        <groupId>org.junit.jupiter</groupId>
-        <artifactId>junit-jupiter</artifactId>
-        <version>${junit.jupiter.version}</version>
-        <scope>test</scope>
-      </dependency>
-      
-      <!-- Common dependencies -->
-      <dependency>
-        <groupId>org.apache.commons</groupId>
-        <artifactId>commons-lang3</artifactId>
-        <version>${commons.lang3.version}</version>
-      </dependency>
-      
-      <!-- Logging -->
-      <dependency>
-        <groupId>org.apache.logging.log4j</groupId>
-        <artifactId>log4j-core</artifactId>
-        <version>${log4j2.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>org.apache.logging.log4j</groupId>
-        <artifactId>log4j-api</artifactId>
-        <version>${log4j2.version}</version>
-      </dependency>
-    </dependencies>
-  </dependencyManagement>
-  
-  <build>
-    <pluginManagement>
-      <plugins>
-        <!-- Java compiler -->
-        <plugin>
-          <groupId>org.apache.maven.plugins</groupId>
-          <artifactId>maven-compiler-plugin</artifactId>
-          <version>3.11.0</version>
-          <configuration>
-            <source>${java.version}</source>
-            <target>${java.version}</target>
-          </configuration>
-        </plugin>
-        
-        <!-- Surefire for unit tests -->
-        <plugin>
-          <groupId>org.apache.maven.plugins</groupId>
-          <artifactId>maven-surefire-plugin</artifactId>
-          <version>3.0.0</version>
-          <configuration>
-            <includes>
-              <include>**/*Test.java</include>
-            </includes>
-          </configuration>
-        </plugin>
-        
-        <!-- Javadoc plugin -->
-        <plugin>
-          <groupId>org.apache.maven.plugins</groupId>
-          <artifactId>maven-javadoc-plugin</artifactId>
-          <version>3.5.0</version>
-        </plugin>
-        
-        <!-- Source plugin -->
-        <plugin>
-          <groupId>org.apache.maven.plugins</groupId>
-          <artifactId>maven-source-plugin</artifactId>
-          <version>3.2.1</version>
-        </plugin>
-        
-        <!-- Deploy plugin -->
-        <plugin>
-          <groupId>org.apache.maven.plugins</groupId>
-          <artifactId>maven-deploy-plugin</artifactId>
-          <version>3.1.0</version>
-        </plugin>
-      </plugins>
-    </pluginManagement>
-  </build>
+
+  <parent>
+    <groupId>com.vsiwest</groupId>
+    <artifactId>dsel-bbcursive-parent</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>bbcursive</artifactId>
+  <packaging>jar</packaging>
+
+  <name>BBCursive Module</name>
+  <description>Low-level ByteBuffer parsing combinator library</description>
+
+  <dependencies>
+    <!-- Inherited from parent's dependencyManagement -->
+    <dependency>
+      <groupId>org.apache.logging.log4j</groupId>
+      <artifactId>log4j-api</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.logging.log4j</groupId>
+      <artifactId>log4j-core</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
 </project>
