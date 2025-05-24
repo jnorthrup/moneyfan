@@ -6,6 +6,7 @@
     <groupId>com.vsiwest</groupId>
     <artifactId>dsel-bbcursive-parent</artifactId>
     <version>1.0.0-SNAPSHOT</version>
+    <relativePath>../pom.xml</relativePath> <!-- Added this line -->
   </parent>
 
   <artifactId>bbcursive</artifactId>
