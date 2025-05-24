@@ -1,9 +1,10 @@
-package com.vsiwest.bikeshed.type;
+package com.vsiwest.bikeshed.types;
+
+import org.jetbrains.annotations.Nullable;
 
 /**
- * Defines the contract for DSEL type information.
- * Implementations will specify serialization/deserialization strategies
- * and fixed sizes where applicable.
+ * Represents a type's metadata, particularly its fixed size in a network/storage context.
+ * This is crucial for ISAM (Indexed Sequential Access Method) where record layouts are fixed.
  */
 public interface TypeMemento {
 
@@ -13,5 +14,5 @@ public interface TypeMemento {
      *
      * @return The size in bytes, or null for variable-length types.
      */
-    Integer networkSize();
+    @Nullable Integer networkSize();
 }
