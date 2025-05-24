@@ -63,31 +63,18 @@ public class ScriptInspiredUsageTest {
 
         // 2. Perform some DSEL operations (examples)
         //    Filter klines with Volume > 10
-        Cursor highVolumeKlines = fltRow(klinesCursor, row -> (Double) get(row, "Volume") > 12.0); // Assuming get(row, "ColName") variant existed or use index
-        // For now, let's find the index of "Volume"
-        int volumeColIdx = -1;
-        for(int i=0; i < sz(firstRow); i++) {
-            if("Volume".equals(colName(firstRow, i))) {
-                volumeColIdx = i;
-                break;
-            }
-        }
-        final int volIdx = volumeColIdx;
-        assertTrue(volIdx != -1);
-
-        Cursor filteredByVolume = fltRow(klinesCursor, row -> (Double) get(row, volIdx) > 12.0);
+        // Using the new get(RowVec, String) method
+        Cursor filteredByVolume = fltRow(klinesCursor, row -> (Double) get(row, "Volume") > 12.0);
         assertEquals(2, sz(filteredByVolume)); // Rows with 12.3 and 15.0 volume
-        assertEquals(12.3, (Double) get(get(filteredByVolume,0), volIdx), 0.001);
+        assertEquals(12.3, (Double) get(get(filteredByVolume,0), "Volume"), 0.001);
 
         // Map to get only Close price and Volume
-        // This would ideally be a "select columns" operation.
-        // For now, we map each row to a new RowVec with just those two.
         final int closeIdx = 4; // Index of "Close"
         Cursor closeAndVolume = mapRow(klinesCursor, row -> {
             Object closePrice = get(row, closeIdx);
-            Object volume = get(row, volIdx);
+            Object volume = get(row, "Volume"); // Use name for Volume
             ColumnMeta cmClose = cm("Close", colType(row, closeIdx));
-            ColumnMeta cmVolume = cm("Volume", colType(row, volIdx));
+            ColumnMeta cmVolume = cm("Volume", colType(row, "Volume")); // Use name for Volume's type
             return rv(2, idx -> idx == 0 ? jn(closePrice, () -> cmClose) : jn(volume, () -> cmVolume) );
         });
         assertEquals(sz(klinesCursor), sz(closeAndVolume));
