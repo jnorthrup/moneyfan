@@ -3,7 +3,7 @@ package com.moneyfan.simulator;
 import com.moneyfan.dsel.D;
 import com.moneyfan.dsel.core.Join;
 import com.moneyfan.simulator.model.AssetKey;
-import com.moneyfan.simulator.model.SimOrder; // FIXED: Added import
+import com.moneyfan.simulator.model.SimOrder;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -19,12 +19,14 @@ public class SimWallet {
         this.quoteBalances = new HashMap<>();
     }
 
+    // Private constructor for creating new immutable instances
     private SimWallet(String agentId, Map<AssetKey, Double> baseBalances, Map<AssetKey, Double> quoteBalances) {
         this.agentId = agentId;
-        this.baseBalances = new HashMap<>(baseBalances);
-        this.quoteBalances = new HashMap<>(quoteBalances);
+        this.baseBalances = new HashMap<>(baseBalances); // Ensure deep copy for immutability
+        this.quoteBalances = new HashMap<>(quoteBalances); // Ensure deep copy for immutability
     }
 
+    // Returns a new SimWallet with updated balance
     public SimWallet initializeBalance(AssetKey assetKey, double baseAmount, double quoteAmount) {
         Map<AssetKey, Double> newBaseBalances = new HashMap<>(baseBalances);
         Map<AssetKey, Double> newQuoteBalances = new HashMap<>(quoteBalances);
@@ -36,6 +38,7 @@ public class SimWallet {
     public double getBaseBalance(AssetKey assetKey) { return baseBalances.getOrDefault(assetKey, 0.0); }
     public double getQuoteBalance(AssetKey assetKey) { return quoteBalances.getOrDefault(assetKey, 0.0); }
 
+    // Returns a Join of (success_boolean, new_wallet_instance)
     public Join<Boolean, SimWallet> applyTrade(SimOrder.OrderSide side, AssetKey assetKey, double quantity, double price) {
         double baseBalance = getBaseBalance(assetKey);
         double quoteBalance = getQuoteBalance(assetKey);
@@ -54,9 +57,9 @@ public class SimWallet {
             } else {
                 System.out.printf("[%s] Wallet: INSUFFICIENT FUNDS to BUY %.4f %s. Need: %.2f %s, Have: %.2f %s\n",
                     agentId, quantity, assetKey.baseAsset(), cost, assetKey.quoteAsset(), quoteBalance, assetKey.quoteAsset());
-                return D.jn(false, this);
+                return D.jn(false, this); // Return current wallet if failed
             }
-        } else {
+        } else { // SELL
             if (baseBalance >= quantity) {
                 double proceeds = quantity * price;
                 Map<AssetKey, Double> newBaseBalances = new HashMap<>(baseBalances);
@@ -70,7 +73,7 @@ public class SimWallet {
             } else {
                 System.out.printf("[%s] Wallet: INSUFFICIENT FUNDS to SELL %.4f %s. Have: %.4f %s\n",
                     agentId, quantity, assetKey.baseAsset(), baseBalance, assetKey.baseAsset());
-                return D.jn(false, this);
+                return D.jn(false, this); // Return current wallet if failed
             }
         }
     }
@@ -80,14 +83,12 @@ public class SimWallet {
             if(entry.getKey().quoteAsset().equals(referenceQuoteAsset.baseAsset())) {
                 totalValue += entry.getValue();
             } else {
-                // FIXED: Changed AssetKey.of call to concatenate strings
-                AssetKey conversionPair = AssetKey.of(entry.getKey().quoteAsset() + "/" + referenceQuoteAsset.baseAsset());
-                totalValue += entry.getValue() * currentPrices.getOrDefault(conversionPair, 0.0);
+                 AssetKey conversionPair = AssetKey.of(entry.getKey().quoteAsset() + "/" + referenceQuoteAsset.baseAsset());
+                 totalValue += entry.getValue() * currentPrices.getOrDefault(conversionPair, 0.0);
             }
         }
         for(Map.Entry<AssetKey, Double> entry : baseBalances.entrySet()){
             AssetKey pair = entry.getKey();
-            // FIXED: Changed AssetKey.of call to concatenate strings
             AssetKey conversionPair = AssetKey.of(pair.baseAsset() + "/" + referenceQuoteAsset.baseAsset());
             totalValue += entry.getValue() * currentPrices.getOrDefault(conversionPair, 0.0);
         }

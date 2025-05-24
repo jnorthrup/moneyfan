@@ -10,18 +10,21 @@ import com.moneyfan.simulator.model.AssetMutation;
 import com.moneyfan.simulator.model.AssetOutput;
 import com.moneyfan.simulator.model.SimOrder;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
 public class Simulator {
     private final Map<AssetKey, MarketDataStream> marketDataStreams = new TreeMap<>();
-    private final List<Join<TradingAgent, AssetKey>> agentAssignments = new ArrayList<>();
-    private Map<String, SimWallet> agentWallets = new HashMap<>();
+    private final List<Join<TradingAgent, AssetKey>> agentAssignments = Collections.synchronizedList(new ArrayList<>()); // Thread-safe list
+    private Map<String, SimWallet> agentWallets = new ConcurrentHashMap<>(); // ConcurrentMap for thread-safe wallet updates
     private long currentTick = 0;
     private final AssetKey referenceFiat = AssetKey.of("USDT/USDT");
     private final ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
@@ -32,12 +35,14 @@ public class Simulator {
     }
 
     public void registerAgent(TradingAgent agent, AssetKey assetToTrade, double initialBase, double initialQuote) {
-        SimWallet wallet = agentWallets.computeIfAbsent(agent.getId(), SimWallet::new);
-        SimWallet updatedWallet = wallet.initializeBalance(assetToTrade, initialBase, initialQuote);
-        agentWallets.put(agent.getId(), updatedWallet);
+        // Retrieve or create wallet, then initialize it immutably
+        SimWallet currentWallet = agentWallets.computeIfAbsent(agent.getId(), SimWallet::new);
+        SimWallet updatedWallet = currentWallet.initializeBalance(assetToTrade, initialBase, initialQuote);
+        agentWallets.put(agent.getId(), updatedWallet); // Update the map with the new wallet instance
+
         agent.initialize(updatedWallet, assetToTrade);
         agentAssignments.add(D.jn(agent, assetToTrade));
-        dataHub.registerAgent(agent.getId());
+        // No explicit registerAgent on dataHub; publishData is done by agent later
     }
 
     public void runSimulation(long totalTicks) {
@@ -53,6 +58,7 @@ public class Simulator {
         }
         System.out.println("\nSimulation finished at tick " + currentTick);
         printPortfolioValues();
+        executorService.shutdown(); // Clean up executor service
     }
 
     private void printPortfolioValues(){
@@ -72,35 +78,54 @@ public class Simulator {
         marketDataStreams.forEach((assetKey, stream) -> {
             if (stream.hasNext()) currentKlines.put(assetKey, stream.nextKline());
         });
-        List<Future<?>> futures = new ArrayList<>();
-        Map<String, SimWallet> updatedWallets = new HashMap<>(agentWallets);
+
+        // Get shared data snapshot BEFORE agents make decisions for this tick
+        Series<Join<String, Double>> sharedDataSnapshot = dataHub.getSharedData();
+
+        List<Callable<Void>> tasks = new ArrayList<>();
+        // Use a temporary map for updates to prevent ConcurrentModificationException
+        // and allow atomic swap at end of tick
+        Map<String, SimWallet> newAgentWalletsState = new ConcurrentHashMap<>(agentWallets);
+
         for (Join<TradingAgent, AssetKey> assignment : agentAssignments) {
-            TradingAgent agent = assignment.f();
-            AssetKey assetKey = assignment.s();
-            SimWallet wallet = agentWallets.get(agent.getId());
-            RowVec kline = currentKlines.get(assetKey);
+            final TradingAgent agent = assignment.f();
+            final AssetKey assetKey = assignment.s();
+            final SimWallet wallet = agentWallets.get(agent.getId()); // Get current wallet state
+            final RowVec kline = currentKlines.get(assetKey);
+
             if (kline != null && wallet != null) {
-                futures.add(executorService.submit(() -> {
-                    AssetOutput output = agent.decide(assetKey, kline, wallet, dataHub.getSharedData());
-                    // After decision, collect data for sharing if agent publishes
-                    agent.publishData(output != null ? output.getReward() : 0.0);
-                    synchronized (updatedWallets) {
-                        processAgentAction(agent, assetKey, output, kline, updatedWallets.get(agent.getId()), updatedWallets);
-                    }
-                }));
+                tasks.add(() -> {
+                    // Agent decides based on current kline and shared data
+                    AssetOutput output = agent.decide(assetKey, kline, wallet, sharedDataSnapshot);
+
+                    // Agent publishes its reward/data
+                    agent.publishData(output.getReward()); // FIXED: getReward() is now available
+
+                    // Process agent action and update wallet state immutably
+                    // Pass a reference to the newAgentWalletsState map for updates
+                    processAgentAction(agent, assetKey, output, kline, wallet, newAgentWalletsState);
+                    return null;
+                });
             }
         }
-        for (Future<?> future : futures) {
-            try {
-                future.get(); // Wait for all agent decisions to complete
-            } catch (Exception e) {
-                System.err.println("Error in agent decision: " + e.getMessage());
+
+        try {
+            List<Future<Void>> futures = executorService.invokeAll(tasks);
+            for (Future<Void> future : futures) {
+                future.get(); // Wait for all tasks to complete and propagate exceptions
             }
+        } catch (Exception e) {
+            System.err.println("Error during parallel agent processing: " + e.getMessage());
+            e.printStackTrace();
         }
-        agentWallets = updatedWallets; // Update wallets after all decisions are processed
+
+        // Atomically update the main agentWallets map with the new state
+        agentWallets = newAgentWalletsState;
+        dataHub.reset(); // Clear shared data for the next tick
     }
 
-    private void processAgentAction(TradingAgent agent, AssetKey assetKey, AssetOutput action, RowVec kline, SimWallet wallet, Map<String, SimWallet> updatedWallets) {
+    // This method now receives the mutable newAgentWalletsState map for updates
+    private void processAgentAction(TradingAgent agent, AssetKey assetKey, AssetOutput action, RowVec kline, SimWallet currentAgentWallet, Map<String, SimWallet> newAgentWalletsState) {
         AssetMutation primaryAction = AssetMutation.HOLD_ACTION;
         if (action.get(AssetMutation.BUY_ACTION) > 0.5 && action.get(AssetMutation.BUY_ACTION) >= action.get(AssetMutation.SELL_ACTION)) {
             primaryAction = AssetMutation.BUY_ACTION;
@@ -116,10 +141,10 @@ public class Simulator {
         double quantityFraction = action.get(AssetMutation.QUANTITY_FRACTION);
         double quantity;
         if (side == SimOrder.OrderSide.BUY) {
-            double availableQuote = wallet.getQuoteBalance(assetKey);
+            double availableQuote = currentAgentWallet.getQuoteBalance(assetKey);
             quantity = (availableQuote * quantityFraction) / orderPrice;
         } else {
-            double availableBase = wallet.getBaseBalance(assetKey);
+            double availableBase = currentAgentWallet.getBaseBalance(assetKey);
             quantity = availableBase * quantityFraction;
         }
         if (quantity < 0.00001) return;
@@ -141,9 +166,10 @@ public class Simulator {
             }
         }
         if (filled) {
-            Join<Boolean, SimWallet> result = wallet.applyTrade(side, assetKey, quantity, fillPrice);
-            if (result.f()) {
-                updatedWallets.put(agent.getId(), result.s());
+            // Call applyTrade which now returns a Join<Boolean, SimWallet>
+            Join<Boolean, SimWallet> tradeResult = currentAgentWallet.applyTrade(side, assetKey, quantity, fillPrice);
+            if (tradeResult.f()) { // If trade was successful
+                newAgentWalletsState.put(agent.getId(), tradeResult.s()); // Update with the new wallet instance
                 System.out.printf("[%s] %s: FILLED ORDER %s at price %.4f\n", agent.getId(), assetKey.toPairString(), order.type(), fillPrice);
             } else {
                 System.out.printf("[%s] %s: FAILED TO FILL ORDER (Wallet rejected) %s at price %.4f\n", agent.getId(), assetKey.toPairString(), order.type(), fillPrice);

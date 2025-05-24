@@ -1,6 +1,6 @@
 package com.moneyfan.simulator.model;
 
-import com.moneyfan.dsel.D; // Assuming D contains 'sr' and other DSEL ops
+import com.moneyfan.dsel.D;
 import com.moneyfan.dsel.core.Series;
 
 // Represents an agent's decision for a single asset.
@@ -19,5 +19,12 @@ public interface AssetOutput extends Series<Double> {
 
     static AssetOutput createDefault() {
         return (AssetOutput) D.createSeries(AssetMutation.OUTPUT_SIZE, i -> AssetMutation.ALL_MUTATIONS[i].defaultValue);
+    }
+
+    // New method to provide a conceptual "reward" based on the output
+    default double getReward() {
+        // Example: a simple reward could be the difference between buy and sell signals
+        // You would define more complex reward functions based on P&L, risk, etc.
+        return get(AssetMutation.BUY_ACTION) - get(AssetMutation.SELL_ACTION);
     }
 }
