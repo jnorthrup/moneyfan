@@ -10,13 +10,20 @@
         <version>1.0-SNAPSHOT</version>
     </parent>
 
-    <artifactId>bbcursive</artifactId>
+    <artifactId>bikeshed</artifactId>
     <packaging>jar</packaging>
 
-    <name>bbcursive - ByteBuffer Parsing Combinator Library</name>
-    <description>A minimal, modern, zero-copy ByteBuffer parsing combinator library.</description>
+    <name>bikeshed - DSEL Core</name>
+    <description>The core implementation of the Data Science Expression Language (DSEL).</description>
 
     <dependencies>
+        <!-- Dependency on the bbcursive module -->
+        <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>bbcursive</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
         <!-- JetBrains annotations (managed by parent) -->
         <dependency>
             <groupId>org.jetbrains</groupId>
