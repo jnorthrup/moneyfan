@@ -1,28 +1,17 @@
 package com.moneyfan.dsel.core;
-
-/**
- * Represents the type information for data within the DSEL.
- * This can be extended to include more complex type details.
- */
 public interface TypeMemento {
-
-    /**
-     * Basic types supported by the DSEL.
-     */
+    String getTypeName(); int getFixedSize();
     enum Basic implements TypeMemento {
-        BOOLEAN,
-        BYTE,
-        SHORT,
-        INTEGER,
-        LONG,
-        FLOAT,
-        DOUBLE,
-        CHAR,
-        STRING,
-        OBJECT, // Generic object type
-        JOIN,   // Indicates the type is a Join itself
-        // For more complex structures, the specific Join parameterization would be needed,
-        // or dedicated TypeMemento implementations.
-        CUSTOM // For user-defined types or complex nested structures
+        BOOLEAN("Boolean", 1), BYTE("Byte", 1), SHORT("Short", 2), INTEGER("Integer", 4), LONG("Long", 8),
+        FLOAT("Float", 4), DOUBLE("Double", 8), CHAR("Char", 2), STRING("String", -1), BINARY_BLOB("BinaryBlob", -1),
+        OBJECT("Object", -1), JOIN("Join", -1), SERIES("Series", -1), ROWVEC("RowVec", -1), CURSOR("Cursor", -1),
+        TWIN("Twin", -1), CUSTOM("Custom", -1);
+        private final String tn; private final int fs;
+        Basic(String tn, int fs) { this.tn = tn; this.fs = fs; }
+        @Override public String getTypeName() { return tn; } @Override public int getFixedSize() { return fs; }
+        public static TypeMemento fromTypeName(String name) {
+            for (Basic b : values()) if (b.getTypeName().equals(name)) return b;
+            throw new IllegalArgumentException("Unknown TypeMemento name: " + name);
+        }
     }
 }
