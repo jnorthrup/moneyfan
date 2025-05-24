@@ -17,7 +17,7 @@ public class RecordMeta extends ColumnMeta {
     private final int begin;
     private final int end;
     private final Function<ByteBuffer, Object> decoder;
-    private final BiConsumer<Object, ByteBuffer> encoder;
+    private final BiConsumer<Object, ByteBuffer> encoder; // Using standard BiConsumer
 
     public RecordMeta(String name, IOMemento type, int begin, int end,
                       Function<ByteBuffer, Object> decoder,

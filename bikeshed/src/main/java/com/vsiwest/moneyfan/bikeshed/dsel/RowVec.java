@@ -3,27 +3,35 @@ package com.vsiwest.moneyfan.bikeshed.dsel;
 import com.vsiwest.moneyfan.bikeshed.core.Join;
 import com.vsiwest.moneyfan.bikeshed.core.Series;
 import com.vsiwest.moneyfan.bikeshed.types.ColumnMeta;
+import com.vsiwest.moneyfan.bikeshed.types.TypeMemento; // Assuming TypeMemento is the general interface
 
 import java.util.function.Function;
 import java.util.function.IntFunction;
 import java.util.List;
+import java.util.function.Supplier;
 
-public class RowVec extends Series<Join<Object, Function<Void, ColumnMeta>>> {
+/**
+ * `RowVec` represents a row of data with associated metadata.
+ * It is conceptually a `Series<Join<Any?, () -> ColumnMeta>>`.
+ * Each element is a `Join` where the first part is the value and the second is a function
+ * that provides `ColumnMeta` (lazily evaluated metadata).
+ */
+public class RowVec extends Series<Join<Object, Supplier<ColumnMeta>>> {
 
     // Constructor to align with Series<T> constructor.
     // T is Join<Object, Function<Void, ColumnMeta>>
-    protected RowVec(int size, IntFunction<Join<Object, Function<Void, ColumnMeta>>> provider) {
+    protected RowVec(int size, IntFunction<Join<Object, Supplier<ColumnMeta>>> provider) {
         super(size, provider);
     }
 
     /**
      * Factory method for `RowVec`.
      *
-     * @param size The number of columns in the row vector.
-     * @param provider A function that provides a column's value and its metadata supplier given its column index.
+     * @param size The number of columns in the row.
+     * @param provider A function providing the value-metadata pair for each column.
      * @return A new RowVec instance.
      */
-    public static RowVec of(int size, IntFunction<Join<Object, Function<Void, ColumnMeta>>> provider) {
+    public static RowVec of(int size, IntFunction<Join<Object, Supplier<ColumnMeta>>> provider) {
         return new RowVec(size, provider);
     }
 
@@ -33,7 +41,7 @@ public class RowVec extends Series<Join<Object, Function<Void, ColumnMeta>>> {
      * @param valuesAndMeta A list of Join<Object, Function<Void, ColumnMeta>> representing the columns.
      * @return A new RowVec instance.
      */
-    public static RowVec of(List<Join<Object, Function<Void, ColumnMeta>>> valuesAndMeta) {
+    public static RowVec of(List<Join<Object, Supplier<ColumnMeta>>> valuesAndMeta) {
         return new RowVec(valuesAndMeta.size(), valuesAndMeta::get);
     }
 
@@ -47,16 +55,12 @@ public class RowVec extends Series<Join<Object, Function<Void, ColumnMeta>>> {
     }
 
     /**
-     * Gets the ColumnMeta for a specific column index.
-     * This assumes the second element of the Join is a supplier for ColumnMeta.
-     *
+     * Provides access to the ColumnMeta at a specific column index.
      * @param columnIndex The index of the column.
-     * @return The ColumnMeta for the specified column.
+     * @return The ColumnMeta for that column.
      */
     public ColumnMeta getColumnMeta(int columnIndex) {
-        // The 'get' method from Series returns Join<Object, Function<Void, ColumnMeta>>
-        // We then get the second element (the Function<Void, ColumnMeta>) and apply it.
-        return this.get(columnIndex).second().apply(null); // Invoke the supplier
+        return this.get(columnIndex).second().get(); // Invoke the supplier
     }
 
     /**
@@ -73,7 +77,7 @@ public class RowVec extends Series<Join<Object, Function<Void, ColumnMeta>>> {
      * @param columnIndex The index of the column.
      * @return The TypeMemento of the column.
      */
-    public com.vsiwest.moneyfan.bikeshed.types.TypeMemento getColumnType(int columnIndex) {
+    public TypeMemento getColumnType(int columnIndex) {
         return getColumnMeta(columnIndex).type();
     }
 }
