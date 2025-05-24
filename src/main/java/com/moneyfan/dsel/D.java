@@ -169,8 +169,20 @@ public enum D { // DSEL Operations Hub (D)
             int schemaSize = in.readInt(); List<ColumnMeta> schema = new ArrayList<>(schemaSize);
             for (int i = 0; i < schemaSize; i++) {
                 String n = in.readUTF(); String tn = in.readUTF(); int fs = in.readInt();
-                TypeMemento t = TypeMemento.Basic.fromTypeName(tn); // Simplified lookup
-                if (t.getFixedSize() != fs && fs != -1) System.err.println("Warning: Mismatch in stored fixed size ("+ fs +") and enum fixed size ("+ t.getFixedSize() +") for type " + tn);
+                TypeMemento t;
+                // Check if it's a custom-sized string or a basic type
+                if (tn.startsWith(TypeMemento.CUSTOM_STRING_PREFIX)) {
+                    t = TypeMemento.customString(fs);
+                } else {
+                    t = TypeMemento.Basic.fromTypeName(tn);
+                    // If the basic type's fixed size doesn't match the stored one,
+                    // it means the stored metadata has a custom size for a "basic" type.
+                    // In this case, create a CustomType to preserve the stored fixed size.
+                    if (t.getFixedSize() != fs && fs != -1) {
+                        System.err.println("Warning: Mismatch in stored fixed size ("+ fs +") and enum fixed size ("+ t.getFixedSize() +") for type " + tn + ". Using stored fixed size.");
+                        t = new TypeMemento.CustomType(tn, fs);
+                    }
+                }
                 schema.add(D.cm(n, t));
             }
             return new IsamFileMetadata(schema, in.readLong(), in.readInt());
@@ -236,47 +248,54 @@ public enum D { // DSEL Operations Hub (D)
 
     // --- ISAM Value Serializers/Deserializers ---
     public static void writeValueToBuffer(ByteBuffer bb, Object val, TypeMemento type) {
-        switch ((TypeMemento.Basic)type) { // Assuming only Basic types for fixed-size ISAM
-            case BOOLEAN: bb.put((byte)((Boolean)val ? 1 : 0)); break;
-            case BYTE: bb.put((Byte)val); break;
-            case SHORT: bb.putShort((Short)val); break;
-            case INTEGER: bb.putInt((Integer)val); break;
-            case LONG: bb.putLong((Long)val); break;
-            case FLOAT: bb.putFloat((Float)val); break;
-            case DOUBLE: bb.putDouble((Double)val); break;
-            case CHAR: bb.putChar((Character)val); break;
-            case STRING: // Fixed-size string: pad/truncate. For variable, ISAM structure would differ.
-                byte[] strBytes = ((String)val).getBytes(StandardCharsets.UTF_8);
-                int len = Math.min(strBytes.length, type.getFixedSize() > 0 ? type.getFixedSize() : strBytes.length); // Simplified for fixed size
-                if(type.getFixedSize() <=0) throw new IllegalArgumentException("String requires fixed size in this ISAM: " + type.getTypeName());
-                bb.put(strBytes, 0, len); for(int i=len; i<type.getFixedSize(); i++) bb.put((byte)0); // Pad
+        switch (type.getTypeName()) { // Use getTypeName() for switch
+            case "Boolean": bb.put((byte)((Boolean)val ? 1 : 0)); break;
+            case "Byte": bb.put((Byte)val); break;
+            case "Short": bb.putShort((Short)val); break;
+            case "Integer": bb.putInt((Integer)val); break;
+            case "Long": bb.putLong((Long)val); break;
+            case "Float": bb.putFloat((Float)val); break;
+            case "Double": bb.putDouble((Double)val); break;
+            case "Char": bb.putChar((Character)val); break;
+            case "String": // This case handles TypeMemento.Basic.STRING
+            case TypeMemento.CUSTOM_STRING_PREFIX + "256": // Example for a specific custom string size
+                // Fall through to handle custom strings based on their fixed size
+            case "BinaryBlob": // This case handles TypeMemento.Basic.BINARY_BLOB
+                // Fall through to handle custom binary blobs based on their fixed size
+                byte[] bytes;
+                if (type.getTypeName().startsWith(TypeMemento.CUSTOM_STRING_PREFIX) || type.getTypeName().equals("String")) {
+                    bytes = ((String)val).getBytes(StandardCharsets.UTF_8);
+                } else if (type.getTypeName().equals("BinaryBlob")) {
+                    bytes = (byte[])val;
+                } else {
+                    throw new IllegalArgumentException("Unsupported type for fixed-size ISAM: " + type.getTypeName());
+                }
+
+                int len = Math.min(bytes.length, type.getFixedSize());
+                if(type.getFixedSize() <=0) throw new IllegalArgumentException(type.getTypeName() + " requires fixed size in this ISAM: " + type.getTypeName());
+                bb.put(bytes, 0, len); for(int i=len; i<type.getFixedSize(); i++) bb.put((byte)0); // Pad
                 break;
-            case BINARY_BLOB:
-                 byte[] blobBytes = (byte[])val;
-                 int blobLen = Math.min(blobBytes.length, type.getFixedSize());
-                 if(type.getFixedSize() <=0) throw new IllegalArgumentException("BINARY_BLOB requires fixed size in this ISAM: " + type.getTypeName());
-                 bb.put(blobBytes, 0, blobLen); for(int i=blobLen; i<type.getFixedSize(); i++) bb.put((byte)0); // Pad
-                 break;
             default: throw new IllegalArgumentException("Unsupported type for fixed-size ISAM: " + type.getTypeName());
         }
     }
     public static Object readValueFromBuffer(ByteBuffer bb, TypeMemento type) {
         try {
-            switch ((TypeMemento.Basic)type) {
-                case BOOLEAN: return bb.get() == 1;
-                case BYTE: return bb.get();
-                case SHORT: return bb.getShort();
-                case INTEGER: return bb.getInt();
-                case LONG: return bb.getLong();
-                case FLOAT: return bb.getFloat();
-                case DOUBLE: return bb.getDouble();
-                case CHAR: return bb.getChar();
-                case STRING:
+            switch (type.getTypeName()) { // Use getTypeName() for switch
+                case "Boolean": return bb.get() == 1;
+                case "Byte": return bb.get();
+                case "Short": return bb.getShort();
+                case "Integer": return bb.getInt();
+                case "Long": return bb.getLong();
+                case "Float": return bb.getFloat();
+                case "Double": return bb.getDouble();
+                case "Char": return bb.getChar();
+                case "String":
+                case TypeMemento.CUSTOM_STRING_PREFIX + "256": // Example for a specific custom string size
                     if(type.getFixedSize() <=0) throw new IllegalArgumentException("String requires fixed size in this ISAM: " + type.getTypeName());
                     byte[] strBytes = new byte[type.getFixedSize()]; bb.get(strBytes);
                     int actualLen = 0; while(actualLen < strBytes.length && strBytes[actualLen] != 0) actualLen++; // Find null terminator
                     return new String(strBytes, 0, actualLen, StandardCharsets.UTF_8);
-                case BINARY_BLOB:
+                case "BinaryBlob":
                     if(type.getFixedSize() <=0) throw new IllegalArgumentException("BINARY_BLOB requires fixed size in this ISAM: " + type.getTypeName());
                     byte[] blobBytes = new byte[type.getFixedSize()]; bb.get(blobBytes);
                     return blobBytes; // Return full fixed-size buffer, or trim if null-termination is convention
@@ -300,24 +319,28 @@ public enum D { // DSEL Operations Hub (D)
 
     public static Object parseStringValue(String sVal, TypeMemento type) {
         try {
-            return switch((TypeMemento.Basic)type) {
-                case BOOLEAN: yield Boolean.parseBoolean(sVal);
-                case BYTE: yield Byte.parseByte(sVal);
-                case SHORT: yield Short.parseShort(sVal);
-                case INTEGER: yield Integer.parseInt(sVal);
-                case LONG: yield Long.parseLong(sVal);
-                case FLOAT: yield Float.parseFloat(sVal);
-                case DOUBLE: yield Double.parseDouble(sVal);
-                case CHAR: yield (sVal.isEmpty() ? '\0' : sVal.charAt(0));
-                case STRING: yield sVal;
+            // Use getTypeName() for switch
+            return switch(type.getTypeName()) {
+                case "Boolean": yield Boolean.parseBoolean(sVal);
+                case "Byte": yield Byte.parseByte(sVal);
+                case "Short": yield Short.parseShort(sVal);
+                case "Integer": yield Integer.parseInt(sVal);
+                case "Long": yield Long.parseLong(sVal);
+                case "Float": yield Float.parseFloat(sVal);
+                case "Double": yield Double.parseDouble(sVal);
+                case "Char": yield (sVal.isEmpty() ? '\0' : sVal.charAt(0));
+                case "String": // Handles TypeMemento.Basic.STRING and custom fixed-size strings
+                case TypeMemento.CUSTOM_STRING_PREFIX + "256": // Example for a specific custom string size
+                    yield sVal;
                 default: throw new IllegalArgumentException("Cannot parse CSV string to type: " + type.getTypeName());
             };
         } catch (NumberFormatException e) {
             System.err.println("Error parsing '" + sVal + "' as " + type.getTypeName() + ": " + e.getMessage() + ". Returning null or default.");
-            return switch((TypeMemento.Basic)type) { // Default values on parse error
-                 case BOOLEAN: yield false; case BYTE: yield (byte)0; case SHORT: yield (short)0; case INTEGER: yield 0;
-                 case LONG: yield 0L; case FLOAT: yield 0.0f; case DOUBLE: yield 0.0; case CHAR: yield '\0';
-                 case STRING: yield ""; default: yield null;
+            // Default values on parse error
+            return switch(type.getTypeName()) {
+                 case "Boolean": yield false; case "Byte": yield (byte)0; case "Short": yield (short)0; case "Integer": yield 0;
+                 case "Long": yield 0L; case "Float": yield 0.0f; case "Double": yield 0.0; case "Char": yield '\0';
+                 case "String": case TypeMemento.CUSTOM_STRING_PREFIX + "256": yield ""; default: yield null;
             };
         }
     }
@@ -351,7 +374,7 @@ public enum D { // DSEL Operations Hub (D)
             cm("Number_of_trades", TypeMemento.Basic.INTEGER),
             cm("Taker_buy_base_asset_volume", TypeMemento.Basic.DOUBLE),
             cm("Taker_buy_quote_asset_volume", TypeMemento.Basic.DOUBLE),
-            cm("Ignore", TypeMemento.Basic.STRING) // Fixed size required for STRING in ISAM
+            cm("Ignore", TypeMemento.customString(256)) // Use customString for fixed-size string
         );
     }
 
@@ -400,16 +423,11 @@ public enum D { // DSEL Operations Hub (D)
                 new IsamFileMetadata(Collections.emptyList(), 0, 0).write(metaOut);
                 return;
             }
-            // For streaming, assume fixed size string or set a default fixed size if not specified
-            // For 'Ignore' column, give it a fixed size, e.g., 1 byte or 10 bytes if it's always short.
-            // If it can be variable, the ISAM format needs to change to handle variable-length records or pointers.
-            // For now, let's assume a default size if it's -1.
+            // Ensure String columns in schema have a fixed size defined for ISAM.
             List<ColumnMeta> fixedSchema = schema.stream().map(cm -> {
-                if (cm.s().getFixedSize() == -1 && cm.s() == TypeMemento.Basic.STRING) {
+                if (cm.s().getFixedSize() == -1 && cm.s().getTypeName().equals(TypeMemento.Basic.STRING.getTypeName())) {
                     // Provide a sensible default for strings if not already fixed.
-                    // This is a common point of failure for simple fixed-length ISAM.
-                    // You might need to pre-analyze data to find max string length.
-                    return D.cm(cm.f(), new TypeMemento.Basic(cm.s().getTypeName(), 256)); // Example: 256 bytes for strings
+                    return D.cm(cm.f(), TypeMemento.customString(256)); // Using new factory method
                 }
                 return cm;
             }).collect(Collectors.toList());
@@ -622,10 +640,10 @@ public enum D { // DSEL Operations Hub (D)
 
         // Ensure String columns in schema have a fixed size defined for ISAM.
         List<ColumnMeta> fixedSchema = schema.stream().map(cm -> {
-            if (cm.s().getFixedSize() == -1 && cm.s() == TypeMemento.Basic.STRING) {
+            if (cm.s().getFixedSize() == -1 && cm.s().getTypeName().equals(TypeMemento.Basic.STRING.getTypeName())) {
                 // Provide a sensible default fixed size for strings.
                 // This might need to be adjusted based on the actual max length of strings.
-                return D.cm(cm.f(), new TypeMemento.Basic(cm.s().getTypeName(), 256)); // Example: 256 bytes for strings
+                return D.cm(cm.f(), TypeMemento.customString(256)); // Using new factory method
             }
             return cm;
         }).collect(Collectors.toList());
