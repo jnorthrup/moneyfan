@@ -4,43 +4,78 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <parent>
-        <groupId>com.yourdomain</groupId>
-        <artifactId>dsel-bbcursive-parent</artifactId>
-        <version>1.0-SNAPSHOT</version>
-    </parent>
+    <groupId>com.yourdomain</groupId>
+    <artifactId>dsel-bbcursive-parent</artifactId>
+    <version>1.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
 
-    <artifactId>bikeshed</artifactId>
-    <packaging>jar</packaging>
+    <name>bbcursive DSEL Parent</name>
+    <description>Parent POM for the bbcursive DSEL and related modules.</description>
 
-    <name>bikeshed - DSEL Core</name>
-    <description>The core implementation of the Data Science Expression Language (DSEL).</description>
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.compiler.source>17</maven.compiler.source>
+        <maven.compiler.target>17</maven.compiler.target>
+        <junit.jupiter.version>5.10.0</junit.jupiter.version>
+        <jetbrains.annotations.version>24.0.1</jetbrains.annotations.version>
+    </properties>
 
-    <dependencies>
-        <!-- Dependency on the bbcursive module -->
-        <dependency>
-            <groupId>${project.groupId}</groupId>
-            <artifactId>bbcursive</artifactId>
-            <version>${project.version}</version>
-        </dependency>
+    <modules>
+        <module>bbcursive</module>
+        <module>bikeshed</module>
+    </modules>
 
-        <!-- JetBrains annotations (managed by parent) -->
-        <dependency>
-            <groupId>org.jetbrains</groupId>
-            <artifactId>annotations</artifactId>
-        </dependency>
+    <dependencyManagement>
+        <dependencies>
+            <!-- JetBrains annotations for @NotNull, @Nullable, etc. -->
+            <dependency>
+                <groupId>org.jetbrains</groupId>
+                <artifactId>annotations</artifactId>
+                <version>${jetbrains.annotations.version}</version>
+            </dependency>
+            <!-- JUnit 5 for testing -->
+            <dependency>
+                <groupId>org.junit.jupiter</groupId>
+                <artifactId>junit-jupiter-api</artifactId>
+                <version>${junit.jupiter.version}</version>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.junit.jupiter</groupId>
+                <artifactId>junit-jupiter-engine</artifactId>
+                <version>${junit.jupiter.version}</version>
+                <scope>test</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
-        <!-- JUnit 5 for testing (managed by parent) -->
-        <dependency>
-            <groupId>org.junit.jupiter</groupId>
-            <artifactId>junit-jupiter-api</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.junit.jupiter</groupId>
-            <artifactId>junit-jupiter-engine</artifactId>
-            <scope>test</scope>
-        </dependency>
-    </dependencies>
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <version>3.11.0</version>
+                    <configuration>
+                        <source>${maven.compiler.source}</source>
+                        <target>${maven.compiler.target}</target>
+                        <!-- Enable preview features if using a newer Java version and features -->
+                        <!-- <compilerArgs>
+                            <arg>--enable-preview</arg>
+                        </compilerArgs> -->
+                    </configuration>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <version>3.1.2</version>
+                    <configuration>
+                        <!-- Enable preview features for tests if needed -->
+                        <!-- <argLine>--enable-preview</argLine> -->
+                    </configuration>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
 
 </project>
