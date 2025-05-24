@@ -36,7 +36,7 @@ public enum D { // DSEL Operations Hub (D)
     public static <F, S, FN, SN> Join<FN, SN> mapJoin(Join<F,S> j, BiFunction<? super F,? super S,? extends Join<FN,SN>> bm) { return j.mapBoth(bm); }
     public static <F, S, FN, SN> Join<FN, SN> mapJoin(Join<F,S> j, Function<? super F,? extends FN> fm, Function<? super S,? extends SN> sm) { return j.mapBoth(fm, sm); }
     public static <F, S> Join<S, F> swapJoin(Join<F, S> j) { return j.swap(); }
-    public static <F, S> boolean testJoin(Join<F, S> j, Predicate<? super Join<F, S>> p) { return j.test(p); }
+    public static <F, S> boolean testJoin(Join<F, S> j, Predicate<? super Join<F, S>> p) { return p.test(j); } // Corrected: use p.test(j)
 
     public static <F, S> Join<F, S> jn(F f, S s) { return createJoin(f,s); }
     public static <F, S> F f(Join<F, S> j) { return first(j); }
@@ -49,11 +49,38 @@ public enum D { // DSEL Operations Hub (D)
     public static <F, S> boolean tst(Join<F, S> j, Predicate<? super Join<F, S>> p) { return testJoin(j,p); }
 
     // --- Conceptual Type Factories ---
-    public static <T> Series<T> createSeries(int size, Function<Integer, T> gen) { if (size<0) throw new IllegalArgumentException("Series size invalid: "+size); return (Series<T>)jn(size, gen); }
-    public static ColumnMeta createColumnMeta(String n, TypeMemento t) { return (ColumnMeta)jn(n, t); }
-    public static RowVec createRowVec(int nCols, Function<Integer, Join<Object, Supplier<ColumnMeta>>> cellGen) { return (RowVec)createSeries(nCols, cellGen); }
-    public static Cursor createCursor(int nRows, Function<Integer, RowVec> rowGen) { return (Cursor)createSeries(nRows, rowGen); }
-    public static <T> Twin<T> createTwin(T t1, T t2) { return (Twin<T>)jn(t1,t2); }
+    // Modified: Ensure these factories return instances of their respective interfaces
+    public static <T> Series<T> createSeries(int size, Function<Integer, T> gen) { 
+        if (size < 0) throw new IllegalArgumentException("Series size invalid: " + size); 
+        return new Series<T>() {
+            @Override public Integer f() { return size; }
+            @Override public Function<Integer, T> s() { return gen; }
+        };
+    }
+    public static ColumnMeta createColumnMeta(String n, TypeMemento t) { 
+        return new ColumnMeta() {
+            @Override public String f() { return n; }
+            @Override public TypeMemento s() { return t; }
+        };
+    }
+    public static RowVec createRowVec(int nCols, Function<Integer, Join<Object, Supplier<ColumnMeta>>> cellGen) { 
+        return new RowVec() {
+            @Override public Integer f() { return nCols; }
+            @Override public Function<Integer, Join<Object, Supplier<ColumnMeta>>> s() { return cellGen; }
+        };
+    }
+    public static Cursor createCursor(int nRows, Function<Integer, RowVec> rowGen) { 
+        return new Cursor() {
+            @Override public Integer f() { return nRows; }
+            @Override public Function<Integer, RowVec> s() { return rowGen; }
+        };
+    }
+    public static <T> Twin<T> createTwin(T t1, T t2) { 
+        return new Twin<T>() {
+            @Override public T f() { return t1; }
+            @Override public T s() { return t2; }
+        };
+    }
 
     public static <T> Series<T> sr(int sz, Function<Integer, T> gen) { return createSeries(sz,gen); }
     public static ColumnMeta cm(String n, TypeMemento t) { return createColumnMeta(n,t); }
@@ -313,18 +340,18 @@ public enum D { // DSEL Operations Hub (D)
 // --- Binance Data Utilities ---
     public static List<ColumnMeta> getBinanceKlineSchema() {
         return Arrays.asList(
-            cm("Open_time", TypeMemento.Basic.STRING), // Will parse to timestamp later if needed
+            cm("Open_time", TypeMemento.Basic.LONG), // Changed to LONG to match ISAM handling
             cm("Open", TypeMemento.Basic.DOUBLE),
             cm("High", TypeMemento.Basic.DOUBLE),
             cm("Low", TypeMemento.Basic.DOUBLE),
             cm("Close", TypeMemento.Basic.DOUBLE),
             cm("Volume", TypeMemento.Basic.DOUBLE),
-            cm("Close_time", TypeMemento.Basic.STRING), // Will parse to timestamp later if needed
+            cm("Close_time", TypeMemento.Basic.LONG), // Changed to LONG to match ISAM handling
             cm("Quote_asset_volume", TypeMemento.Basic.DOUBLE),
             cm("Number_of_trades", TypeMemento.Basic.INTEGER),
             cm("Taker_buy_base_asset_volume", TypeMemento.Basic.DOUBLE),
             cm("Taker_buy_quote_asset_volume", TypeMemento.Basic.DOUBLE),
-            cm("Ignore", TypeMemento.Basic.STRING)
+            cm("Ignore", TypeMemento.Basic.STRING) // Fixed size required for STRING in ISAM
         );
     }
 
@@ -373,27 +400,41 @@ public enum D { // DSEL Operations Hub (D)
                 new IsamFileMetadata(Collections.emptyList(), 0, 0).write(metaOut);
                 return;
             }
-            RowVec firstRow = parseCsvLine(line, schema, delimiter);
-            IsamFileMetadata meta = new IsamFileMetadata(schema, 0); // Temporary count, will update later
+            // For streaming, assume fixed size string or set a default fixed size if not specified
+            // For 'Ignore' column, give it a fixed size, e.g., 1 byte or 10 bytes if it's always short.
+            // If it can be variable, the ISAM format needs to change to handle variable-length records or pointers.
+            // For now, let's assume a default size if it's -1.
+            List<ColumnMeta> fixedSchema = schema.stream().map(cm -> {
+                if (cm.s().getFixedSize() == -1 && cm.s() == TypeMemento.Basic.STRING) {
+                    // Provide a sensible default for strings if not already fixed.
+                    // This is a common point of failure for simple fixed-length ISAM.
+                    // You might need to pre-analyze data to find max string length.
+                    return D.cm(cm.f(), new TypeMemento.Basic(cm.s().getTypeName(), 256)); // Example: 256 bytes for strings
+                }
+                return cm;
+            }).collect(Collectors.toList());
+
+            RowVec firstRow = parseCsvLine(line, fixedSchema, delimiter);
+            IsamFileMetadata meta = new IsamFileMetadata(fixedSchema, 0); // Temporary count, will update later
             meta.write(metaOut); // Write placeholder metadata
             ByteBuffer bb = ByteBuffer.allocate(meta.recordByteLength()).order(ByteOrder.BIG_ENDIAN);
             // Process first row
             bb.clear();
-            for (int j = 0; j < sz(firstRow); j++) writeValueToBuffer(bb, cell(firstRow, j).f(), schema.get(j).s());
+            for (int j = 0; j < sz(firstRow); j++) writeValueToBuffer(bb, cell(firstRow, j).f(), fixedSchema.get(j).s());
             dataOut.write(bb.array());
             recordCount++;
             // Process remaining rows in a single pass
             while ((line = reader.readLine()) != null) {
-                RowVec row = parseCsvLine(line, schema, delimiter);
+                RowVec row = parseCsvLine(line, fixedSchema, delimiter);
                 bb.clear();
-                for (int j = 0; j < sz(row); j++) writeValueToBuffer(bb, cell(row, j).f(), schema.get(j).s());
+                for (int j = 0; j < sz(row); j++) writeValueToBuffer(bb, cell(row, j).f(), fixedSchema.get(j).s());
                 dataOut.write(bb.array());
                 recordCount++;
             }
             // Update metadata with actual record count
             try (RandomAccessFile metaRaf = new RandomAccessFile(isamPathBase + META_SFX, "rw")) {
                 metaRaf.seek(0);
-                new IsamFileMetadata(schema, recordCount).write(new DataOutputStream(new FileOutputStream(metaRaf.getFD())));
+                new IsamFileMetadata(fixedSchema, recordCount).write(new DataOutputStream(new FileOutputStream(metaRaf.getFD())));
             }
         }
     }
@@ -415,21 +456,30 @@ public enum D { // DSEL Operations Hub (D)
                 this.metadata = IsamFileMetadata.read(metaIn);
             }
             this.dataFile = new RandomAccessFile(pathBase + DATA_SFX, "r");
-            this.indexFile = new RandomAccessFile(pathBase + DATA_SFX + ".idx", "r");
-            this.indexCount = indexFile.length() / 16; // 8 bytes for timestamp, 8 for offset
-            this.useDiskIndex = indexCount > MAX_IN_MEMORY_INDEX;
-            if (!useDiskIndex) {
-                // Load index into memory for binary search if within limit
-                timestamps = new long[(int) indexCount];
-                offsets = new long[(int) indexCount];
-                indexFile.seek(0);
-                for (int i = 0; i < indexCount; i++) {
-                    timestamps[i] = indexFile.readLong();
-                    offsets[i] = indexFile.readLong();
+            // Check if index file exists, if not, create an empty array/handle missing index
+            Path indexPath = Paths.get(pathBase + DATA_SFX + ".idx");
+            if (Files.exists(indexPath)) {
+                this.indexFile = new RandomAccessFile(indexPath.toFile(), "r");
+                this.indexCount = indexFile.length() / 16; // 8 bytes for timestamp, 8 for offset
+                this.useDiskIndex = indexCount > MAX_IN_MEMORY_INDEX;
+                if (!useDiskIndex) {
+                    timestamps = new long[(int) indexCount];
+                    offsets = new long[(int) indexCount];
+                    indexFile.seek(0);
+                    for (int i = 0; i < indexCount; i++) {
+                        timestamps[i] = indexFile.readLong();
+                        offsets[i] = indexFile.readLong();
+                    }
+                } else {
+                    timestamps = new long[0];
+                    offsets = new long[0];
                 }
             } else {
-                timestamps = new long[0];
-                offsets = new long[0];
+                this.indexFile = null; // No index file
+                this.indexCount = 0;
+                this.useDiskIndex = false;
+                this.timestamps = new long[0];
+                this.offsets = new long[0];
             }
         }
 
@@ -461,6 +511,7 @@ public enum D { // DSEL Operations Hub (D)
         }
 
         public int findRowIndexByTimestamp(long timestamp) throws IOException {
+            if (indexFile == null || indexCount == 0) return -1; // No index to search
             if (useDiskIndex) {
                 return diskBinarySearch(timestamp);
             } else {
@@ -477,6 +528,8 @@ public enum D { // DSEL Operations Hub (D)
         }
 
         public Join<Integer, Integer> findRowIndexRangeByTimestamp(long startTimestamp, long endTimestamp) throws IOException {
+            if (indexFile == null || indexCount == 0) return jn(-1,-1); // No index to search
+
             if (useDiskIndex) {
                 int startIdx = diskBinarySearchNearest(startTimestamp, true);
                 int endIdx = diskBinarySearchNearest(endTimestamp, false);
@@ -542,6 +595,7 @@ public enum D { // DSEL Operations Hub (D)
         }
 
         private long readTimestampAtIndex(long index) throws IOException {
+            if (indexFile == null) throw new IOException("Index file not available.");
             synchronized (indexFile) {
                 indexFile.seek(index * 16); // 8 bytes timestamp + 8 bytes offset
                 return indexFile.readLong();
@@ -565,7 +619,18 @@ public enum D { // DSEL Operations Hub (D)
         }
         RowVec firstRow = get(data, 0);
         List<ColumnMeta> schema = ls(firstRow).stream().map(cell -> cell.s().get()).collect(Collectors.toList());
-        IsamFileMetadata meta = new IsamFileMetadata(schema, sz(data));
+
+        // Ensure String columns in schema have a fixed size defined for ISAM.
+        List<ColumnMeta> fixedSchema = schema.stream().map(cm -> {
+            if (cm.s().getFixedSize() == -1 && cm.s() == TypeMemento.Basic.STRING) {
+                // Provide a sensible default fixed size for strings.
+                // This might need to be adjusted based on the actual max length of strings.
+                return D.cm(cm.f(), new TypeMemento.Basic(cm.s().getTypeName(), 256)); // Example: 256 bytes for strings
+            }
+            return cm;
+        }).collect(Collectors.toList());
+
+        IsamFileMetadata meta = new IsamFileMetadata(fixedSchema, sz(data));
 
         List<Join<Long, Long>> timestampOffsets = new ArrayList<>();
         try (DataOutputStream metaOut = new DataOutputStream(new FileOutputStream(pathBase + META_SFX));
@@ -582,7 +647,7 @@ public enum D { // DSEL Operations Hub (D)
                     if (j == timestampColIdx && val instanceof Long) {
                         timestampOffsets.add(jn((Long) val, offset));
                     }
-                    writeValueToBuffer(bb, val, schema.get(j).s());
+                    writeValueToBuffer(bb, val, fixedSchema.get(j).s());
                 }
                 dataOut.write(bb.array());
             }
