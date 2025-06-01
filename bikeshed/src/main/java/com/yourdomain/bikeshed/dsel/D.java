@@ -1,13 +1,14 @@
 package com.yourdomain.bikeshed.dsel;
 
-import com.yourdomain.bikeshed.core.Join;
-import com.yourdomain.bikeshed.core.Series;
-import com.yourdomain.bikeshed.core.Twin;
-import com.yourdomain.bikeshed.core.RowVec;
-import com.yourdomain.bikeshed.core.Cursor;
-import com.yourdomain.bikeshed.io.IOMemento;
-import com.yourdomain.bikeshed.type.ColumnMeta;
-import com.yourdomain.bikeshed.type.TypeMemento;
+import borg.trikeshed.lib.Join; // Changed
+import borg.trikeshed.lib.Series; // Changed
+import borg.trikeshed.lib.Twin; // Changed
+import borg.trikeshed.cursor.RowVec; // Changed
+import borg.trikeshed.cursor.Cursor; // Changed
+import borg.trikeshed.nio.IOMemento; // Changed from isam.meta to nio
+import borg.trikeshed.isam.RecordMeta; // Changed (type.ColumnMeta maps here)
+// Note: TypeMemento is now IOMemento, ColumnMeta is now RecordMeta.
+// The original import for com.yourdomain.bikeshed.io.IOMemento is now effectively the same as TypeMemento's replacement.
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -181,6 +182,7 @@ public enum D {
      * @param <T> Type of elements.
      * @return A new Series instance.
      */
+    // Series is now borg.trikeshed.lib.Series due to import
     public static <T> @NotNull Series<T> sr(int size, @NotNull Function<Integer, T> provider) {
         return Series.of(size, provider);
     }
@@ -360,7 +362,8 @@ public enum D {
      * @param valuesAndMeta A list of value-metadata supplier pairs for the row.
      * @return A new RowVec instance.
      */
-    public static @NotNull RowVec rv(@NotNull List<Join<Object, Supplier<ColumnMeta>>> valuesAndMeta) {
+    // RowVec, Join, ColumnMeta (as RecordMeta) are from new packages due to imports
+    public static @NotNull RowVec rv(@NotNull List<Join<Object, Supplier<RecordMeta>>> valuesAndMeta) {
         return RowVec.of(valuesAndMeta);
     }
 
@@ -386,7 +389,8 @@ public enum D {
      * @param colIndex The column index.
      * @return The TypeMemento of the column.
      */
-    public static @NotNull TypeMemento colType(@NotNull RowVec rowVec, int colIndex) {
+    // TypeMemento is now IOMemento due to import changes
+    public static @NotNull IOMemento colType(@NotNull RowVec rowVec, int colIndex) {
         return rowVec.get(colIndex).snd().get().type();
     }
 
@@ -400,8 +404,23 @@ public enum D {
      * @param rows A list of RowVecs.
      * @return A new Cursor instance.
      */
+    // Cursor, RowVec from new packages
+    /** @deprecated prefer {@link #cur(Series)} */
+    @Deprecated
     public static @NotNull Cursor cur(@NotNull List<RowVec> rows) {
-        return Cursor.of(rows);
+        return Cursor.of(rows); // This will call the deprecated Cursor.of(List<RowVec>)
+    }
+
+    /**
+     * Shorthand for {@code Cursor.of(series)}. Creates a new Cursor from a Series of RowVecs.
+     * Glyph: `cur`
+     * Example: `D.cur(myRowVecSeries)`
+     *
+     * @param rowsSeries A Series of RowVecs.
+     * @return A new Cursor instance.
+     */
+    public static @NotNull Cursor cur(@NotNull Series<RowVec> rowsSeries) {
+        return Cursor.of(rowsSeries); // This will call the new Cursor.of(Series<RowVec>)
     }
 
     /**
@@ -413,6 +432,7 @@ public enum D {
      * @param range The range of rows to slice.
      * @return A new Cursor representing the sliced rows.
      */
+    // Cursor, Series from new packages
     public static @NotNull Cursor slc(@NotNull Cursor cursor, @NotNull Series.IntRange range) {
         return cursor.slice(range);
     }
@@ -454,6 +474,7 @@ public enum D {
      * @param <R> The type of the transformed RowVec.
      * @return A new Cursor with mapped rows.
      */
+    // Cursor, RowVec from new packages
     public static <R extends RowVec> @NotNull Cursor mapRows(@NotNull Cursor cursor, @NotNull Function<RowVec, R> rowMapper) {
         return cursor.mapRows(rowMapper);
     }
@@ -468,6 +489,7 @@ public enum D {
      * @param rowPredicate The predicate to filter RowVecs.
      * @return A new Cursor containing only rows that satisfy the predicate.
      */
+    // Cursor, RowVec from new packages
     public static @NotNull Cursor filterRows(@NotNull Cursor cursor, @NotNull Predicate<RowVec> rowPredicate) {
         return cursor.filterRows(rowPredicate);
     }
@@ -483,8 +505,9 @@ public enum D {
      * @param type The TypeMemento describing the column's data type.
      * @return A new ColumnMeta instance.
      */
-    public static @NotNull ColumnMeta cm(@NotNull String name, @NotNull TypeMemento type) {
-        return ColumnMeta.of(name, type);
+    // ColumnMeta is RecordMeta, TypeMemento is IOMemento
+    public static @NotNull RecordMeta cm(@NotNull String name, @NotNull IOMemento type) {
+        return RecordMeta.of(name, type);
     }
 
     // --- TypeMemento/IOMemento Fixed-Size String/Binary Blob Factories (Glyphs: fsString, fsBinaryBlob) ---
@@ -497,8 +520,9 @@ public enum D {
      * @param length The fixed length of the string in bytes.
      * @return A TypeMemento representing a fixed-size string.
      */
-    public static @NotNull TypeMemento fsString(int length) {
-        return new FixedSizeTypeMemento(IOMemento.IoString, length);
+    // borg.trikeshed.isam.meta.IOMemento is now an enum
+    public static @NotNull IOMemento fsString(int length) {
+        return new FixedSizeTypeMemento(borg.trikeshed.isam.meta.IOMemento.IoString, length);
     }
 
     /**
@@ -509,19 +533,21 @@ public enum D {
      * @param length The fixed length of the binary blob in bytes.
      * @return A TypeMemento representing a fixed-size binary blob.
      */
-    public static @NotNull TypeMemento fsBinaryBlob(int length) {
-        return new FixedSizeTypeMemento(IOMemento.IoByteArray, length);
+    // borg.trikeshed.isam.meta.IOMemento is now an enum
+    public static @NotNull IOMemento fsBinaryBlob(int length) {
+        return new FixedSizeTypeMemento(borg.trikeshed.isam.meta.IOMemento.IoByteArray, length);
     }
 
     /**
      * Internal helper class for fixed-size variable-length types (String, ByteArray)
      * when used in ISAM, where their length is determined by schema, not content.
      */
-    public static class FixedSizeTypeMemento implements TypeMemento {
-        private final IOMemento baseType;
+    // TypeMemento is IOMemento
+    public static class FixedSizeTypeMemento implements IOMemento {
+        private final IOMemento baseType; // This IOMemento is now borg.trikeshed.isam.meta.IOMemento
         private final int fixedSize;
 
-        public FixedSizeTypeMemento(@NotNull IOMemento baseType, int fixedSize) {
+        public FixedSizeTypeMemento(@NotNull IOMemento baseType, int fixedSize) { // baseType is new IOMemento
             if (baseType.networkSize() != null) {
                 throw new IllegalArgumentException("FixedSizeTypeMemento is only for variable-length IOMementos (String, ByteArray).");
             }
@@ -534,12 +560,13 @@ public enum D {
             return fixedSize;
         }
 
-        public IOMemento getBaseType() {
+        public IOMemento getBaseType() { // Returns new IOMemento
             return baseType;
         }
 
         @Override
         public String toString() {
+            // baseType is now an enum, so .name() is available.
             return baseType.name() + "(" + fixedSize + ")";
         }
 

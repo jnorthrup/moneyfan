@@ -1,12 +1,12 @@
 package com.yourdomain.bikeshed.trading;
 
-import com.yourdomain.bikeshed.core.Cursor;
-import com.yourdomain.bikeshed.core.Join;
-import com.yourdomain.bikeshed.core.RowVec;
-import com.yourdomain.bikeshed.core.Series;
-import com.yourdomain.bikeshed.io.IsamDataFile;
-import com.yourdomain.bikeshed.io.IOMemento;
-import com.yourdomain.bikeshed.type.ColumnMeta;
+import borg.trikeshed.cursor.Cursor;   // Changed
+// Join is implicitly used via D.jn
+import borg.trikeshed.cursor.RowVec;   // Changed
+import borg.trikeshed.lib.Series;    // Changed
+import com.yourdomain.bikeshed.io.IsamDataFile; // IsamDataFile itself uses new types
+import borg.trikeshed.isam.meta.IOMemento; // Changed
+import borg.trikeshed.isam.RecordMeta; // Changed
 import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
@@ -60,21 +60,21 @@ public interface MarketDataSource {
 
         // Define the schema for Binance Kline/Candlestick data, aligned with ISAM fixed-size needs.
         // Assuming the common Binance API Klines endpoint format (timestamp, open, high, low, close, volume, etc.)
-        private static final Series<ColumnMeta> BINANCE_KLINES_SCHEMA = Series.of(
+        private static final Series<RecordMeta> BINANCE_KLINES_SCHEMA = Series.of( // Changed ColumnMeta to RecordMeta
             // Order and types are crucial for ISAM layout
             List.of(
-                ColumnMeta.of("Open_time", IOMemento.IoLong), // Unix timestamp in ms
-                ColumnMeta.of("Open", IOMemento.IoDouble),
-                ColumnMeta.of("High", IOMemento.IoDouble),
-                ColumnMeta.of("Low", IOMemento.IoDouble),
-                ColumnMeta.of("Close", IOMemento.IoDouble),
-                ColumnMeta.of("Volume", IOMemento.IoDouble),
-                ColumnMeta.of("Close_time", IOMemento.IoLong), // Unix timestamp in ms
-                ColumnMeta.of("Quote_asset_volume", IOMemento.IoDouble),
-                ColumnMeta.of("Number_of_trades", IOMemento.IoInt),
-                ColumnMeta.of("Taker_buy_base_asset_volume", IOMemento.IoDouble),
-                ColumnMeta.of("Taker_buy_quote_asset_volume", IOMemento.IoDouble),
-                ColumnMeta.of("Ignore", IOMemento.IoInt) // Last field, often unused
+                RecordMeta.of("Open_time", IOMemento.IoLong), // Unix timestamp in ms. RecordMeta.of, IOMemento is enum
+                RecordMeta.of("Open", IOMemento.IoDouble),
+                RecordMeta.of("High", IOMemento.IoDouble),
+                RecordMeta.of("Low", IOMemento.IoDouble),
+                RecordMeta.of("Close", IOMemento.IoDouble),
+                RecordMeta.of("Volume", IOMemento.IoDouble),
+                RecordMeta.of("Close_time", IOMemento.IoLong), // Unix timestamp in ms
+                RecordMeta.of("Quote_asset_volume", IOMemento.IoDouble),
+                RecordMeta.of("Number_of_trades", IOMemento.IoInt),
+                RecordMeta.of("Taker_buy_base_asset_volume", IOMemento.IoDouble),
+                RecordMeta.of("Taker_buy_quote_asset_volume", IOMemento.IoDouble),
+                RecordMeta.of("Ignore", IOMemento.IoInt) // Last field, often unused
             )
         );
 
@@ -122,22 +122,22 @@ public interface MarketDataSource {
                         double v = volume + (i * 0.1);
 
                         // Use the predefined schema to construct RowVecs
-                        return rv(List.of(
-                            jn(ts, (Supplier<ColumnMeta>) () -> BINANCE_KLINES_SCHEMA.get(0)),
-                            jn(o, (Supplier<ColumnMeta>) () -> BINANCE_KLINES_SCHEMA.get(1)),
-                            jn(h, (Supplier<ColumnMeta>) () -> BINANCE_KLINES_SCHEMA.get(2)),
-                            jn(l, (Supplier<ColumnMeta>) () -> BINANCE_KLINES_SCHEMA.get(3)),
-                            jn(c, (Supplier<ColumnMeta>) () -> BINANCE_KLINES_SCHEMA.get(4)),
-                            jn(v, (Supplier<ColumnMeta>) () -> BINANCE_KLINES_SCHEMA.get(5)),
-                            jn(ts + 60000, (Supplier<ColumnMeta>) () -> BINANCE_KLINES_SCHEMA.get(6)),
-                            jn(v * c, (Supplier<ColumnMeta>) () -> BINANCE_KLINES_SCHEMA.get(7)),
-                            jn(100 + i, (Supplier<ColumnMeta>) () -> BINANCE_KLINES_SCHEMA.get(8)),
-                            jn(v * 0.5, (Supplier<ColumnMeta>) () -> BINANCE_KLINES_SCHEMA.get(9)),
-                            jn(v * c * 0.5, (Supplier<ColumnMeta>) () -> BINANCE_KLINES_SCHEMA.get(10)),
-                            jn(0, (Supplier<ColumnMeta>) () -> BINANCE_KLINES_SCHEMA.get(11))
+                        return rv(List.of( // rv and jn are from D, using new types
+                            jn(ts, (Supplier<RecordMeta>) () -> BINANCE_KLINES_SCHEMA.get(0)), // Changed ColumnMeta to RecordMeta
+                            jn(o, (Supplier<RecordMeta>) () -> BINANCE_KLINES_SCHEMA.get(1)),
+                            jn(h, (Supplier<RecordMeta>) () -> BINANCE_KLINES_SCHEMA.get(2)),
+                            jn(l, (Supplier<RecordMeta>) () -> BINANCE_KLINES_SCHEMA.get(3)),
+                            jn(c, (Supplier<RecordMeta>) () -> BINANCE_KLINES_SCHEMA.get(4)),
+                            jn(v, (Supplier<RecordMeta>) () -> BINANCE_KLINES_SCHEMA.get(5)),
+                            jn(ts + 60000, (Supplier<RecordMeta>) () -> BINANCE_KLINES_SCHEMA.get(6)),
+                            jn(v * c, (Supplier<RecordMeta>) () -> BINANCE_KLINES_SCHEMA.get(7)),
+                            jn(100 + i, (Supplier<RecordMeta>) () -> BINANCE_KLINES_SCHEMA.get(8)),
+                            jn(v * 0.5, (Supplier<RecordMeta>) () -> BINANCE_KLINES_SCHEMA.get(9)),
+                            jn(v * c * 0.5, (Supplier<RecordMeta>) () -> BINANCE_KLINES_SCHEMA.get(10)),
+                            jn(0, (Supplier<RecordMeta>) () -> BINANCE_KLINES_SCHEMA.get(11))
                         ));
                     })
-                    .collect(Collectors.toList());
+                    .collect(Collectors.toList()); // RowVec is borg.trikeshed.cursor.RowVec
         }
     }
 }

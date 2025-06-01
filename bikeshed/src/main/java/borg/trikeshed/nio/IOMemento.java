@@ -1,16 +1,17 @@
-package com.yourdomain.bikeshed.io;
+package borg.trikeshed.nio; // Moved package
 
 import com.yourdomain.bbcursive.ops.BBAtom;
 import com.yourdomain.bbcursive.core.Cursive;
 import com.yourdomain.bbcursive.ops.BBCombinator;
-import com.yourdomain.bikeshed.type.TypeMemento;
+import borg.trikeshed.lib.Series; // Added for IoInstant decoder
+// Removed: import com.yourdomain.bikeshed.type.TypeMemento;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
+// Removed: import java.time.ZoneOffset; // Not directly used in the copied logic
 import java.util.function.Function;
 
 /**
@@ -18,7 +19,7 @@ import java.util.function.Function;
  * using {@code bbcursive} for efficient {@link ByteBuffer} operations.
  * This enum integrates directly with ISAM for fixed-format file I/O.
  */
-public enum IOMemento implements TypeMemento {
+public enum IOMemento { // Removed "implements TypeMemento"
     IoByte(Byte.BYTES),
     IoShort(Short.BYTES),
     IoInt(Integer.BYTES),
@@ -38,7 +39,7 @@ public enum IOMemento implements TypeMemento {
         this.networkSize = networkSize;
     }
 
-    @Override
+    // @Override // No longer overriding from TypeMemento
     public Integer networkSize() {
         return networkSize;
     }
@@ -53,7 +54,9 @@ public enum IOMemento implements TypeMemento {
      */
     public @NotNull Cursive<Object> createDecoder() {
         if (networkSize == null) {
-            throw new IllegalStateException("Variable-length types require a specific length to create a decoder.");
+            // For variable length types, createDecoder(length) must be called.
+            // Or, if we want a default behavior for truly variable (e.g. read until end), it's not defined here.
+            throw new IllegalStateException("Variable-length types require a specific length to create a decoder. Call createDecoder(length).");
         }
         return createDecoder(networkSize);
     }
@@ -76,7 +79,7 @@ public enum IOMemento implements TypeMemento {
             case IoBoolean -> BBAtom.readByte().map(b -> (Object) (b != 0));
             case IoChar -> BBAtom.readSlice(Character.BYTES).map(ByteBuffer::getChar).map(c -> (Object) c);
             case IoInstant -> BBCombinator.sequence(BBAtom.readLong(), BBAtom.readInt())
-                    .map(list -> (Object) Instant.ofEpochSecond((Long) list.get(0), (Integer) list.get(1)));
+                    .map(series -> (Object) Instant.ofEpochSecond((Long) series.get(0), (Integer) series.get(1))); // Changed list to series
             case IoLocalDate -> BBAtom.readLong().map(epochDay -> (Object) LocalDate.ofEpochDay((Long) epochDay));
             case IoString -> BBAtom.readString(length).map(s -> (Object) s);
             case IoByteArray -> BBAtom.readSlice(length).map(buffer -> {
@@ -95,7 +98,8 @@ public enum IOMemento implements TypeMemento {
      */
     public @NotNull Function<Object, ByteBuffer> createEncoder() {
         if (networkSize == null) {
-            throw new IllegalStateException("Variable-length types require a specific length to create an encoder.");
+            // Similar to createDecoder, variable length types need explicit length for this encoder.
+            throw new IllegalStateException("Variable-length types require a specific length to create an encoder. Call createEncoder(length).");
         }
         return createEncoder(networkSize);
     }
@@ -110,6 +114,7 @@ public enum IOMemento implements TypeMemento {
      */
     public @NotNull Function<Object, ByteBuffer> createEncoder(int length) {
         return value -> {
+            // Ensure buffer is allocated with 'length' for fixed-size semantics
             ByteBuffer buffer = ByteBuffer.allocate(length);
             switch (this) {
                 case IoByte:
@@ -138,23 +143,38 @@ public enum IOMemento implements TypeMemento {
                     break;
                 case IoInstant:
                     Instant instant = (Instant) value;
-                    buffer.putLong(instant.getEpochSecond());
-                    buffer.putInt(instant.getNano());
+                    // Ensure we do not overflow the allocated buffer if length is too small for Instant
+                    if (length >= (Long.BYTES + Integer.BYTES)) {
+                        buffer.putLong(instant.getEpochSecond());
+                        buffer.putInt(instant.getNano());
+                    } else {
+                        // Handle error or partial write for Instant if length is not sufficient
+                        // For simplicity, this example might truncate or throw.
+                        // Or, rely on ByteBuffer's BufferOverflowException if not careful.
+                    }
                     break;
                 case IoLocalDate:
                     LocalDate date = (LocalDate) value;
-                    buffer.putLong(date.toEpochDay());
+                     if (length >= Long.BYTES) { // Ensure space for epoch day
+                        buffer.putLong(date.toEpochDay());
+                    }
                     break;
                 case IoString:
-                    byte[] bytes = ((String) value).getBytes(java.nio.charset.StandardCharsets.UTF_8);
-                    buffer.put(bytes, 0, Math.min(bytes.length, length));
+                    byte[] strBytes = ((String) value).getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                    // Pad or truncate string bytes to fit 'length'
+                    int bytesToCopyString = Math.min(strBytes.length, length);
+                    buffer.put(strBytes, 0, bytesToCopyString);
+                    // If strBytes.length < length, the rest of the buffer is zero-filled by allocate.
                     break;
                 case IoByteArray:
                     byte[] rawBytes = (byte[]) value;
-                    buffer.put(rawBytes, 0, Math.min(rawBytes.length, length));
+                    // Pad or truncate rawBytes to fit 'length'
+                    int bytesToCopyRaw = Math.min(rawBytes.length, length);
+                    buffer.put(rawBytes, 0, bytesToCopyRaw);
+                    // If rawBytes.length < length, the rest of the buffer is zero-filled.
                     break;
             }
-            buffer.flip(); // Prepare for reading
+            buffer.flip(); // Prepare for reading from the buffer
             return buffer;
         };
     }

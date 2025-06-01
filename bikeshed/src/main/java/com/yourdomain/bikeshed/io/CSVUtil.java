@@ -1,12 +1,12 @@
 package com.yourdomain.bikeshed.io;
 
-import com.yourdomain.bikeshed.core.Cursor;
-import com.yourdomain.bikeshed.core.Join;
-import com.yourdomain.bikeshed.core.RowVec;
-import com.yourdomain.bikeshed.core.Series;
-import com.yourdomain.bikeshed.dsel.D;
-import com.yourdomain.bikeshed.type.ColumnMeta;
-import com.yourdomain.bikeshed.type.TypeMemento;
+import borg.trikeshed.cursor.Cursor;   // Changed
+import borg.trikeshed.lib.Join;     // Changed (via D.jn)
+import borg.trikeshed.cursor.RowVec;   // Changed (via D.rv)
+import borg.trikeshed.lib.Series; // Added for Series usage
+import com.yourdomain.bikeshed.dsel.D;     // D itself is updated
+import borg.trikeshed.isam.RecordMeta; // Changed
+import borg.trikeshed.nio.IOMemento; // Changed from isam.meta to nio
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -81,9 +81,9 @@ public enum CSVUtil {
      * @param value The string value to deduce type for.
      * @return A TypeMemento representing the deduced type.
      */
-    public static @NotNull TypeMemento deduceType(@Nullable String value) {
+    public static @NotNull IOMemento deduceType(@Nullable String value) { // Changed return type
         if (value == null || value.trim().isEmpty()) {
-            return IOMemento.IoString; // Default for empty/null
+            return IOMemento.IoString; // Default for empty/null (IOMemento is now enum)
         }
         String trimmed = value.trim();
 
@@ -122,16 +122,18 @@ public enum CSVUtil {
      * @return The converted object, or null if conversion fails for numeric/boolean types.
      * @throws IllegalArgumentException if conversion is not possible (e.g., invalid Base64).
      */
-    public static @Nullable Object convertCsvStringToTypedValue(@Nullable String csvString, @NotNull TypeMemento targetType) {
+    public static @Nullable Object convertCsvStringToTypedValue(@Nullable String csvString, @NotNull IOMemento targetType) { // Changed targetType
         String value = (csvString == null) ? "" : csvString.trim();
 
         if (targetType instanceof D.FixedSizeTypeMemento) {
+            // D.FixedSizeTypeMemento implements IOMemento, getBaseType returns the enum IOMemento
             targetType = ((D.FixedSizeTypeMemento) targetType).getBaseType();
         }
+        // targetType is now guaranteed to be the IOMemento enum if it was FixedSizeTypeMemento
 
         if (value.isEmpty()) {
             // Handle empty strings for different types
-            return switch ((IOMemento) targetType) {
+            return switch (targetType) { // targetType is IOMemento enum
                 case IoBoolean -> false; // Default for empty boolean
                 case IoString -> "";
                 case IoByteArray -> new byte[0];
@@ -139,7 +141,7 @@ public enum CSVUtil {
             };
         }
 
-        return switch ((IOMemento) targetType) {
+        return switch (targetType) { // targetType is IOMemento enum
             case IoByte -> Byte.parseByte(value);
             case IoShort -> Short.parseShort(value);
             case IoInt -> Integer.parseInt(value);
@@ -177,94 +179,98 @@ public enum CSVUtil {
      */
     public static @NotNull Cursor readCsv(@NotNull String filePath, boolean hasHeader, char delimiter, char quote, int sampleRowsForTypeDeduction) throws IOException {
         Path path = Paths.get(filePath);
-        List<String> allLines = Files.readAllLines(path);
+        List<String> allLinesList = Files.readAllLines(path);
+        Series<String> allLinesSeries = Series.of(allLinesList.size(), allLinesList::get);
 
-        if (allLines.isEmpty()) {
-            return Cursor.of(Collections.emptyList());
+        if (allLinesSeries.size() == 0) {
+            return D.cur(Series.of(0, i -> { throw new IndexOutOfBoundsException(); })); // Use new D.cur with empty Series
         }
 
-        List<String> headerLine = hasHeader ? parseCsvLine(allLines.get(0), delimiter, quote) : Collections.emptyList();
-        List<String> dataLines = hasHeader ? allLines.subList(1, allLines.size()) : allLines;
+        List<String> headerNamesList = hasHeader ? parseCsvLine(allLinesSeries.get(0), delimiter, quote) : Collections.emptyList();
+        Series<String> dataLinesSeries = hasHeader ? allLinesSeries.tail(1) : allLinesSeries;
 
-        if (dataLines.isEmpty()) {
-            // If no data lines, but had header, create empty cursor with header schema
+        if (dataLinesSeries.size() == 0) {
             if (hasHeader) {
-                List<ColumnMeta> headerMeta = headerLine.stream()
-                        .map(name -> D.cm(name, IOMemento.IoString)) // Default to String for empty data
-                        .collect(Collectors.toList());
-                return Cursor.of(Collections.emptyList()).selectColumns(IntStream.range(0, headerMeta.size()).toArray()); // Placeholder for schema
+                // Schema from header, but no data.
+                // This part can be complex if we need to create a Cursor with specific schema but no rows.
+                // For now, D.cur with empty Series is simplest. If schema must be preserved, this needs more work.
+                // List<RecordMeta> headerMeta = headerNamesList.stream().map(name -> D.cm(name, IOMemento.IoString)).collect(Collectors.toList());
+                // Series<RecordMeta> schemaSeries = Series.of(headerMeta.size(), headerMeta::get);
+                // return D.cur(Series.of(0, i -> { throw new IndexOutOfBoundsException(); }) /*, schemaSeries */); // D.cur doesn't take schema
             }
-            return Cursor.of(Collections.emptyList());
+            return D.cur(Series.of(0, i -> { throw new IndexOutOfBoundsException(); }));
         }
 
         // 1. Deduce types
-        List<List<String>> parsedSampleRows = dataLines.stream()
-                .limit(sampleRowsForTypeDeduction)
-                .map(line -> parseCsvLine(line, delimiter, quote))
-                .collect(Collectors.toList());
+        Series<List<String>> parsedSampleRowsSeries = dataLinesSeries.head(sampleRowsForTypeDeduction)
+                                                       .alpha(line -> parseCsvLine(line, delimiter, quote));
 
-        int numColumns = parsedSampleRows.stream().mapToInt(List::size).max().orElse(0);
-        if (numColumns == 0) { // No data rows or empty rows
-            numColumns = hasHeader ? headerLine.size() : 0;
+        int numColumns = parsedSampleRowsSeries.size() > 0 ? parsedSampleRowsSeries.get(0).size() : 0;
+        if (numColumns == 0 && parsedSampleRowsSeries.size() > 0) { // if first sample row was empty
+             numColumns = parsedSampleRowsSeries.alpha(List::size).toList().stream().mapToInt(Integer::intValue).max().orElse(0);
+        }
+        if (numColumns == 0) { // Still no columns found
+            numColumns = hasHeader ? headerNamesList.size() : 0;
         }
 
-        List<TypeMemento> deducedTypes = IntStream.range(0, numColumns)
-                .mapToObj(colIndex -> {
-                    // Collect all values for this column from sample rows
-                    List<String> columnValues = parsedSampleRows.stream()
-                            .filter(row -> colIndex < row.size())
-                            .map(row -> row.get(colIndex))
-                            .collect(Collectors.toList());
+        final int finalNumColumns = numColumns; // For use in lambdas
 
-                    // Deduce the most general type that fits all samples in this column
-                    TypeMemento commonType = IOMemento.IoString; // Start with most general
-                    int maxStrLength = 0;
+        IOMemento[] deducedTypesArray = new IOMemento[finalNumColumns];
+        for (int colIndex = 0; colIndex < finalNumColumns; colIndex++) {
+            final int cIdx = colIndex;
+            Series<String> columnValuesSeries = parsedSampleRowsSeries.alpha(
+                parsedRowList -> cIdx < parsedRowList.size() ? parsedRowList.get(cIdx) : ""
+            );
 
-                    for (String val : columnValues) {
-                        TypeMemento currentValType = deduceType(val);
-                        if (currentValType == IOMemento.IoString) {
-                            commonType = IOMemento.IoString; // If any is string, it's a string column
-                        } else if (currentValType == IOMemento.IoDouble && commonType != IOMemento.IoString) {
-                            commonType = IOMemento.IoDouble; // If any is double, and not string, it's double
-                        } else if (currentValType == IOMemento.IoLong && commonType == IOMemento.IoBoolean) {
-                            commonType = IOMemento.IoLong; // Long overrides boolean
-                        }
-                        maxStrLength = Math.max(maxStrLength, val != null ? val.length() : 0);
-                    }
+            IOMemento commonType = IOMemento.IoString;
+            int maxStrLength = 0;
+            for (int i = 0; i < columnValuesSeries.size(); i++) {
+                String val = columnValuesSeries.get(i);
+                IOMemento currentValType = deduceType(val);
+                if (currentValType == IOMemento.IoString) {
+                    commonType = IOMemento.IoString;
+                } else if (currentValType == IOMemento.IoDouble && commonType != IOMemento.IoString) {
+                    commonType = IOMemento.IoDouble;
+                } else if (currentValType == IOMemento.IoLong && commonType == IOMemento.IoBoolean) {
+                    commonType = IOMemento.IoLong;
+                } else if (commonType == IOMemento.IoBoolean && currentValType != IOMemento.IoBoolean) {
+                     commonType = currentValType;
+                }
+                maxStrLength = Math.max(maxStrLength, val != null ? val.length() : 0);
+            }
 
-                    // For string types, use FixedSizeTypeMemento with max length + 1 for null terminator/padding
-                    if (commonType == IOMemento.IoString) {
-                        return D.fsString(Math.max(1, maxStrLength + 1));
-                    }
-                    return commonType;
-                })
-                .collect(Collectors.toList());
+            if (commonType == IOMemento.IoString) {
+                deducedTypesArray[cIdx] = D.fsString(Math.max(1, maxStrLength + 1));
+            } else {
+                deducedTypesArray[cIdx] = commonType;
+            }
+        }
+        Series<IOMemento> deducedTypesSeries = Series.of(deducedTypesArray.length, idx -> deducedTypesArray[idx]);
 
-        // 2. Create ColumnMeta for the schema
-        List<ColumnMeta> schema = IntStream.range(0, numColumns)
-                .mapToObj(colIndex -> {
-                    String colName = hasHeader && colIndex < headerLine.size() ? headerLine.get(colIndex) : "column_" + colIndex;
-                    TypeMemento colType = deducedTypes.get(colIndex);
-                    return D.cm(colName, colType);
-                })
-                .collect(Collectors.toList());
+        // 2. Create RecordMeta for the schema
+        RecordMeta[] schemaArray = new RecordMeta[finalNumColumns];
+        for (int colIndex = 0; colIndex < finalNumColumns; colIndex++) {
+            String colName = (hasHeader && colIndex < headerNamesList.size()) ? headerNamesList.get(colIndex) : "column_" + colIndex;
+            IOMemento colType = deducedTypesSeries.get(colIndex);
+            schemaArray[colIndex] = D.cm(colName, colType);
+        }
+        Series<RecordMeta> schemaSeries = Series.of(schemaArray.length, idx -> schemaArray[idx]);
 
         // 3. Process all data rows into RowVecs
-        List<RowVec> rows = dataLines.stream()
-                .map(line -> {
-                    List<String> parsedFields = parseCsvLine(line, delimiter, quote);
-                    List<Join<Object, Supplier<ColumnMeta>>> rowCells = IntStream.range(0, numColumns)
-                            .mapToObj(colIndex -> {
-                                String stringValue = colIndex < parsedFields.size() ? parsedFields.get(colIndex) : "";
-                                TypeMemento colType = schema.get(colIndex).type();
-                                Object typedValue = convertCsvStringToTypedValue(stringValue, colType);
-                                return D.jn(typedValue, (Supplier<ColumnMeta>) () -> schema.get(colIndex));
-                            })
-                            .collect(Collectors.toList());
-                    return D.rv(rowCells);
-                })
-                .collect(Collectors.toList());
+        Series<RowVec> rowsSeries = dataLinesSeries.alpha(line -> {
+            List<String> parsedFields = parseCsvLine(line, delimiter, quote);
+            @SuppressWarnings("unchecked") // For Join[] array creation
+            Join<Object, Supplier<RecordMeta>>[] rowCellsArray = new Join[finalNumColumns];
+            for (int colIndex = 0; colIndex < finalNumColumns; colIndex++) {
+                String stringValue = colIndex < parsedFields.size() ? parsedFields.get(colIndex) : "";
+                IOMemento colType = schemaSeries.get(colIndex).type();
+                Object typedValue = convertCsvStringToTypedValue(stringValue, colType);
+                final int cIdx = colIndex;
+                rowCellsArray[colIndex] = D.jn(typedValue, (Supplier<RecordMeta>) () -> schemaSeries.get(cIdx));
+            }
+            return D.rv(rowCellsArray);
+        });
 
-        return D.cur(rows);
+        return D.cur(rowsSeries); // Use new D.cur that takes Series<RowVec>
     }
 }

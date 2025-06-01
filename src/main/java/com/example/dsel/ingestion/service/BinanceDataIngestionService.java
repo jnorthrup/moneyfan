@@ -5,8 +5,7 @@ import com.example.dsel.ingestion.dto.BinanceKline;
 import com.example.dsel.ingestion.dto.BinanceTrade;
 import com.example.dsel.ingestion.schema.DselSchemas;
 import borg.trikeshed.cursor.Cursor;
-// import borg.trikeshed.lib.Series; // No longer directly used here, Cursor.size() is available
-
+import borg.trikeshed.lib.Series; // Added import for Series
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -197,31 +196,35 @@ public class BinanceDataIngestionService {
             // 4. Final ISAM Conversion
             if (Files.exists(mainCsvFile) && Files.size(mainCsvFile) > 0) {
                 System.out.printf("Starting ISAM conversion for %s%n", mainCsvFile);
-                List<?> dtos; // List<BinanceKline> or List<BinanceTrade>
+                Series<?> dtosSeries; // Changed List<?> to Series<?>
                 if (dataType.equals("klines")) {
-                    dtos = parseKlinesFromCsv(mainCsvFile);
-                    if (!dtos.isEmpty()) {
-                        Cursor klineCursor = dataTransformerService.transformKlines((List<BinanceKline>) dtos, DselSchemas.KLINE_SCHEMA);
+                    dtosSeries = parseKlinesFromCsv(mainCsvFile); // Returns Series<BinanceKline>
+                    if (!dtosSeries.isEmpty()) { // Series.isEmpty()
+                        // Cast to Series<BinanceKline> for transformKlines
+                        Cursor klineCursor = dataTransformerService.transformKlines((Series<BinanceKline>) dtosSeries, DselSchemas.KLINE_SCHEMA);
                         if (klineCursor != null && klineCursor.size() > 0) {
                             isamPersistenceService.saveCursor(klineCursor, assetPair, interval, dataType, DselSchemas.KLINE_SCHEMA);
-                            long finalTimestamp = ((BinanceKline) dtos.get(dtos.size() - 1)).closeTime();
+                            // Get last element for timestamp: Series.get() and Series.size()
+                            long finalTimestamp = ((BinanceKline) dtosSeries.get(dtosSeries.size() - 1)).closeTime();
                             incrementalUpdateManager.updateLastTimestamp(assetPair, interval, dataType, finalTimestamp);
                             System.out.printf("ISAM conversion complete for klines. Final timestamp: %d%n", finalTimestamp);
                         }
                     }
                 } else { // trades
-                    dtos = parseTradesFromCsv(mainCsvFile);
-                     if (!dtos.isEmpty()) {
-                        Cursor tradeCursor = dataTransformerService.transformTrades((List<BinanceTrade>) dtos, DselSchemas.TRADE_SCHEMA);
+                    dtosSeries = parseTradesFromCsv(mainCsvFile); // Returns Series<BinanceTrade>
+                     if (!dtosSeries.isEmpty()) { // Series.isEmpty()
+                        // Cast to Series<BinanceTrade> for transformTrades
+                        Cursor tradeCursor = dataTransformerService.transformTrades((Series<BinanceTrade>) dtosSeries, DselSchemas.TRADE_SCHEMA);
                         if (tradeCursor != null && tradeCursor.size() > 0) {
                             isamPersistenceService.saveCursor(tradeCursor, assetPair, interval, dataType, DselSchemas.TRADE_SCHEMA);
-                            long finalTimestamp = ((BinanceTrade) dtos.get(dtos.size() - 1)).time();
+                            // Get last element for timestamp: Series.get() and Series.size()
+                            long finalTimestamp = ((BinanceTrade) dtosSeries.get(dtosSeries.size() - 1)).time();
                             incrementalUpdateManager.updateLastTimestamp(assetPair, interval, dataType, finalTimestamp);
                              System.out.printf("ISAM conversion complete for trades. Final timestamp: %d%n", finalTimestamp);
                         }
                     }
                 }
-                 if (dtos.isEmpty()) {
+                 if (dtosSeries.isEmpty()) {
                     System.out.printf("No DTOs parsed from CSV %s. ISAM conversion skipped.%n", mainCsvFile);
                 }
             } else {
@@ -288,11 +291,11 @@ public class BinanceDataIngestionService {
         return 0L;
     }
 
-    private List<BinanceKline> parseKlinesFromCsv(Path csvFile) throws IOException {
-        List<BinanceKline> klines = new ArrayList<>();
+    private Series<BinanceKline> parseKlinesFromCsv(Path csvFile) throws IOException { // Changed return type
+        List<BinanceKline> klinesList = new ArrayList<>(); // Keep internal list for collection
         if (!Files.exists(csvFile) || Files.size(csvFile) == 0) {
             System.out.println("CSV file for klines is empty or does not exist: " + csvFile);
-            return klines;
+            return Series.of(0, i -> { throw new IndexOutOfBoundsException(); }); // Return empty Series
         }
 
         try (IndexedCsvReader reader = new IndexedCsvReader(csvFile)) {
@@ -324,14 +327,14 @@ public class BinanceDataIngestionService {
                 }
             }
         } // try-with-resources will close the reader
-        return klines;
+        return Series.of(klinesList.size(), klinesList::get); // Convert List to Series
     }
 
-    private List<BinanceTrade> parseTradesFromCsv(Path csvFile) throws IOException {
-        List<BinanceTrade> trades = new ArrayList<>();
+    private Series<BinanceTrade> parseTradesFromCsv(Path csvFile) throws IOException { // Changed return type
+        List<BinanceTrade> tradesList = new ArrayList<>(); // Keep internal list for collection
          if (!Files.exists(csvFile) || Files.size(csvFile) == 0) {
             System.out.println("CSV file for trades is empty or does not exist: " + csvFile);
-            return trades;
+            return Series.of(0, i -> { throw new IndexOutOfBoundsException(); }); // Return empty Series
         }
 
         try (IndexedCsvReader reader = new IndexedCsvReader(csvFile)) {
@@ -358,6 +361,6 @@ public class BinanceDataIngestionService {
                 }
             }
         } // try-with-resources will close the reader
-        return trades;
+        return Series.of(tradesList.size(), tradesList::get); // Convert List to Series
     }
 }

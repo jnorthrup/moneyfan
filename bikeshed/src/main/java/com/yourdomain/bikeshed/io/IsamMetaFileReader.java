@@ -1,8 +1,10 @@
 package com.yourdomain.bikeshed.io;
 
-import com.yourdomain.bikeshed.core.Series;
-import com.yourdomain.bikeshed.type.ColumnMeta;
+import borg.trikeshed.nio.IOMemento; // Changed from isam.meta to nio
+import borg.trikeshed.isam.RecordMeta;   // Changed
+import borg.trikeshed.lib.Series; // Changed to new location
 import com.yourdomain.bbcursive.core.Cursive;
+import com.yourdomain.bikeshed.dsel.D; // For FixedSizeTypeMemento
 import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
@@ -11,10 +13,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.List;
+import java.util.List; // Still needed for Files.readAllLines
 import java.util.Map;
 import java.util.function.Function;
-import java.util.stream.Collectors;
+// import java.util.stream.Collectors; // No longer needed for dataLines
+import java.util.stream.IntStream; // For loop if used, or can use standard for loop
 
 /**
  * Reads ISAM metadata files to define the schema for data files.
@@ -24,7 +27,7 @@ import java.util.stream.Collectors;
 public class IsamMetaFileReader {
 
     private final String metafileFilename;
-    private Series<ColumnMeta> constraints;
+    private Series<RecordMeta> constraints; // Changed
     private int recordLengthBytes;
 
     public IsamMetaFileReader(@NotNull String metafileFilename) {
@@ -44,24 +47,31 @@ public class IsamMetaFileReader {
             throw new IOException("Metafile not found: " + metafileFilename);
         }
 
-        List<String> lines = Files.readAllLines(path);
-        List<String> dataLines = lines.stream()
-                .filter(line -> !line.trim().startsWith("#") && !line.isBlank())
-                .collect(Collectors.toList());
+        List<String> linesList = Files.readAllLines(path); // Step 1: Keep as is
+        Series<String> linesSeries = Series.of(linesList.size(), linesList::get); // Step 1: Convert to Series
 
-        if (dataLines.size() < 3) {
+        // Step 2: Filter lines using Series.filter
+        Series<String> filteredLinesSeries = linesSeries.filter(line -> !line.trim().startsWith("#") && !line.isBlank());
+
+        if (filteredLinesSeries.size() < 3) { // Step 3: Check size
             throw new IllegalArgumentException("Metafile is too short, expected at least 3 data lines.");
         }
 
-        String[] coordStrings = dataLines.get(0).trim().split("\\s+");
-        String[] nameStrings = dataLines.get(1).trim().split("\\s+");
-        String[] typeStrings = dataLines.get(2).trim().split("\\s+");
+        // Step 3: Access specific definition lines
+        String coordStringsLine = filteredLinesSeries.get(0).trim();
+        String nameStringsLine = filteredLinesSeries.get(1).trim();
+        String typeStringsLine = filteredLinesSeries.get(2).trim();
+
+        String[] coordStrings = coordStringsLine.split("\\s+");
+        String[] nameStrings = nameStringsLine.split("\\s+");
+        String[] typeStrings = typeStringsLine.split("\\s+");
 
         if (nameStrings.length != typeStrings.length || coordStrings.length != nameStrings.length * 2) {
             throw new IllegalArgumentException("Malformed metafile: mismatch in counts of coords, names, or types.");
         }
 
-        List<ColumnMeta> tempConstraints = new ArrayList<>();
+        // Step 4: Parse and collect RecordMeta objects into an array
+        RecordMeta[] constraintsArray = new RecordMeta[nameStrings.length];
         for (int i = 0; i < nameStrings.length; i++) {
             String name = nameStrings[i];
             IOMemento type;
@@ -93,15 +103,36 @@ public class IsamMetaFileReader {
                 throw new IllegalArgumentException("Invalid field length for " + name + ": " + actualFieldLength);
             }
 
-            tempConstraints.add(new IsamColumnMeta(name, type, fieldBegin, fieldEnd));
+            // Handle potential creation of D.FixedSizeTypeMemento if type is IoString or IoByteArray and fixedSize is from typeStrings[i]
+            if (typeStrings[i].contains("(")) {
+                // This logic was already present and correctly determines 'type' (base enum) and 'fixedSize'
+                // We need to pass the correct IOMemento instance to IsamColumnMeta constructor
+                // If it's a fixed-size spec for a variable type like IoString(10), we might need FixedSizeTypeMemento
+                // However, IsamColumnMeta's first constructor takes IOMemento (enum), second takes D.FixedSizeTypeMemento
+                // The current logic correctly deduces the base 'type' (enum) and 'fixedSize'.
+                // The IsamColumnMeta constructor that takes the base enum 'type' will use 'actualFieldLength' for its decoder/encoder.
+                // This seems fine. If a FixedSizeTypeMemento was intended, the caller of IsamColumnMeta would create it.
+                // Here, we are parsing the meta file, so we create IsamColumnMeta with the base enum type.
+                constraintsArray[i] = new IsamColumnMeta(name, type, fieldBegin, fieldEnd);
+            } else {
+                 constraintsArray[i] = new IsamColumnMeta(name, type, fieldBegin, fieldEnd);
+            }
         }
-        this.constraints = Series.of(tempConstraints.size(), tempConstraints::get);
+        // Step 5: Assign to this.constraints
+        this.constraints = Series.of(constraintsArray.length, idx -> constraintsArray[idx]);
         this.recordLengthBytes = Integer.parseInt(coordStrings[coordStrings.length - 1]); // Last coord is total record length
 
         // Verify calculated record length matches the one in metadata
-        int calculatedRecordLength = tempConstraints.stream()
-                .mapToInt(IsamColumnMeta::getLength)
-                .sum();
+        // Need to iterate over constraintsArray or this.constraints Series
+        int calculatedRecordLength = 0;
+        for(int i=0; i < constraintsArray.length; ++i) {
+            calculatedRecordLength += ((IsamColumnMeta)constraintsArray[i]).getLength();
+        }
+        // Or using the new Series:
+        // int calculatedRecordLength = IntStream.range(0, this.constraints.size())
+        //        .map(i -> ((IsamColumnMeta)this.constraints.get(i)).getLength())
+        //        .sum();
+
         if (calculatedRecordLength != recordLengthBytes) {
             throw new IllegalArgumentException("Calculated record length (" + calculatedRecordLength + ") does not match metafile record length (" + recordLengthBytes + ").");
         }
@@ -112,7 +143,7 @@ public class IsamMetaFileReader {
      * Must call {@code load()} first.
      * @return A Series of ColumnMeta representing the schema.
      */
-    public @NotNull Series<ColumnMeta> getConstraints() {
+    public @NotNull Series<RecordMeta> getConstraints() { // Changed
         if (constraints == null) {
             throw new IllegalStateException("Metadata not loaded. Call load() first.");
         }
@@ -143,29 +174,40 @@ public class IsamMetaFileReader {
      * @throws IOException If the file cannot be written.
      * @throws IllegalArgumentException If variable-length types don't have lengths specified.
      */
-    public static void write(@NotNull String metafileFilename, @NotNull Series<ColumnMeta> columnMetas, @NotNull Map<String, Integer> varCharLengths) throws IOException {
+    public static void write(@NotNull String metafileFilename, @NotNull Series<RecordMeta> columnMetas, @NotNull Map<String, Integer> varCharLengths) throws IOException { // Changed
         List<String> coordStrings = new ArrayList<>();
         List<String> nameStrings = new ArrayList<>();
         List<String> typeStrings = new ArrayList<>();
 
         int currentOffset = 0;
         for (int i = 0; i < columnMetas.size(); i++) {
-            ColumnMeta colMeta = columnMetas.get(i);
+            RecordMeta colMeta = columnMetas.get(i); // Changed
             String name = colMeta.name();
-            TypeMemento typeMemento = colMeta.type(); // Can be IOMemento or FixedSizeTypeMemento
+            IOMemento typeMemento = colMeta.type(); // colMeta.type() now returns IOMemento enum
 
             nameStrings.add(name);
 
             int fieldLength;
-            if (typeMemento.networkSize() != null) {
+            // typeMemento is now the enum. It could have been wrapped in FixedSizeTypeMemento by user.
+            // However, RecordMeta stores the base enum type.
+            // The .toString() of FixedSizeTypeMemento is "IoString(10)".
+            // The .name() of IOMemento enum is "IoString".
+            // The meta file expects "IoString(10)" for fixed variable types.
+            // This means if colMeta came from D.fsString(10), its type() would be IoString enum.
+            // This static write method needs to know the intended fixed length for variable types.
+            // This implies columnMetas should perhaps be Series<IsamColumnMeta> or similar rich type.
+            // Or, the ColumnMeta/RecordMeta itself should store the "fixed variable length" if specified at creation.
+            // Current RecordMeta does not store this. It only stores the base IOMemento enum.
+            // Let's assume varCharLengths map is the source of truth for fixed variable lengths.
+            if (typeMemento.networkSize() != null) { // Truly fixed size type (e.g. IoInt)
                 fieldLength = typeMemento.networkSize();
-                typeStrings.add(typeMemento instanceof IOMemento ? ((IOMemento) typeMemento).name() : typeMemento.toString());
-            } else {
+                typeStrings.add(typeMemento.name()); // Use enum name: "IoInt"
+            } else { // Variable size type (e.g. IoString, IoByteArray)
                 fieldLength = varCharLengths.getOrDefault(name, -1);
                 if (fieldLength == -1) {
-                    throw new IllegalArgumentException("Variable-length type '" + name + "' (Type: " + typeMemento.getClass().getSimpleName() + ") requires an explicit length in varCharLengths map.");
+                    throw new IllegalArgumentException("Variable-length type '" + name + "' (Type: " + typeMemento.name() + ") requires an explicit length in varCharLengths map.");
                 }
-                typeStrings.add(typeMemento.toString()); // e.g., IoString(10)
+                typeStrings.add(typeMemento.name() + "(" + fieldLength + ")"); // e.g., "IoString(10)"
             }
 
             coordStrings.add(String.valueOf(currentOffset));
@@ -187,14 +229,14 @@ public class IsamMetaFileReader {
     // A specialized ColumnMeta for ISAM to hold begin/end/decoder/encoder
     // In a real system, this would be a separate record or a richer ColumnMeta interface.
     // For this example, we define it as a concrete class to hold the necessary details.
-    public static class IsamColumnMeta extends ColumnMeta.ImmutableColumnMeta {
+    public static class IsamColumnMeta extends RecordMeta.ImmutableRecordMeta { // Changed superclass
         private final int beginOffset;
         private final int endOffset;
         private final Cursive<Object> decoder;
         private final Function<Object, ByteBuffer> encoder;
 
-        public IsamColumnMeta(@NotNull String name, @NotNull IOMemento type, int beginOffset, int endOffset) {
-            super(name, type);
+        public IsamColumnMeta(@NotNull String name, @NotNull IOMemento type, int beginOffset, int endOffset) { // IOMemento is now enum
+            super(name, type); // Super constructor expects (String, IOMemento enum)
             this.beginOffset = beginOffset;
             this.endOffset = endOffset;
             int length = endOffset - beginOffset;
@@ -203,8 +245,8 @@ public class IsamMetaFileReader {
         }
 
         // Constructor for FixedSizeTypeMemento
-        public IsamColumnMeta(@NotNull String name, @NotNull D.FixedSizeTypeMemento type, int beginOffset, int endOffset) {
-            super(name, type);
+        public IsamColumnMeta(@NotNull String name, @NotNull D.FixedSizeTypeMemento type, int beginOffset, int endOffset) { // type is D.FixedSizeTypeMemento
+            super(name, type); // Super constructor expects (String, IOMemento). D.FixedSizeTypeMemento implements IOMemento.
             this.beginOffset = beginOffset;
             this.endOffset = endOffset;
             int length = endOffset - beginOffset;

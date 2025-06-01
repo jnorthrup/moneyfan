@@ -2,11 +2,12 @@ package com.yourdomain.bbcursive.ops;
 
 import com.yourdomain.bbcursive.core.Cursive;
 import com.yourdomain.bbcursive.core.ParseResult;
+import borg.trikeshed.lib.Series; // Added import for Series
 import org.jetbrains.annotations.NotNull;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.List;
+import java.util.List; // Still used temporarily by 'many'
 import java.util.Optional;
 import java.util.function.Predicate;
 
@@ -27,25 +28,39 @@ public enum BBCombinator {
      *
      * @param parsers An array of Cursive parsers.
      * @param <T> The common supertype of values produced by the parsers.
-     * @return A Cursive parser that produces a List of parsed values.
+     * @return A Cursive parser that produces a Series of parsed values.
      */
     @SafeVarargs
-    public static <T> @NotNull Cursive<List<T>> sequence(@NotNull Cursive<? extends T>... parsers) {
+    public static <T> @NotNull Cursive<Series<T>> sequence(@NotNull Cursive<? extends T>... parsers) { // Changed List<T> to Series<T>
         return buffer -> {
             ByteBuffer currentBuffer = buffer.duplicate(); // Work on a duplicate to allow rollback
-            List<T> results = new ArrayList<>();
+            Object[] tempResults = new Object[parsers.length];
+            int successfulParses = 0;
+
             for (Cursive<? extends T> parser : parsers) {
                 ParseResult<? extends T> result = parser.parse(currentBuffer);
                 if (result.isSuccess()) {
-                    results.add(result.getValue());
+                    // Only add to results if getValue() is not null, though Cursive<T> might not allow null values.
+                    // Depending on Cursive's contract, result.getValue() might be null for Cursive<Void> or similar.
+                    // For simplicity, assuming parsers here are value-producing.
+                    tempResults[successfulParses++] = result.getValue();
                     currentBuffer = result.getRemainingBuffer(); // Update buffer for next parser in sequence
                 } else {
                     return ParseResult.failure(); // Any failure in sequence means overall failure
                 }
             }
+
             // If all succeeded, update the original buffer's position and return success
             buffer.position(currentBuffer.position());
-            return ParseResult.success(results, buffer);
+
+            // Create final array, possibly trimmed if some parsers didn't add to successfulParses (e.g. Cursive<Void>)
+            // For this implementation, assuming all parsers contribute if successful.
+            final Object[] finalResults = new Object[successfulParses];
+            System.arraycopy(tempResults, 0, finalResults, 0, successfulParses);
+
+            @SuppressWarnings("unchecked") // Safe due to controlled population and Cursive<? extends T>
+            Series<T> seriesResult = Series.of(finalResults.length, i -> (T)finalResults[i]);
+            return ParseResult.success(seriesResult, buffer);
         };
     }
 
@@ -101,24 +116,25 @@ public enum BBCombinator {
      *
      * @param parser The Cursive parser to apply repeatedly.
      * @param <T> The type of the value produced by the parser.
-     * @return A Cursive parser that produces a List of parsed values.
+     * @return A Cursive parser that produces a Series of parsed values.
      */
-    public static <T> @NotNull Cursive<List<T>> many(@NotNull Cursive<T> parser) {
+    public static <T> @NotNull Cursive<Series<T>> many(@NotNull Cursive<T> parser) { // Changed List<T> to Series<T>
         return buffer -> {
             ByteBuffer currentBuffer = buffer.duplicate(); // Work on a duplicate
-            List<T> results = new ArrayList<>();
+            List<T> tempListResults = new ArrayList<>(); // Still use List for temporary collection
             while (true) {
                 ByteBuffer attemptBuffer = currentBuffer.duplicate(); // For local attempt rollback
                 ParseResult<T> result = parser.parse(attemptBuffer);
                 if (result.isSuccess()) {
-                    results.add(result.getValue());
+                    tempListResults.add(result.getValue());
                     currentBuffer = result.getRemainingBuffer(); // Advance current buffer
                 } else {
                     break; // Parser failed, stop repetition
                 }
             }
             buffer.position(currentBuffer.position()); // Update original buffer
-            return ParseResult.success(results, buffer);
+            Series<T> seriesResult = Series.of(tempListResults.size(), tempListResults::get);
+            return ParseResult.success(seriesResult, buffer);
         };
     }
 
@@ -128,12 +144,13 @@ public enum BBCombinator {
      *
      * @param parser The Cursive parser to apply repeatedly.
      * @param <T> The type of the value produced by the parser.
-     * @return A Cursive parser that produces a List of parsed values.
+     * @return A Cursive parser that produces a Series of parsed values.
      */
-    public static <T> @NotNull Cursive<List<T>> many1(@NotNull Cursive<T> parser) {
+    public static <T> @NotNull Cursive<Series<T>> many1(@NotNull Cursive<T> parser) { // Changed List<T> to Series<T>
         return buffer -> {
-            ParseResult<List<T>> result = many(parser).parse(buffer);
-            if (result.isSuccess() && !result.getValue().isEmpty()) {
+            // 'many(parser)' now returns Cursive<Series<T>>
+            ParseResult<Series<T>> result = many(parser).parse(buffer);
+            if (result.isSuccess() && result.getValue().size() > 0) { // Check Series size
                 return result;
             }
             return ParseResult.failure();

@@ -1,7 +1,7 @@
 package com.example.dsel.ingestion.schema;
 
 import borg.trikeshed.isam.RecordMeta;
-import borg.trikeshed.isam.meta.IOMemento;
+import borg.trikeshed.nio.IOMemento; // Changed from isam.meta to nio
 
 import java.util.ArrayList;
 import java.util.List;

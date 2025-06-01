@@ -4,9 +4,15 @@ import com.example.dsel.ingestion.config.AppConfig;
 import borg.trikeshed.cursor.Cursor;
 import borg.trikeshed.cursor.RowVec;
 import borg.trikeshed.isam.RecordMeta; // User's existing Kotlin type
-import borg.trikeshed.isam.meta.IOMemento;
+import borg.trikeshed.nio.IOMemento; // Changed from isam.meta to nio
 import borg.trikeshed.lib.Series; // For iterating cursor
 import borg.trikeshed.lib.Join; // For accessing elements in RowVec
+import borg.trikeshed.nio.ByteFieldSerializer; // Added
+import borg.trikeshed.nio.LongFieldSerializer; // Added
+import borg.trikeshed.nio.DoubleFieldSerializer; // Added
+import borg.trikeshed.nio.IntegerFieldSerializer; // Added
+import borg.trikeshed.nio.BooleanFieldSerializer; // Added
+import borg.trikeshed.nio.StringFieldSerializer; // Added
 
 import java.io.BufferedWriter;
 import java.io.IOException;
@@ -24,62 +30,8 @@ import java.util.Map;
 import java.util.HashMap; // For varChars if used
 import java.util.function.Supplier;
 
-// Define ByteFieldSerializer interface and its implementations here for subtask simplicity
-interface ByteFieldSerializer<T> {
-    // buffer is positioned at the start of the record. offset is within this record.
-    void serialize(ByteBuffer recordBuffer, int fieldOffsetInRecord, T value, int fieldLength); 
-}
-
-class LongFieldSerializer implements ByteFieldSerializer<Long> {
-    @Override
-    public void serialize(ByteBuffer recordBuffer, int fieldOffsetInRecord, Long value, int fieldLength) {
-        recordBuffer.putLong(fieldOffsetInRecord, value == null ? 0L : value);
-    }
-}
-
-class DoubleFieldSerializer implements ByteFieldSerializer<Double> {
-    @Override
-    public void serialize(ByteBuffer recordBuffer, int fieldOffsetInRecord, Double value, int fieldLength) {
-        recordBuffer.putDouble(fieldOffsetInRecord, value == null ? 0.0 : value);
-    }
-}
-
-class IntegerFieldSerializer implements ByteFieldSerializer<Integer> {
-    @Override
-    public void serialize(ByteBuffer recordBuffer, int fieldOffsetInRecord, Integer value, int fieldLength) {
-        recordBuffer.putInt(fieldOffsetInRecord, value == null ? 0 : value);
-    }
-}
-
-class BooleanFieldSerializer implements ByteFieldSerializer<Boolean> {
-    @Override
-    public void serialize(ByteBuffer recordBuffer, int fieldOffsetInRecord, Boolean value, int fieldLength) {
-        recordBuffer.put(fieldOffsetInRecord, (byte) ((value != null && value) ? 1 : 0));
-    }
-}
-
-class StringFieldSerializer implements ByteFieldSerializer<String> {
-    @Override
-    public void serialize(ByteBuffer recordBuffer, int fieldOffsetInRecord, String value, int fieldLength) {
-        byte[] stringBytes = (value == null ? "" : value).getBytes(StandardCharsets.UTF_8);
-        int bytesToWrite = Math.min(stringBytes.length, fieldLength);
-        
-        // Save current position, write, then restore (or use absolute put if buffer is record slice)
-        // For this implementation, assuming recordBuffer is for a single record and fieldOffsetInRecord is absolute within it.
-        // So, direct writes to recordBuffer.position(fieldOffsetInRecord) then put() is fine.
-        // The provided code does recordBuffer.put(fieldOffsetInRecord, byte) for primitives, which is absolute.
-        // For byte arrays, we need to position then put.
-        int originalPos = recordBuffer.position(); // Not strictly needed if all puts are absolute to fieldOffsetInRecord
-        recordBuffer.position(fieldOffsetInRecord);
-        recordBuffer.put(stringBytes, 0, bytesToWrite);
-        // Pad if necessary
-        for (int i = bytesToWrite; i < fieldLength; i++) {
-            recordBuffer.put((byte) 0); // Null padding
-        }
-        recordBuffer.position(originalPos); // Restore if other operations depend on it, though for single record buffer, less critical.
-    }
-}
-
+// Removed local ByteFieldSerializer interface and its implementations (LongFieldSerializer, DoubleFieldSerializer, etc.)
+// They are now imported from borg.trikeshed.nio.*
 
 class RecordRowSerializer { // Renamed from RecordSerializer to avoid conflict if it's a common name
     private final List<AugmentedRecordMeta> augmentedSchema;
@@ -171,7 +123,7 @@ public class IsamPersistenceService {
         int currentOffset = 0;
         for (RecordMeta meta : schema) {
             int fieldLength;
-            Integer networkSize = meta.type().getNetworkSize(); // IOMemento.getNetworkSize()
+            Integer networkSize = meta.type().networkSize(); // Changed getNetworkSize() to networkSize()
             if (networkSize != null) {
                 fieldLength = networkSize;
             } else if (meta.type() == IOMemento.IoString) { // Assuming IoString has null networkSize

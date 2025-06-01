@@ -1,4 +1,4 @@
-package com.yourdomain.bikeshed.core;
+package borg.trikeshed.lib; // Changed package
 
 import java.util.Objects;
 import java.util.function.BiFunction;

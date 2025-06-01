@@ -1,10 +1,10 @@
 package com.yourdomain.bikeshed.io;
 
-import com.yourdomain.bikeshed.core.Cursor;
-import com.yourdomain.bikeshed.core.Join;
-import com.yourdomain.bikeshed.core.RowVec;
-import com.yourdomain.bikeshed.core.Series;
-import com.yourdomain.bikeshed.type.ColumnMeta;
+import borg.trikeshed.cursor.Cursor; // Changed
+import borg.trikeshed.lib.Join;     // Changed
+import borg.trikeshed.cursor.RowVec;   // Changed
+import borg.trikeshed.lib.Series;    // Changed
+import borg.trikeshed.isam.RecordMeta; // Changed
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -129,7 +129,8 @@ public class IsamDataFile implements Cursor, AutoCloseable {
         mmapBuffer.position(0);
         mmapBuffer.limit(mmapBuffer.capacity());
 
-        List<Join<Object, Supplier<ColumnMeta>>> columnValuesAndMeta = IntStream.range(0, isamConstraints.size())
+        @SuppressWarnings("unchecked") // Suppress warning for creating generic array for toArray()
+        Join<Object, Supplier<RecordMeta>>[] columnValuesAndMetaArray = IntStream.range(0, isamConstraints.size())
                 .mapToObj(colIndex -> {
                     IsamMetaFileReader.IsamColumnMeta colMeta = isamConstraints.get(colIndex);
                     // Create a sub-slice for the column data within the recordBuffer
@@ -141,11 +142,12 @@ public class IsamDataFile implements Cursor, AutoCloseable {
                     Object value = colMeta.getDecoder().parse(columnDataBuffer).getValue(); // bbcursive parse
 
                     // Return a Join of the value and a supplier for its metadata
-                    return jn(value, (Supplier<ColumnMeta>) () -> colMeta);
+                    // IsamColumnMeta is a RecordMeta, so this cast is fine.
+                    return jn(value, (Supplier<RecordMeta>) () -> colMeta);
                 })
-                .collect(Collectors.toList());
+                .toArray(Join[]::new); // Collect to array
 
-        return RowVec.of(columnValuesAndMeta);
+        return RowVec.of(columnValuesAndMetaArray); // Pass array to varargs method
     }
 
     /**
@@ -164,9 +166,9 @@ public class IsamDataFile implements Cursor, AutoCloseable {
         }
 
         // 1. Determine the schema (ColumnMeta) and write the metadata file
-        Series<ColumnMeta> schema = cursor.meta();
+        Series<RecordMeta> schema = cursor.meta(); // cursor.meta() now returns Series<RecordMeta>
         String metaFilename = dataFilename + ".meta";
-        IsamMetaFileReader.write(metaFilename, schema, varCharLengths);
+        IsamMetaFileReader.write(metaFilename, schema, varCharLengths); // IsamMetaFileReader.write now expects Series<RecordMeta>
 
         // Re-load the metafile to get the concrete IsamColumnMeta with offsets, decoders, and encoders.
         IsamMetaFileReader writerMetaReader = new IsamMetaFileReader(metaFilename);

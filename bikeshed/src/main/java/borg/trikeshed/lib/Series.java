@@ -1,5 +1,6 @@
-package com.yourdomain.bikeshed.core;
+package borg.trikeshed.lib; // Changed package
 
+import borg.trikeshed.lib.Join; // Already correct
 import org.jetbrains.annotations.NotNull;
 
 import java.util.Iterator;
@@ -17,7 +18,7 @@ import java.util.stream.IntStream;
  *
  * @param <T> The type of elements in the Series.
  */
-public interface Series<T> extends Join<Integer, Function<Integer, T>>, Iterable<T> {
+public interface Series<T> extends borg.trikeshed.lib.Join<Integer, Function<Integer, T>>, Iterable<T> {
 
     /**
      * Factory method to create a new Series instance.
@@ -90,11 +91,12 @@ public interface Series<T> extends Join<Integer, Function<Integer, T>>, Iterable
      * @return A new Series containing only elements that satisfy the predicate.
      */
     default @NotNull Series<T> filter(@NotNull Predicate<T> predicate) {
-        List<T> filteredList = IntStream.range(0, size())
-                .mapToObj(this::get)
-                .filter(predicate)
-                .collect(Collectors.toList());
-        return Series.of(filteredList.size(), filteredList::get);
+        // Materialize indices of matching elements
+        int[] matchingIndices = java.util.stream.IntStream.range(0, size())
+                                     .filter(i -> predicate.test(get(i)))
+                                     .toArray();
+        // Create a new Series view based on these indices
+        return Series.of(matchingIndices.length, i -> get(matchingIndices[i]));
     }
 
     /**
@@ -215,9 +217,24 @@ public interface Series<T> extends Join<Integer, Function<Integer, T>>, Iterable
     }
 
     // Inner class for the immutable implementation
-    final class ImmutableSeries<T> extends Join.ImmutableJoin<Integer, Function<Integer, T>> implements Series<T> {
+    final class ImmutableSeries<T> implements Series<T> { // Removed "extends borg.trikeshed.lib.Join.ImmutableJoin"
+        private final Integer seriesSize;
+        private final Function<Integer, T> seriesProvider; // Renamed to avoid confusion if provider was a field name
+
         private ImmutableSeries(Integer size, Function<Integer, T> provider) {
-            super(size, provider);
+            this.seriesSize = java.util.Objects.requireNonNull(size, "size must not be null");
+            this.seriesProvider = java.util.Objects.requireNonNull(provider, "provider must not be null");
         }
+
+        @Override
+        public Integer fst() {
+            return this.seriesSize;
+        }
+
+        @Override
+        public Function<Integer, T> snd() {
+            return this.seriesProvider;
+        }
+        // Default methods in Series interface (like size(), get()) will use fst() and snd()
     }
 }
