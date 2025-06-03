@@ -50,6 +50,20 @@
             <artifactId>slf4j-simple</artifactId>
             <version>2.1.0-alpha1</version>
         </dependency>
+
+        <!-- JUnit 5 for testing -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-api</artifactId>
+            <version>5.10.2</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-engine</artifactId>
+            <version>5.10.2</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
@@ -60,6 +74,7 @@
                 <version>3.1.0</version>
                 <configuration>
                     <mainClass>com.vsiwest.moneyfan.ingestion.TheEnvReadingSimulationHarnass</mainClass>
+                    <classpathScope>compile</classpathScope>
                 </configuration>
             </plugin>
         </plugins>
