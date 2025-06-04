@@ -53,7 +53,7 @@
  *    (Ensure the API key has permissions for viewing balances, market data, and trading).
  *
  * Running the Script:
- *   kotlin -script coinbaseXChangeBot.main.kts
+ *   kscript coinbaseXChangeBot.main.kts
  *
  * Disclaimer:
  * TRADING CRYPTOCURRENCIES IS RISKY. THIS SCRIPT IS FOR EDUCATIONAL AND
@@ -1272,4 +1272,3 @@ fun main() = runBlocking {
         mainLoopLogger.info("Main loop and ExchangeService cleaned up. Exiting.")
     }
 }
-[end of coinbaseXChangeBot.main.kts]
