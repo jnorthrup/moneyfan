@@ -95,8 +95,7 @@ import kotlin.math.max
 import kotlin.jvm.JvmInline
 
 
-// --- TrikeShed Core Definitions (Ad-hoc Integration from TrikeShedCore.kt) ---
-// ... (TrikeShed Core definitions as in previous step - assuming they are here)
+ 
 // I. Join and Series Primitives
 interface Join<A, B> {
     val a: A
@@ -232,11 +231,13 @@ fun <A, B> Tensor<A>.zip(other: Tensor<B>): Tensor<Join<A, B>> {
     return TensorConstruct(broadcastedShape) { bCoords ->
         val finalACoords = IntArray(this.rank) { aDimIdx ->
             val bAlignedIdx = bCoords.size - (this.rank - aDimIdx)
+ 
             if (aDimIdx >=this.shape.size || this.shape[aDimIdx] == 1) 0 else bCoords[bAlignedIdx] // Check aDimIdx bounds
         }
         val finalBCoords = IntArray(other.rank) { bDimIdx ->
             val bAlignedIdx = bCoords.size - (other.rank - bDimIdx)
             if (bDimIdx >= other.shape.size || other.shape[bDimIdx] == 1) 0 else bCoords[bAlignedIdx] // Check bDimIdx bounds
+ 
         }
         this(finalACoords) j other(finalBCoords)
     }
@@ -245,8 +246,10 @@ fun <A, B> Tensor<A>.zip(other: Tensor<B>): Tensor<Join<A, B>> {
 inline fun <A, B, C> Tensor<A>.combine(other: Tensor<B>, crossinline transform: (A, B) -> C): Tensor<C> {
     val broadcastedShape = broadcastShapes(this.shape, other.shape)
     return TensorConstruct(broadcastedShape) { bCoords ->
+ 
         val finalACoords = IntArray(this.rank) { aDimIdx -> val bAlignedIdx = bCoords.size - (this.rank - aDimIdx) ; if (aDimIdx >=this.shape.size || this.shape[aDimIdx] == 1) 0 else bCoords[bAlignedIdx] }
         val finalBCoords = IntArray(other.rank) { bDimIdx -> val bAlignedIdx = bCoords.size - (other.rank - bDimIdx) ; if (bDimIdx >=other.shape.size ||other.shape[bDimIdx] == 1) 0 else bCoords[bAlignedIdx] }
+ 
         transform(this(finalACoords), other(finalBCoords))
     }
 }
@@ -329,9 +332,8 @@ fun <A, B> Series<A>.zip(other: Series<B>): Series<Pair<A, B>> {
     require(this.size == other.size) { "Series must have the same size to zip. Sizes: ${this.size} and ${other.size}" }
     return (this.size j { i -> Pair(this[i], other[i]) })
 }
-
-// --- End TrikeShed Core Definitions ---
-
+ 
+ 
 // --- Bot Specific Typealiases ---
 typealias PriceSeries = Series<java.math.BigDecimal?>
 typealias QuantitySeries = Series<java.math.BigDecimal>
@@ -400,7 +402,8 @@ typealias PortfolioTensor = CoreTensorCursorWithMeta<Any?>
 
 
 // --- Strategy Constants and Top-Level Variables ---
-const val LIVE_TRADING_ENABLED = false // MASTER SWITCH FOR SIMULATION VS LIVE
+ const val LIVE_TRADING_ENABLED = false // MASTER SWITCH FOR SIMULATION VS LIVE
+ 
 val QUOTE_CURRENCY_CODE = "USD"
 val QUOTE_CURRENCY = Currency(QUOTE_CURRENCY_CODE)
 
@@ -537,7 +540,7 @@ fun logTrade(asset: String, side: String, quantity: String, price: String, order
     mainLoopLogger.info("TRADE: $side $quantity $asset @ ~$price (Order ID: ${orderId ?: "N/A"}) - Note: $note")
 }
 
-// --- OrderSimulator Object ---
+ // --- OrderSimulator Object ---
 object OrderSimulator {
     private val logger = LoggerFactory.getLogger(OrderSimulator::class.java)
 
@@ -673,8 +676,7 @@ object OrderSimulator {
         return simulatedOrderId
     }
 }
-
-
+ 
 // --- State Manager Object ---
 object StateManager {
     private val logger = LoggerFactory.getLogger(StateManager::class.java)
@@ -817,7 +819,7 @@ object ExchangeService {
     }
 
     suspend fun getAccountBalances(): Map<Currency, Balance>? {
-        // If OrderSimulator is active and initialized, return its balances
+         // If OrderSimulator is active and initialized, return its balances
         if (!LIVE_TRADING_ENABLED && OrderSimulator.isInitialized) { // Check LIVE_TRADING_ENABLED flag
             val simBalances = mutableMapOf<Currency, Balance>()
             simBalances[QUOTE_CURRENCY] = Balance.Builder().currency(QUOTE_CURRENCY).available(OrderSimulator.getSimulatedBalance(QUOTE_CURRENCY)).total(OrderSimulator.getSimulatedBalance(QUOTE_CURRENCY)).build()
@@ -836,7 +838,7 @@ object ExchangeService {
                     ?: accountInfo?.wallets?.values?.flatMap { it.balances.values }?.associateBy { it.currency }
             } catch (e: Exception) {
                 logger.error("Error fetching REAL account balances: ${e.message}", e)
-                null
+                 null
             }
         }
     }
@@ -860,7 +862,7 @@ object ExchangeService {
         type: Order.OrderType,
         orderAmount: OrderAmount
     ): String? {
-        if (!LIVE_TRADING_ENABLED) {
+         if (!LIVE_TRADING_ENABLED) {
             val currentPrice = latestPrices[pair]?.last
             if (currentPrice == null || currentPrice <= BigDecimal.ZERO) {
                 logger.error("SIMULATOR: Cannot place order for $pair, current price is unknown or invalid: $currentPrice")
@@ -895,7 +897,7 @@ object ExchangeService {
                 }
             }
             // return "live_order_id_placeholder"; // Replace with actual tradeService call
-        }
+         }
     }
 
     fun subscribeToPriceTicks(pair: CurrencyPair, onPriceUpdate: (Ticker) -> Unit): Disposable? {
@@ -960,8 +962,8 @@ fun main() = runBlocking {
     System.setProperty("org.slf4j.simpleLogger.log.StateManager", "info")
     System.setProperty("org.slf4j.simpleLogger.log.ExchangeService", "info")
     System.setProperty("org.slf4j.simpleLogger.log.MainLoopLogic", "info")
-    System.setProperty("org.slf4j.simpleLogger.log.OrderSimulator", "info")
-    System.setProperty("org.slf4j.simpleLogger.log.org.knowm.xchange", "warn")
+     System.setProperty("org.slf4j.simpleLogger.log.OrderSimulator", "info")
+     System.setProperty("org.slf4j.simpleLogger.log.org.knowm.xchange", "warn")
     System.setProperty("org.slf4j.simpleLogger.log.org.knowm.xchange.coinbasepro", "info")
     System.setProperty("org.slf4j.simpleLogger.showDateTime", "true")
     System.setProperty("org.slf4j.simpleLogger.dateTimeFormat", "yyyy-MM-dd HH:mm:ss:SSS Z")
@@ -974,7 +976,7 @@ fun main() = runBlocking {
     val REFRESH_INTERVAL = 8000L
     var currentPortfolioDeviationPercentForDisplay = 0.0
     var validPortfolioItemsForTrading = listOf<PortfolioRow>()
-    var cycleCount = 0
+     var cycleCount = 0
 
     try {
         ExchangeService.initialize() // Initializes real exchange connection for metadata, market data
@@ -1011,10 +1013,10 @@ fun main() = runBlocking {
 
             val cycleStartTime = System.currentTimeMillis()
             mainLoopLogger.info("----- Cycle Start: ${Instant.ofEpochMilli(cycleStartTime)} (Cycle #$cycleCount) -----")
-            harvestedAmountThisCycle = BigDecimal.ZERO
+             harvestedAmountThisCycle = BigDecimal.ZERO
             anyTradesThisCycle = false
             var stateChangedThisCycle = false
-
+ 
             var loopCashBalance: BigDecimal
             val loopCurrentHoldings: MutableMap<Currency, BigDecimal>
 
@@ -1056,7 +1058,7 @@ fun main() = runBlocking {
                 mainLoopLogger.info("No significant crypto holdings for cycle.")
             }
 
-            val symbolsToTrack = loopCurrentHoldings.keys.toMutableSet() // Use loopCurrentHoldings
+            val symbolsToTrack = loopCurrentHoldings.keys.toMutableSet() // Use loopCurrentHoldings 
             if (HARVEST_ALLOC_BTC_PERCENT > 0 && MIN_BTC_BUY_USD < 1000) {
                  symbolsToTrack.add(Currency.BTC)
             }
@@ -1110,15 +1112,14 @@ fun main() = runBlocking {
                 mainLoopLogger.info("Allowing 1s for new tickers to stream initial prices...")
                 delay(1000)
             }
-
+ 
             // --- Transform loopCurrentHoldings into Series ---
             val heldCurrencyList = loopCurrentHoldings.keys.toList()
-            val heldQuantityList = loopCurrentHoldings.values.toList()
-
+            val heldQuantityList = loopCurrentHoldings.values.toList() 
             val numHeldAssets = heldCurrencyList.size
             val heldCurrenciesSeries: CurrencySeries = TensorSeries(numHeldAssets) { i -> heldCurrencyList[i] }
             val heldQuantitiesSeries: QuantitySeries = TensorSeries(numHeldAssets) { i -> heldQuantityList[i] }
-
+ 
             // ... (The rest of the portfolio calculation, display, ADZ/CP, and strategy logic using these series and loopCashBalance) ...
             // This means replacing `currentHoldings` with `loopCurrentHoldings` and `cashBalance` with `loopCashBalance`
             // in all subsequent calculations and logging within the current cycle.
@@ -1132,15 +1133,16 @@ fun main() = runBlocking {
             val baselinesList = mutableListOf<Double?>()
             for (i in 0 until numHeldAssets) {
                 val currency = heldCurrenciesSeries[i]; val pair = CurrencyPair(currency, QUOTE_CURRENCY)
+ 
                 currentPricesList.add(latestPriceInfo[pair]?.first?.price)
                 previousPricesList.add(latestPriceInfo[pair]?.second?.price)
                 baselinesList.add(botState.baselines[currency.currencyCode])
             }
-            val currentPricesSeries: PriceSeries = TensorSeries(numHeldAssets) { i -> currentPricesList[i] }
+             val currentPricesSeries: PriceSeries = TensorSeries(numHeldAssets) { i -> currentPricesList[i] }
             val previousPricesSeries: PriceSeries = TensorSeries(numHeldAssets) { i -> previousPricesList[i] }
             val baselinesSeries: BaselineSeries = TensorSeries(numHeldAssets) { i -> baselinesList[i] }
 
-            val currentValuesSeries: ValueSeries = heldQuantitiesSeries.zip(currentPricesSeries).α { (qty, price) -> if (price != null && price > BigDecimal.ZERO) qty.multiply(price) else null }
+             val currentValuesSeries: ValueSeries = heldQuantitiesSeries.zip(currentPricesSeries).α { (qty, price) -> if (price != null && price > BigDecimal.ZERO) qty.multiply(price) else null }
             val absoluteDifferencesSeries: Series<BigDecimal?> = currentValuesSeries.zip(baselinesSeries).α { (v, b) -> if (v != null && b != null) v.subtract(BigDecimal.valueOf(b)) else null }
             val deviationsSeries: DeviationSeries = absoluteDifferencesSeries.zip(baselinesSeries).α { (ad, b) -> if (ad != null && b != null && b > 0.0) ad.divide(BigDecimal.valueOf(b), MathContext.DECIMAL64).toDouble() else null }
             val priceChangesSeries: PriceSeries = currentPricesSeries.zip(previousPricesSeries).α { (curr, prev) -> if (curr != null && prev != null) curr.subtract(prev) else null }
@@ -1159,7 +1161,7 @@ fun main() = runBlocking {
                             botState.baselines[symbolCode] = currentHoldingValueBD.toDouble()
                             mainLoopLogger.info("✨ Initialized baseline $symbolCode: $${currentHoldingValueBD.toDouble()} (First cycle).")
                             baselinesVerifiedOrSetThisCycleForInit = true; stateChangedThisCycle = true
-                        }
+                         }
                     }
                     if (initialized && baselineValue == null && currentHoldingValueBD > BigDecimal.valueOf(0.01)) {
                         botState.baselines[symbolCode] = currentHoldingValueBD.toDouble()
@@ -1174,7 +1176,7 @@ fun main() = runBlocking {
                     }
                 }
             }
-            if (!initialized) {
+             if (!initialized) {
                 if (baselinesVerifiedOrSetThisCycleForInit) { mainLoopLogger.info("✅ Baselines & Timestamps init/verify complete."); initialized = true }
                 else if (loopCurrentHoldings.isNotEmpty() && (0 until numHeldAssets).all { currentPricesSeries[it] == null } && !baselinesVerifiedOrSetThisCycleForInit) { mainLoopLogger.info("⏳ Waiting for prices for baseline init (all holdings lack prices)...") }
                 else if (loopCurrentHoldings.isEmpty()) { mainLoopLogger.info("✅ No holdings, baseline init considered complete."); initialized = true }
@@ -1182,7 +1184,7 @@ fun main() = runBlocking {
 
             val portfolioDataTensorPart: CoreTensorCursor<Any?> = TensorCursor(numHeldAssets, portfolioColumnNames.size) { r,c -> /* ... as before ... */
                  when (portfolioColumnNames[c]) {
-                    "Symbol" -> heldCurrenciesSeries[r].currencyCode
+                     "Symbol" -> heldCurrenciesSeries[r].currencyCode
                     "CurrencyObj" -> heldCurrenciesSeries[r]
                     "Quantity" -> heldQuantitiesSeries[r]
                     "Price" -> currentPricesSeries[r]
@@ -1196,35 +1198,36 @@ fun main() = runBlocking {
             }
             val currentPortfolioTensor: PortfolioTensor = portfolioDataTensorPart j portfolioCursorMeta
 
-            val currentSymbolsInPortfolioView = (0 until heldCurrenciesSeries.size).map { heldCurrenciesSeries[it].currencyCode }.toSet()
+             val currentSymbolsInPortfolioView = (0 until heldCurrenciesSeries.size).map { heldCurrenciesSeries[it].currencyCode }.toSet()
             val symbolsToRemove = botState.baselines.keys.filterNot { it in currentSymbolsInPortfolioView }.toSet()
             if (symbolsToRemove.isNotEmpty()) { /* ... state cleanup as before ... */
                 symbolsToRemove.forEach { symCode ->
                     mainLoopLogger.info("🗑️ Clearing state for sold/removed asset: $symCode.")
                     botState.baselines.remove(symCode); botState.trailingState.remove(symCode); botState.lastActionTimestamps.remove(symCode); botState.rebalanceState.remove(symCode); botState.adaptiveDeadZoneState.remove(symCode)
-                }
+                 }
                 stateChangedThisCycle = true
             }
 
-            val tempPortfolioRows = mutableListOf<PortfolioRow>()
+             val tempPortfolioRows = mutableListOf<PortfolioRow>()
             if (currentPortfolioTensor.a.rows > 0) { /* ... rebuild tempPortfolioRows as before ... */
                  for (r in 0 until currentPortfolioTensor.a.rows) {
-                    val symbol = currentPortfolioTensor.a(r, portfolioColumnNames.indexOf("Symbol")) as String
+                     val symbol = currentPortfolioTensor.a(r, portfolioColumnNames.indexOf("Symbol")) as String
                     val currency = currentPortfolioTensor.a(r, portfolioColumnNames.indexOf("CurrencyObj")) as Currency
                     val quantity = currentPortfolioTensor.a(r, portfolioColumnNames.indexOf("Quantity")) as BigDecimal
                     val price = currentPortfolioTensor.a(r, portfolioColumnNames.indexOf("Price")) as? BigDecimal
-                    val actualBaseline = botState.baselines[symbol]
+                     val actualBaseline = botState.baselines[symbol]
                     val value = currentPortfolioTensor.a(r, portfolioColumnNames.indexOf("Value")) as? BigDecimal
                     val priceChange = currentPortfolioTensor.a(r, portfolioColumnNames.indexOf("PriceChange")) as? BigDecimal
                     val actualDeviation = if (value != null && actualBaseline != null && actualBaseline > 0.0 && price != null && price > BigDecimal.ZERO) value.subtract(BigDecimal.valueOf(actualBaseline)).divide(BigDecimal.valueOf(actualBaseline), MathContext.DECIMAL64).toDouble() else null
                     val actualAbsDifference = if (value != null && actualBaseline != null) value.subtract(BigDecimal.valueOf(actualBaseline)) else null
-                    if (actualBaseline != null && actualBaseline > 0.01 && actualDeviation != null && price != null && price > BigDecimal.ZERO && value != null) {
+                     if (actualBaseline != null && actualBaseline > 0.01 && actualDeviation != null && price != null && price > BigDecimal.ZERO && value != null) {
                         tempPortfolioRows.add(PortfolioRow(symbol, currency, quantity, price, value, actualBaseline, actualDeviation, actualAbsDifference, priceChange))
                     }
                 }
             }
             validPortfolioItemsForTrading = tempPortfolioRows.sortedByDescending { it.deviation ?: Double.NEGATIVE_INFINITY }
 
+ 
             // Display and Financial Overview (uses loopCashBalance)
             if (validPortfolioItemsForTrading.isNotEmpty()) { /* ... Display Portfolio Summary ... */ }
             else if (loopCurrentHoldings.isNotEmpty()) { mainLoopLogger.info("ℹ️ No items with complete data for full portfolio summary display (e.g. missing prices or baselines).") }
@@ -1246,6 +1249,7 @@ fun main() = runBlocking {
 
             if (stateChangedThisCycle) { StateManager.saveState(botState) }
             val cycleEndTime = System.currentTimeMillis(); val elapsedMillis = cycleEndTime - cycleStartTime
+ 
             val delayTime = (REFRESH_INTERVAL - elapsedMillis).coerceAtLeast(0L)
             mainLoopLogger.info("----- Cycle End: Took ${elapsedMillis}ms. Active Subs: ${activeSubscriptions.size}. Waiting ${delayTime}ms... -----")
             delay(delayTime)
@@ -1265,4 +1269,4 @@ fun main() = runBlocking {
         ExchangeService.cleanup()
         mainLoopLogger.info("Main loop and ExchangeService cleaned up. Exiting.")
     }
-}
+} 
