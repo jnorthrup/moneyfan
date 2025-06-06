@@ -14,9 +14,45 @@
         <jetbrains.annotations.version>24.1.0</jetbrains.annotations.version>
         <jackson.version>2.16.1</jackson.version>
         <zeromq.version>0.5.4</zeromq.version>
+        <junit.jupiter.version>5.10.2</junit.jupiter.version>
+        <commons.codec.version>1.16.0</commons.codec.version>
+        <mockito.version>5.12.0</mockito.version>
+        <httpcomponents.client5.version>5.2.3</httpcomponents.client5.version>
+        <httpcomponents.core5.version>5.2.4</httpcomponents.core5.version>
+        <!-- junit.pioneer.version removed -->
     </properties>
 
     <dependencies>
+        <dependency>
+            <groupId>commons-codec</groupId>
+            <artifactId>commons-codec</artifactId>
+            <version>${commons.codec.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-api</artifactId>
+            <version>${junit.jupiter.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-engine</artifactId>
+            <version>${junit.jupiter.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- junit-pioneer dependency removed -->
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-core</artifactId>
+            <version>${mockito.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-junit-jupiter</artifactId>
+            <version>${mockito.version}</version>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>org.jetbrains</groupId>
             <artifactId>annotations</artifactId>
@@ -27,7 +63,12 @@
         <dependency>
             <groupId>org.apache.httpcomponents.client5</groupId>
             <artifactId>httpclient5</artifactId>
-            <version>5.5</version>
+            <version>${httpcomponents.client5.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.httpcomponents.core5</groupId>
+            <artifactId>httpcore5</artifactId>
+            <version>${httpcomponents.core5.version}</version>
         </dependency>
         
         <!-- JSON processing -->
@@ -55,11 +96,17 @@
     <build>
         <plugins>
             <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.2.5</version>
+                <!-- argLine configuration was not here, so no change needed for removal based on previous diff -->
+            </plugin>
+            <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>exec-maven-plugin</artifactId>
                 <version>3.1.0</version>
                 <configuration>
-                    <mainClass>com.vsiwest.moneyfan.ingestion.TheEnvReadingSimulationHarnass</mainClass>
+                    <mainClass>com.vsiwest.moneyfan.ingestion.CoinbaseSkimmer</mainClass>
                 </configuration>
             </plugin>
         </plugins>
