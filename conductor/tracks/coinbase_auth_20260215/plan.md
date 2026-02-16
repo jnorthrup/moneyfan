@@ -17,7 +17,7 @@ Track ID: `coinbase_auth_20260215`
     - [ ] Parse EC private key (support raw PEM and CDP SDK format)
     - [ ] Sign JWT with ES256 using `PyJWT` or `python-jose`
     - [ ] Expose `generate_jwt(method: str, path: str) -> str`
-- [ ] Task: Conductor - User Manual Verification 'Phase 1' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Phase 1' (Protocol in workflow.md)
 
 ---
 
