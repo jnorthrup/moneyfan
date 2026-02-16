@@ -6,13 +6,13 @@ Track ID: `coinbase_auth_20260215`
 
 ## Phase 1: JWT Authentication Module
 
-- [ ] Task: Write failing tests for JWT token generation (Red)
+- [x] Task: Write failing tests for JWT token generation (Red) [aac51f7]
     - [ ] Test that `generate_jwt(method, path)` returns a valid JWT string
     - [ ] Test that JWT header contains `alg: ES256` and `kid: <api_key_name>`
     - [ ] Test that JWT claims contain `sub`, `iss`, `nbf`, `exp`, `uri`
     - [ ] Test that `exp` is within 120 seconds of `nbf`
     - [ ] Test that missing env vars raise a clear `EnvironmentError`
-- [ ] Task: Implement `coinbase_auth.py` — JWT generation module (Green)
+- [x] Task: Implement `coinbase_auth.py` — JWT generation module (Green) [98833ad]
     - [ ] Load `COINBASE_API_KEY_NAME` and `COINBASE_PRIVATE_KEY` from env / `.env`
     - [ ] Parse EC private key (support raw PEM and CDP SDK format)
     - [ ] Sign JWT with ES256 using `PyJWT` or `python-jose`
