@@ -4,7 +4,7 @@ Track ID: `coinbase_auth_20260215`
 
 ---
 
-## Phase 1: JWT Authentication Module
+## Phase 1: JWT Authentication Module [checkpoint: e6724c5]
 
 - [x] Task: Write failing tests for JWT token generation (Red) [aac51f7]
     - [ ] Test that `generate_jwt(method, path)` returns a valid JWT string
