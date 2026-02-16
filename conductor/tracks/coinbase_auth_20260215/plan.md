@@ -23,12 +23,12 @@ Track ID: `coinbase_auth_20260215`
 
 ## Phase 2: Authenticated HTTP Client
 
-- [ ] Task: Write failing tests for `CoinbaseClient` (Red)
+- [x] Task: Write failing tests for `CoinbaseClient` (Red) [7cc1cba]
     - [ ] Test that GET request includes `Authorization: Bearer <token>` header
     - [ ] Test that POST request includes `Authorization: Bearer <token>` header
     - [ ] Test that HTTP 401 response raises `AuthenticationError` with clear message
     - [ ] Test that client reads base URL from env (`COINBASE_API_URL`, default `https://api.coinbase.com`)
-- [ ] Task: Implement `CoinbaseClient` class (Green)
+- [x] Task: Implement `CoinbaseClient` class (Green) [7cc1cba]
     - [ ] Wrap `requests.Session` with auto JWT injection
     - [ ] Implement `get(path, **kwargs)` and `post(path, json, **kwargs)`
     - [ ] Handle 401 with descriptive error
