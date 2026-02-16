@@ -16,8 +16,17 @@ Usage:
 import os
 import time
 import base64
-from typing import Optional
-from datetime import datetime
+from urllib.parse import urlparse
+
+try:
+    import requests
+except ImportError:
+    class _RequestsFallback:
+        @staticmethod
+        def Session():
+            raise ImportError("requests is required. Install with: pip install requests")
+
+    requests = _RequestsFallback()
 
 try:
     import jwt
@@ -174,3 +183,35 @@ def generate_jwt_token(method: str, host: str, path: str) -> str:
     )
     
     return token
+
+
+class AuthenticationError(Exception):
+    """Raised when authenticated Coinbase API calls are rejected."""
+
+
+class CoinbaseClient:
+    """Thin authenticated HTTP client for Coinbase Advanced Trade APIs."""
+
+    def __init__(self, base_url: str | None = None, session: requests.Session | None = None):
+        self.base_url = (base_url or os.getenv("COINBASE_API_URL", "https://api.coinbase.com")).rstrip("/")
+        self._host = urlparse(self.base_url).netloc
+        self._session = session or requests.Session()
+
+    def _request(self, method: str, path: str, **kwargs):
+        clean_path = path if path.startswith("/") else f"/{path}"
+        token = generate_jwt_token(method.upper(), self._host, clean_path)
+        headers = dict(kwargs.pop("headers", {}) or {})
+        headers["Authorization"] = f"Bearer {token}"
+        url = f"{self.base_url}{clean_path}"
+        response = self._session.request(method=method.upper(), url=url, headers=headers, **kwargs)
+        if response.status_code == 401:
+            raise AuthenticationError(
+                f"Coinbase authentication failed (401) for {method.upper()} {clean_path}: {getattr(response, 'text', '')}"
+            )
+        return response
+
+    def get(self, path: str, **kwargs):
+        return self._request("GET", path, **kwargs)
+
+    def post(self, path: str, json: dict | None = None, **kwargs):
+        return self._request("POST", path, json=json, **kwargs)
