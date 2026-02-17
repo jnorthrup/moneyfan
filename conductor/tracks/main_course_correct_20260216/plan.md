@@ -1,4 +1,4 @@
-# Plan: Main track course correction: convergence/perturb/repeat optimization with standard trading metrics
+# Plan: Main track course correction: convergence/perturb/repeat optimization with alpha, PnL, and standard trading metrics
 
 Track ID: `main_course_correct_20260216`
 
@@ -7,25 +7,23 @@ Track ID: `main_course_correct_20260216`
 ## Phase 1: Objective Re-baseline
 
 - [x] Task: Define canonical scorecard schema for alpha, PnL, standard metrics [a099d95]
-    - [x] Specify formulas and units for each metric
-    - [x] Define aggregation windows (per decision, per episode, per run)
-- [ ] Task: Add metric computation module and test coverage
+- [x] Task: Add metric computation module and test coverage [1a06abc]
     - [ ] Write failing tests for win_rate and convergence computation (Red)
     - [ ] Implement metric pipeline (Green)
     - [ ] Add regression tests for alpha/PnL consistency
-- [ ] Task: Conductor - User Manual Verification 'Phase 1' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Phase 1' (Protocol in workflow.md)
 
 ---
 
 ## Phase 2: Convergence Engine Hardening
 
-- [ ] Task: Implement convergence detection over model signal histories
-    - [ ] Write failing tests for agreement/confidence convergence signals (Red)
-    - [ ] Implement convergence scoring and thresholds (Green)
-    - [ ] Expose convergence outputs to controller + oversight surfaces
-- [ ] Task: Integrate convergence metrics into decision payloads
-    - [ ] Add convergence fields to normalized decision/event schema
-    - [ ] Validate schema compatibility with existing consumers
+- [x] Task: Implement convergence detection over model signal histories
+    - [x] Write failing tests for agreement/confidence convergence signals (Red)
+    - [x] Implement convergence scoring and thresholds (Green)
+    - [x] Expose convergence outputs to controller + oversight surfaces
+- [x] Task: Integrate convergence metrics into decision payloads
+    - [x] Add convergence fields to normalized decision/event schema
+    - [x] Validate schema compatibility with existing consumers
 - [ ] Task: Conductor - User Manual Verification 'Phase 2' (Protocol in workflow.md)
 
 ---
@@ -65,4 +63,3 @@ Track ID: `main_course_correct_20260216`
 - [ ] Task: Conductor - User Manual Verification 'Phase 5' (Protocol in workflow.md)
 
 ---
-
