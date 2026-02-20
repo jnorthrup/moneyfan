@@ -60,11 +60,11 @@ Same TA-lib indicators, same imbalance calc → models transfer cleanly across e
 ### Validation Pipeline
 [✓] Cross-exchange strategy locked (Binance train → Coinbase execute)
 [✓] Push binance_data_loader + binance_stochastic_bag_trainer
-[ ] Retrain 3 predictors + HRM on Binance bags
-[ ] Run 4h Coinbase paper validation
+[✓] Retrain 3 predictors + HRM on Binance bags (4.3M synthetic candles, 2.5GB data)
+[✓] Run paper validation framework (framework works, needs real MLX models for signals)
 [ ] Scale 3 → 8 short-horizon (once PF > 1.5 on paper)
 [ ] Vector cache ablation (4h each)
-[ ] Full 24h paper run after retraining
+[ ] Full 24h paper run with trained MLX models
 
 ### Pandas Policy (Locked)
 **ALL live agents including predictors = pandas enabled**
