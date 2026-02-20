@@ -68,16 +68,15 @@ class SharedEncoder:
     
     def _init_mlx(self):
         class Encoder(nn.Module):
-            def __init__(self, hidden_dim, n_layers, n_heads, dropout):
+            def __init__(self, hidden_dim, n_layers, dropout):
                 super().__init__()
                 self.input_proj = nn.Linear(64, hidden_dim)
-                self.pos_embed = nn.Linear(1, hidden_dim)
                 self.layers = [
-                    nn.TransformerEncoderLayer(
-                        dims=hidden_dim,
-                        num_heads=n_heads,
-                        mlp_dims=hidden_dim * 4,
-                        dropout=dropout
+                    nn.Sequential(
+                        nn.Linear(hidden_dim, hidden_dim * 4),
+                        nn.ReLU(),
+                        nn.Linear(hidden_dim * 4, hidden_dim),
+                        nn.Dropout(dropout)
                     ) for _ in range(n_layers)
                 ]
                 self.norm = nn.LayerNorm(hidden_dim)
@@ -85,13 +84,12 @@ class SharedEncoder:
             def __call__(self, x):
                 x = self.input_proj(x)
                 for layer in self.layers:
-                    x = layer(x)
+                    x = x + layer(x)
                 return self.norm(x)
         
         self.model = Encoder(
             self.config.hidden_dim,
             self.config.n_encoder_layers,
-            self.config.n_heads,
             self.config.dropout
         )
     
@@ -158,7 +156,6 @@ class SlowLayer:
                 self.trust_net = nn.Sequential(
                     nn.Linear(hidden_dim, hidden_dim),
                     nn.ReLU(),
-                    nn.Dropout(0.1),
                     nn.Linear(hidden_dim, n_codecs)
                 )
                 self.risk_net = nn.Sequential(
@@ -347,7 +344,6 @@ class WorldModelHeads:
                 self.net = nn.Sequential(
                     nn.Linear(hidden_dim, hidden_dim),
                     nn.ReLU(),
-                    nn.Dropout(0.1),
                     nn.Linear(hidden_dim, n_metrics)
                 )
             
