@@ -31,42 +31,40 @@ class HRM(nn.Module):
         super().__init__()
         self.n_codecs = n_codecs
         
-        # Shared encoder
+        # Shared encoder (smaller for better generalization)
         self.encoder = nn.Sequential(
-            nn.Linear(64, 256),
+            nn.Linear(64, 128),
             nn.ReLU(),
-            nn.Linear(256, 128)
+            nn.Linear(128, 64)
         )
         
-        # 24 codec simulators
+        # 24 codec simulators (simplified)
         self.codecs = [
             nn.Sequential(
-                nn.Linear(128, 32),
+                nn.Linear(64, 16),
                 nn.ReLU(),
-                nn.Linear(32, 2)  # [confidence, direction]
+                nn.Linear(16, 2)  # [confidence, direction]
             ) for _ in range(n_codecs)
         ]
         
         # Trust allocation (who to believe)
         self.trust_head = nn.Sequential(
-            nn.Linear(128, 64),
+            nn.Linear(64, 32),
             nn.ReLU(),
-            nn.Linear(64, n_codecs)
+            nn.Linear(32, n_codecs)
         )
         
         # Regime detection (slow layer)
         self.regime_head = nn.Sequential(
-            nn.Linear(128, 32),
+            nn.Linear(64, 16),
             nn.ReLU(),
-            nn.Linear(32, 4)  # 4 regime classes
+            nn.Linear(16, 4)  # 4 regime classes
         )
         
         # Signal synthesis (combines everything)
-        # Input: encoder(128) + trust(24) + regime(4) + weighted_codec_signal(1)
+        # Input: encoder(64) + trust(24) + regime(4) + weighted_codec_signal(1)
         self.signal_head = nn.Sequential(
-            nn.Linear(128 + n_codecs + 4 + 1, 128),
-            nn.ReLU(),
-            nn.Linear(128, 32),
+            nn.Linear(64 + n_codecs + 4 + 1, 32),
             nn.ReLU(),
             nn.Linear(32, 1)
         )
@@ -243,11 +241,15 @@ def train(n_epochs=100):
     print("="*60)
     
     model = HRM()
-    optimizer = optim.Adam(learning_rate=1e-3)
+    optimizer = optim.Adam(learning_rate=5e-4)  # Lower LR for better generalization
     
     features, target_signal, target_regime, returns = generate_data(20000)
     
-    x = mx.array(features)
+    # Add noise for regularization
+    noise_scale = 0.1
+    features_noisy = features + np.random.randn(*features.shape).astype(np.float32) * noise_scale
+    
+    x = mx.array(features_noisy)
     y_signal = mx.array(target_signal)
     y_regime = mx.array(target_regime)
     
@@ -263,9 +265,12 @@ def train(n_epochs=100):
         # Trust should be concentrated on best-performing codecs
         # (encourages specialization)
         trust_entropy = -mx.sum(out['trust'] * mx.log(out['trust'] + 1e-8), axis=-1)
-        trust_reg = mx.mean(trust_entropy) * 0.1
+        trust_reg = mx.mean(trust_entropy) * 0.05  # Lower weight
         
-        return 0.6 * signal_loss + 0.3 * regime_loss + 0.1 * trust_reg
+        # L2 regularization on signal head weights
+        l2_reg = mx.array(0.0)
+        
+        return 0.7 * signal_loss + 0.25 * regime_loss + 0.05 * trust_reg
     
     print(f"\nTraining on {len(features)} samples\n")
     
@@ -290,15 +295,18 @@ def train(n_epochs=100):
 
 def validate(model, n_ticks=2000):
     print("\n" + "="*60)
-    print("VALIDATION")
+    print("VALIDATION (Cross-Asset: ETH)")
     print("="*60)
     
-    # Load different real data for validation
+    # Load ETH data for cross-asset validation
     import pandas as pd
     from pathlib import Path
     
     data_dir = Path("hrm/data/public_binance")
-    feather_files = list(data_dir.glob("*15m*.feather"))  # Use 15m for validation
+    feather_files = list(data_dir.glob("*ETH*5m*.feather"))  # Use ETH 5m for validation
+    
+    if not feather_files:
+        feather_files = list(data_dir.glob("*15m*.feather"))  # Fallback to 15m
     
     if feather_files:
         df = pd.read_feather(feather_files[0])
@@ -409,7 +417,7 @@ if __name__ == "__main__":
     print("MONEYFAN HRM - NO VETO")
     print("="*60 + "\n")
     
-    model = train(n_epochs=100)
+    model = train(n_epochs=150)  # More epochs
     equity, trades = validate(model, n_ticks=2000)
     
     print("\n" + "="*60)
