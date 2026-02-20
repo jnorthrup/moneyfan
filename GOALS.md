@@ -124,10 +124,12 @@ This is the prop-shop secret: hierarchy + shared world model = exponential perfo
 - [x] Stochastic bag implementation
 - [x] MLX optimization
 - [x] Multi-task HRM with fast/slow shared backbone
+- [x] Real MLX training with backpropagation
 
 ### Phase 2: Validation (Next 2-4 weeks)
 - [x] Add multi-task heads to HRM (hrm_meta.py)
-- [ ] Update training loop with shared encoder loss
+- [x] Wire joint multi-task loss
+- [ ] Train on real market data (4.3M candles available)
 - [ ] Ablation: measure generalization speed
 - [ ] 30-day paper run with new HRM
 
