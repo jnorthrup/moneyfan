@@ -1,6 +1,9 @@
 """
 HRM Signal Processor — 16-signal convergence model
-====================================================
+===================================================
+
+Replaces hyperbolic memory with simple vector store lookup.
+Uses 24 horizon predictors that output 64-dim vectors → vector cache.
 
 Instead of raw OHLCV features → HRM, this adapts HRM to take the 16 most
 differentiated trading signals as input and learn:
@@ -41,6 +44,14 @@ try:
 except ImportError:
     HAS_MLX = False
     print("[signal_hrm] MLX not available — numpy fallback mode")
+
+# Import vector store interface (new, simple replacement for hyperbolic memory)
+try:
+    from vector_store import VectorStore, VectorStoreConfig
+    HAS_VECTOR_STORE = True
+except ImportError:
+    HAS_VECTOR_STORE = False
+    print("[signal_hrm] VectorStore not available — using simple aggregation")
 
 # ---------------------------------------------------------------------------
 # The 16 canonical signals (balanced across 6 regimes)
@@ -133,8 +144,12 @@ class SignalHRMConfig:
     L_cycles: int     = 3
     dropout: float    = 0.1
     convergence_threshold: float = 0.25  # min confidence sum for nonzero convergence
-    sparkline_frames: int  = 20    # number of perspective memory frames
-    sparkline_horizon: int = 2000  # vanishing point in ticks (configurable, not model-visible)
+    # Vector store parameters (replaces hyperbolic memory)
+    vector_store_enabled: bool = True
+    vector_store_path: str = "data/vector_store"
+    vector_dim: int = 64
+    use_cosine_similarity: bool = True
+    n_neighbors: int = 5
 
 
 # ---------------------------------------------------------------------------
@@ -210,7 +225,7 @@ if HAS_MLX:
     Fully implements the reference HRM architecture for MLX:
     - H×L nested reasoning cycles
     - Transformer blocks with attention
-    - Full sparkline memory with logarithmic timescales
+    - Simple vector store lookup (replaces hyperbolic memory)
     - ANE-friendly fixed shapes
     
     Input:  x  [B, seq_len, N_SIGNALS * 2]  (signal + confidence interleaved)
@@ -249,25 +264,27 @@ if HAS_MLX:
         self._z_L_init = mx.zeros((1, 1, D))
 
         def __call__(self, x: mx.array | np.ndarray, memory=None):
-            """Forward pass with 20-frame logarithmic sparkline memory.
+            """Forward pass with simple vector cache lookup.
             
-            Memory is a [B, 20, D] buffer where frame k represents timescale
-            2^k ticks. Frame 0 = last tick, frame 19 ≈ 5 years. Cascading
-            update with hyperbolic alpha; log-weighted readout for z_H/z_L init.
-            No gradient through sparkline — idempotent past.
+            Replaces hyperbolic memory with vector store lookup.
+            Memory is now a reference to the vector store (optional).
             
             Args:
                 x: Input tensor [B, seq_len, input_dim]
-                memory: Optional (sparkline_H, sparkline_L) each [B, 20, D]
+                memory: Optional VectorStore instance
             
             Returns:
                 (weights, alpha, convergence, memory)
             """
-            N_FRAMES = self.cfg.sparkline_frames
-            HORIZON = self.cfg.sparkline_horizon
-            # Geometric horizon progression: H_k = ratio^k
-            # ratio = HORIZON^(1/(N-1)) ensures Frame N-1 is at HORIZON ticks.
-            ratio = HORIZON ** (1.0 / max(N_FRAMES - 1, 1))
+            # Initialize vector store if not provided
+            if memory is None and self.cfg.vector_store_enabled and HAS_VECTOR_STORE:
+                if not hasattr(self, '_vector_store'):
+                    config = VectorStoreConfig(
+                        vector_dim=self.cfg.vector_dim,
+                        memmap_path=f"{self.cfg.vector_store_path}/vectors.dat"
+                    )
+                    self._vector_store = VectorStore(config)
+                memory = self._vector_store
             
             if self.force_cpu:
                 x_np = x if isinstance(x, np.ndarray) else np.array(x)
@@ -275,29 +292,24 @@ if HAS_MLX:
                 D = min(F, self.cfg.hidden_dim)
                 pooled = x_np.mean(axis=1)  # [B, F]
                 
-                # Sparkline update + readout (CPU)
-                if memory is not None:
-                    sparkline = memory.copy()
-                else:
-                    sparkline = np.zeros((B, N_FRAMES, F), dtype=np.float32)
+                # Simple vector store lookup (CPU fallback)
+                if memory is not None and HAS_VECTOR_STORE:
+                    try:
+                        # Get vectors from store for similar horizons
+                        # For now, use simple aggregation of recent vectors
+                        if hasattr(memory, 'get_all_vectors'):
+                            all_vectors = memory.get_all_vectors()
+                            if all_vectors:
+                                # Simple aggregation: take mean of recent vectors
+                                recent_vectors = [vec for _, _, vec in all_vectors[-50:]]
+                                if recent_vectors:
+                                    context = np.mean(recent_vectors, axis=0)
+                                    # Blend context into pooled
+                                    pooled = 0.5 * pooled + 0.5 * context[:pooled.shape[1]]
+                    except Exception as e:
+                        print(f"[SignalHRM] Vector store lookup failed: {e}")
                 
-                # Frame 0 = current tick
-                sparkline[:, 0, :] = pooled
-                # Cascade: alpha_k = 1 / H_k
-                for k in range(1, N_FRAMES):
-                    h_k = ratio ** k
-                    alpha_k = 1.0 / h_k
-                    sparkline[:, k, :] = (1.0 - alpha_k) * sparkline[:, k, :] + alpha_k * sparkline[:, k - 1, :]
-                
-                # Weighting: w_k = 1/H_k (near frames more important)
-                # This provides a consistent "vanishing point" perspective.
-                persp_w = np.array([1.0 / (ratio ** k) for k in range(N_FRAMES)], dtype=np.float32)
-                persp_w /= persp_w.sum()
-                context = np.einsum('k,bkd->bd', persp_w, sparkline)  # [B, F]
-                
-                # Blend context into pooled
-                pooled = 0.5 * pooled + 0.5 * context
-                new_memory = sparkline
+                new_memory = memory  # Just pass through
                 
                 w_logits = np.dot(pooled[:, :N_SIGNALS], np.diag(self.signal_weights))
                 weights = np.exp(w_logits) / np.sum(np.exp(w_logits), axis=-1, keepdims=True)
@@ -314,44 +326,43 @@ if HAS_MLX:
             # Project input → embedding
             x_emb = self.input_proj(x)  # [B, T, D]
 
-            # ── SPARKLINE MEMORY ──────────────────────────────────
-            if memory is not None:
-                spark_H = mx.stop_gradient(memory[0])  # [B, 20, D]
-                spark_L = mx.stop_gradient(memory[1])
+            # ── VECTOR STORE LOOKUP ──────────────────────────────────
+            # Simple vector store lookup instead of hyperbolic memory
+            if memory is not None and self.cfg.vector_store_enabled and HAS_VECTOR_STORE:
+                try:
+                    # Get query vector from current input
+                    query_vector = x_emb.mean(axis=1)  # [B, D]
+                    
+                    # Look up similar vectors from store
+                    # For now, use simple aggregation of nearby vectors
+                    if hasattr(memory, 'get_all_vectors'):
+                        all_vectors = memory.get_all_vectors()
+                        if all_vectors:
+                            # Take mean of recent vectors (last 50)
+                            recent_vectors = [mx.array(vec, dtype=mx.float32) for _, _, vec in all_vectors[-50:]]
+                            if recent_vectors:
+                                context = mx.mean(mx.stack(recent_vectors, axis=0), axis=0)
+                                # Use context for initialization
+                                z_H = mx.broadcast_to(context.reshape(1, 1, D), (B, T, D))
+                                z_L = mx.broadcast_to(context.reshape(1, 1, D), (B, T, D))
+                            else:
+                                z_H = mx.zeros((B, T, D))
+                                z_L = mx.zeros((B, T, D))
+                        else:
+                            z_H = mx.zeros((B, T, D))
+                            z_L = mx.zeros((B, T, D))
+                    else:
+                        z_H = mx.zeros((B, T, D))
+                        z_L = mx.zeros((B, T, D))
+                except Exception as e:
+                    print(f"[SignalHRM] Vector store lookup failed: {e}")
+                    z_H = mx.zeros((B, T, D))
+                    z_L = mx.zeros((B, T, D))
             else:
-                spark_H = mx.zeros((B, N_FRAMES, D))
-                spark_L = mx.zeros((B, N_FRAMES, D))
+                z_H = mx.zeros((B, T, D))
+                z_L = mx.zeros((B, T, D))
 
-            # Current tick state (mean of input embedding)
-            curr_H = x_emb.mean(axis=1, keepdims=True)  # [B, 1, D]
-            curr_L = x_emb.mean(axis=1, keepdims=True)
-
-            # Build updated sparkline: frame 0 = current, cascade up
-            # Geometric horizon: H_k = ratio^k, alpha_k = 1/H_k
-            frames_H = [curr_H]
-            frames_L = [curr_L]
-            for k in range(1, N_FRAMES):
-                h_k = ratio ** k
-                alpha_k = 1.0 / h_k
-                fH = (1.0 - alpha_k) * spark_H[:, k:k+1, :] + alpha_k * frames_H[k - 1]
-                fL = (1.0 - alpha_k) * spark_L[:, k:k+1, :] + alpha_k * frames_L[k - 1]
-                frames_H.append(fH)
-                frames_L.append(fL)
-            
-            new_spark_H = mx.concatenate(frames_H, 1)
-            new_spark_L = mx.concatenate(frames_L, 1)
-
-            # Weighting: w_k = 1/H_k
-            persp_w = mx.array([1.0 / (ratio ** k) for k in range(N_FRAMES)])
-            persp_w = persp_w / persp_w.sum()
-            context_H = mx.sum(new_spark_H * persp_w.reshape(1, N_FRAMES, 1), axis=1, keepdims=True)
-            context_L = mx.sum(new_spark_L * persp_w.reshape(1, N_FRAMES, 1), axis=1, keepdims=True)
-
-            # Init z_H/z_L from sparkline context
-            z_H = mx.broadcast_to(context_H, (B, T, D))
-            z_L = mx.broadcast_to(context_L, (B, T, D))
-
-            # Nested H × L recurrence (stop_gradient on non-final iterations)
+            # Nested H × L recurrence (simplified without hyperbolic memory)
             for h in range(self.cfg.H_cycles):
                 for l in range(self.cfg.L_cycles):
                     is_final = (h == self.cfg.H_cycles - 1) and (l == self.cfg.L_cycles - 1)
@@ -364,8 +375,8 @@ if HAS_MLX:
                 else:
                     z_H = self.H_level(z_H, z_L)
 
-            # Carry forward sparkline (detached, idempotent past)
-            new_memory = (mx.stop_gradient(new_spark_H), mx.stop_gradient(new_spark_L))
+            # Simple memory storage (just pass through vector store reference)
+            new_memory = memory
 
             # Pool over sequence → [B, D]
             pooled = z_H.mean(axis=1)
@@ -415,14 +426,11 @@ else:
         
         def __call__(self, x, memory=None):
             """
-            Simplified CPU forward pass.
+            Simplified CPU forward pass with vector store lookup.
             
             Note: Does NOT match MLX numerically (different architecture).
             But produces valid trading signals suitable for training.
             """
-            N_FRAMES = self.cfg.sparkline_frames
-            HORIZON = self.cfg.sparkline_horizon
-            ratio = HORIZON ** (1.0 / max(N_FRAMES - 1, 1))
             B, T, F = x.shape
             
             # Simplified pooling (instead of transformer blocks)
@@ -436,23 +444,21 @@ else:
                 padded[:, :F] = pooled
                 pooled = padded
             
-            # Sparkline memory (same logic as MLX)
-            if memory is not None:
-                sparkline = memory.copy()
-            else:
-                sparkline = np.zeros((B, N_FRAMES, self.hidden_dim), dtype=np.float32)
-            
-            sparkline[:, 0, :] = pooled
-            for k in range(1, N_FRAMES):
-                h_k = ratio ** k
-                alpha_k = 1.0 / h_k
-                sparkline[:, k, :] = (1.0 - alpha_k) * sparkline[:, k, :] + alpha_k * sparkline[:, k - 1, :]
-            
-            persp_w = np.array([1.0 / (ratio ** k) for k in range(N_FRAMES)], dtype=np.float32)
-            persp_w /= persp_w.sum()
-            context = np.einsum('k,bkd->bd', persp_w, sparkline)
-            
-            pooled = 0.5 * pooled + 0.5 * context
+            # Simple vector store lookup (CPU fallback)
+            if memory is not None and HAS_VECTOR_STORE:
+                try:
+                    # Get vectors from store for similar horizons
+                    if hasattr(memory, 'get_all_vectors'):
+                        all_vectors = memory.get_all_vectors()
+                        if all_vectors:
+                            # Simple aggregation: take mean of recent vectors
+                            recent_vectors = [vec for _, _, vec in all_vectors[-50:]]
+                            if recent_vectors:
+                                context = np.mean(recent_vectors, axis=0)
+                                # Blend context into pooled
+                                pooled = 0.5 * pooled + 0.5 * context[:pooled.shape[1]]
+                except Exception as e:
+                    print(f"[SignalHRM CPU] Vector store lookup failed: {e}")
             
             # Weight computation (same as MLX: softmax over weight_head output)
             w_logits = np.dot(pooled, self.weight_head_weight) + self.weight_head_bias
@@ -467,7 +473,7 @@ else:
             raw_signals = x[:, -1, :N_SIGNALS*2:2]  # [B, N_SIGNALS]
             alpha = (weights * raw_signals).sum(axis=-1)
             
-            new_memory = sparkline
+            new_memory = memory  # Just pass through
             
             return weights, alpha, convergence, new_memory
         
