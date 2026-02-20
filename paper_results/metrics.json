@@ -7,10 +7,5 @@
   "total_slippage": 0.0,
   "max_drawdown": 0.0,
   "peak_equity": 1000.0,
-  "trough_equity": 1000.0,
-  "profit_factor": Infinity,
-  "sharpe_ratio": 0,
-  "final_equity": 1000.0,
-  "return_pct": 0.0,
-  "win_rate": 0
+  "trough_equity": 1000.0
 }

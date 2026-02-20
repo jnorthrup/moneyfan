@@ -29,17 +29,17 @@ except ImportError:
 @dataclass
 class ProvenanceConfig:
     """Configuration for provenance import"""
-    # Exchange sources
+    # Exchange sources - updated to point to actual arrow directory
     binance_sources: List[str] = field(default_factory=lambda: [
-        "hrm/data/binance_spot",  # Existing Binance spot data
+        "hrm/data/arrow",  # Arrow files in main directory
         "hrm/data/binance_arrow",  # Arrow files from previous system
-        "data/binance_spot",  # Alternative location
+        "hrm/data/binance_spot",  # Existing Binance spot data
     ])
     
     coinbase_sources: List[str] = field(default_factory=lambda: [
-        "hrm/data/coinbase",  # Coinbase historical data
+        "hrm/data/arrow",  # Arrow files in main directory
         "hrm/data/coinbase_arrow",  # Arrow files from previous system
-        "data/coinbase",  # Alternative location
+        "hrm/data/coinbase",  # Coinbase historical data
     ])
     
     # DuckDB database
@@ -49,7 +49,7 @@ class ProvenanceConfig:
     import_timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
     data_retention_days: int = 365  # Keep data for 1 year
     
-    # Binance pairs to import (basic trade pairs)
+    # Binance pairs to import (basic trade pairs) - updated based on actual feather files
     binance_pairs: List[str] = field(default_factory=lambda: [
         "BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT",
         "ADAUSDT", "DOGEUSDT", "AVAXUSDT", "DOTUSDT", "MATICUSDT",
@@ -57,12 +57,16 @@ class ProvenanceConfig:
         "ETCUSDT", "FILUSDT", "APTUSDT", "OPUSDT", "ARBUSDT",
     ])
     
-    # Coinbase pairs to import
+    # Coinbase pairs to import - updated based on actual feather files
     coinbase_pairs: List[str] = field(default_factory=lambda: [
         "BTC-USD", "ETH-USD", "SOL-USD", "BNB-USD", "XRP-USD",
         "ADA-USD", "DOGE-USD", "AVAX-USD", "DOT-USD", "MATIC-USD",
         "LINK-USD", "UNI-USD", "ATOM-USD", "LTC-USD", "BCH-USD",
         "ETC-USD", "FIL-USD", "APT-USD", "OP-USD", "ARB-USD",
+        # Also include other common Coinbase pairs found in feather files
+        "BTC-AUD", "ETH-AUD", "SOL-AUD", "BNB-AUD", "XRP-AUD",
+        "ADA-AUD", "DOGE-AUD", "AVAX-AUD", "DOT-AUD", "MATIC-AUD",
+        "LINK-AUD", "UNI-AUD", "ATOM-AUD", "LTC-AUD", "BCH-AUD",
     ])
 
 class ProvenanceImport:
@@ -225,11 +229,12 @@ class ProvenanceImport:
             for feather_file in feather_files:
                 # Extract symbol from filename
                 symbol_raw = feather_file.stem
-                # Convert to Binance format (BTCUSDT)
+                # Convert to Binance format (BTCUSDT) - remove underscores and hyphens
                 symbol = symbol_raw.replace("_", "").replace("-", "").upper()
                 
-                # Check if this is a valid Binance pair
-                if symbol not in self.config.binance_pairs:
+                # Check if this is a valid Binance pair (with underscore format)
+                binance_symbol = symbol_raw.replace("_", "").replace("-", "").upper()
+                if binance_symbol not in self.config.binance_pairs:
                     continue
                 
                 print(f"\n    Processing {symbol}...")
@@ -373,11 +378,15 @@ class ProvenanceImport:
             for feather_file in feather_files:
                 # Extract symbol from filename
                 symbol_raw = feather_file.stem
-                # Convert to Coinbase format (BTC-USD)
+                # Convert to Coinbase format (BTC-USD) - replace underscore with hyphen
                 symbol = symbol_raw.replace("_", "-")
                 
-                # Check if this is a valid Coinbase pair
-                if symbol not in self.config.coinbase_pairs:
+                # Also check if this could be Binance (BTC_USDT format)
+                binance_symbol = symbol_raw.replace("_", "").replace("-", "").upper()
+                
+                # Check if this is a valid Coinbase pair OR Binance pair
+                # We'll process both in their respective imports
+                if symbol not in self.config.coinbase_pairs and binance_symbol not in self.config.binance_pairs:
                     continue
                 
                 print(f"\n    Processing {symbol}...")
@@ -575,14 +584,6 @@ class ProvenanceImport:
 # Example usage
 async def main():
     config = ProvenanceConfig(
-        binance_sources=[
-            "hrm/data/binance_spot",
-            "hrm/data/binance_arrow",
-        ],
-        coinbase_sources=[
-            "hrm/data/coinbase",
-            "hrm/data/coinbase_arrow",
-        ],
         duck_db_path="hrm/data/market.duckdb"
     )
     

@@ -24,7 +24,7 @@ import pandas as pd
 import numpy as np
 from datetime import datetime
 
-from instruments import LazyInstrument, InstrumentRegistry, QuantModel
+from hrm.instruments import LazyInstrument, InstrumentRegistry, QuantModel
 
 
 class BotType(Enum):

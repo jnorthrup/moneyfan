@@ -27,14 +27,14 @@ from signal_orchestrator import (
 )
 try:
     from hrm.signal_hrm import SIGNAL_16, N_SIGNALS
-    from hrm.arrow_store import ArrowStore
+    from hrm.duck_store import DuckStore
 except ImportError:
     from signal_hrm import SIGNAL_16, N_SIGNALS
-    from arrow_store import ArrowStore
+    from duck_store import DuckStore
 
 class OrchestratorBridge:
-    def __init__(self, arrow_dir: str = 'hrm/data/arrow'):
-        self.store = ArrowStore(arrow_dir)
+    def __init__(self, duck_dir: str = 'hrm/data/market.duckdb'):
+        self.store = DuckStore(duck_dir)
         self.orchestrator = Orchestrator(max_workers=4)
         self._register_services()
         self._setup_compositions()

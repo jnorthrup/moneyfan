@@ -31,7 +31,7 @@ except ImportError:
     try:
         from duck_store import DuckStore
     except:
-        from hrm.arrow_store import ArrowStore as DuckStore
+        from hrm.duck_store import DuckStore
     
 try:
     import requests
@@ -288,14 +288,7 @@ class CoinbaseHistory:
 
 class CoinbaseRealtime:
     """
-    Production-style Advanced Trade market websocket adapter.
-
-    Features:
-      - one-channel-per-subscribe semantics
-      - reconnect with exponential backoff
-      - optional JWT rotation per subscribe message
-      - normalized MarketEvent fanout for HRM/oversight
-      - legacy ticker fallback support
+    Realtime Coinbase WebSocket feed that writes to DuckStore
     """
 
     def __init__(
