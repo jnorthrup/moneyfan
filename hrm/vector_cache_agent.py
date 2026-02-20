@@ -11,50 +11,55 @@ from typing import Optional, List, Tuple, Dict, Any
 from dataclasses import dataclass, field
 
 try:
-    from vector_store import VectorStore, VectorStoreConfig
-    HAS_VECTOR_STORE = True
+    from hrm.duck_store import DuckStore
+    HAS_DUCK_STORE = True
 except ImportError:
-    HAS_VECTOR_STORE = False
-    print("[VectorCacheAgent] VectorStore not available")
+    HAS_DUCK_STORE = False
+    print("[VectorCacheAgent] DuckStore not available")
 
 @dataclass
 class VectorCacheAgentConfig:
     """Configuration for vector cache agent"""
     vector_dim: int = 64
     n_horizons: int = 24
-    vector_store_path: str = "data/vector_store"
+    duck_db_path: str = "hrm/data/market.duckdb"
     use_cosine_similarity: bool = True
     n_neighbors: int = 3  # Number of neighbors to look up
     skew_factor: float = 0.3  # How much to skew features using vectors
 
 class VectorCacheAgent:
     """
-    HRM agent that uses vector cache for skewed features
+    HRM agent that uses DuckDB vector cache for skewed features
     
-    Replaces hyperbolic memory with simple vector lookup.
+    Replaces hyperbolic memory with SQL-based vector lookup.
     """
     
     def __init__(self, config: VectorCacheAgentConfig):
         self.config = config
         
-        # Initialize vector store
-        if HAS_VECTOR_STORE:
-            vs_config = VectorStoreConfig(
-                vector_dim=config.vector_dim,
-                memmap_path=f"{config.vector_store_path}/vectors.dat"
-            )
-            self.vector_store = VectorStore(vs_config)
-            # Try to load existing data
-            self.vector_store.load()
+        # Initialize DuckDB store
+        if HAS_DUCK_STORE:
+            self.duck_store = DuckStore(config.duck_db_path)
+            
+            # Ensure vectors table exists
+            self.duck_store.conn.execute("""
+                CREATE TABLE IF NOT EXISTS vectors (
+                    id INTEGER PRIMARY KEY,
+                    horizon INTEGER,
+                    timestamp INTEGER,
+                    vector DOUBLE[],
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
         else:
-            self.vector_store = None
+            self.duck_store = None
         
         print(f"[VectorCacheAgent] Initialized with {config.n_horizons} horizons")
     
     def get_skewed_features(self, base_features: np.ndarray, horizon: int, 
                            timestamp: int) -> np.ndarray:
         """
-        Get skewed features by looking up similar vectors in cache
+        Get skewed features by looking up similar vectors in DuckDB
         
         Args:
             base_features: Original features (16-dim or 64-dim)
@@ -64,7 +69,7 @@ class VectorCacheAgent:
         Returns:
             Skewed features (same shape as base_features)
         """
-        if self.vector_store is None or not HAS_VECTOR_STORE:
+        if self.duck_store is None or not HAS_DUCK_STORE:
             # Fallback: return base features unchanged
             return base_features
         
@@ -81,26 +86,55 @@ class VectorCacheAgent:
             padded[:n] = query_vector[:n]
             query_vector = padded
         
-        # Look up similar vectors
-        if self.config.use_cosine_similarity:
-            similar_vectors = self.vector_store.cosine_similarity(
-                query_vector, k=self.config.n_neighbors
-            )
-        else:
-            similar_vectors = self.vector_store.nearest_neighbor(
-                query_vector, k=self.config.n_neighbors
-            )
+        # Look up similar vectors from DuckDB
+        # Convert vector to SQL array format
+        query_vector_str = "[" + ", ".join([str(x) for x in query_vector]) + "]"
         
-        if not similar_vectors:
-            # No similar vectors found, return base features
-            return base_features
-        
-        # Aggregate similar vectors
-        similar_vecs_list = []
-        for distance_or_sim, (vec_horizon, vec_timestamp) in similar_vectors:
-            vec = self.vector_store.get_vector(vec_horizon, vec_timestamp)
-            if vec is not None:
-                similar_vecs_list.append(vec)
+        try:
+            if self.config.use_cosine_similarity:
+                # DuckDB doesn't have built-in cosine similarity
+                # We'll use simple Euclidean distance
+                query = f"""
+                    SELECT horizon, timestamp, vector, 
+                           array_distance(vector, {query_vector_str}) as distance
+                    FROM vectors
+                    WHERE horizon = ?
+                    ORDER BY distance
+                    LIMIT ?
+                """
+                results = self.duck_store.conn.execute(
+                    query, (horizon, self.config.n_neighbors)
+                ).fetchall()
+            else:
+                query = f"""
+                    SELECT horizon, timestamp, vector,
+                           array_distance(vector, {query_vector_str}) as distance
+                    FROM vectors
+                    WHERE horizon = ?
+                    ORDER BY distance
+                    LIMIT ?
+                """
+                results = self.duck_store.conn.execute(
+                    query, (horizon, self.config.n_neighbors)
+                ).fetchall()
+            
+            if not results:
+                # No similar vectors found, return base features
+                return base_features
+            
+            # Aggregate similar vectors
+            similar_vecs_list = []
+            for row in results:
+                horizon_val, ts_val, vec_str, distance = row
+                # Parse vector string back to array
+                try:
+                    vec = np.array(json.loads(vec_str), dtype='float32')
+                    similar_vecs_list.append(vec)
+                except:
+                    continue
+            
+            if not similar_vecs_list:
+                return base_features
         
         if not similar_vecs_list:
             return base_features
@@ -129,31 +163,63 @@ class VectorCacheAgent:
             return skewed[:base_features.shape[0], :base_features.shape[1]]
     
     def update_cache(self, vector: np.ndarray, horizon: int, timestamp: int):
-        """Update the vector cache with a new vector"""
-        if self.vector_store is None or not HAS_VECTOR_STORE:
+        """Update the vector cache with a new vector in DuckDB"""
+        if self.duck_store is None or not HAS_DUCK_STORE:
             return
         
         try:
-            self.vector_store.add_vector(vector, horizon, timestamp)
+            # Convert vector to SQL array format
+            vector_str = "[" + ", ".join([str(x) for x in vector]) + "]"
+            
+            # Insert into DuckDB
+            self.duck_store.conn.execute(
+                "INSERT INTO vectors (horizon, timestamp, vector) VALUES (?, ?, ?)",
+                (int(horizon), int(timestamp), vector_str)
+            )
         except Exception as e:
             print(f"[VectorCacheAgent] Error updating cache: {e}")
+        
+        # Vector already inserted in DuckDB above
     
     def get_cache_stats(self) -> Dict[str, Any]:
-        """Get vector cache statistics"""
-        if self.vector_store is None or not HAS_VECTOR_STORE:
-            return {"count": 0, "error": "VectorStore not available"}
+        """Get vector cache statistics from DuckDB"""
+        if self.duck_store is None or not HAS_DUCK_STORE:
+            return {"count": 0, "error": "DuckStore not available"}
         
-        return self.vector_store.get_stats()
+        try:
+            result = self.duck_store.conn.execute("SELECT COUNT(*) as count FROM vectors").fetchone()
+            count = result[0] if result else 0
+            
+            return {
+                "count": count,
+                "table": "vectors",
+                "database": self.duck_store.db_path
+            }
+        except Exception as e:
+            return {"count": 0, "error": str(e)}
     
     def get_similar_vectors(self, query_vector: np.ndarray, k: int = 3) -> List[Tuple[float, Tuple[int, int]]]:
-        """Get k similar vectors from cache"""
-        if self.vector_store is None or not HAS_VECTOR_STORE:
+        """Get k similar vectors from DuckDB cache"""
+        if self.duck_store is None or not HAS_DUCK_STORE:
             return []
         
-        if self.config.use_cosine_similarity:
-            return self.vector_store.cosine_similarity(query_vector, k=k)
-        else:
-            return self.vector_store.nearest_neighbor(query_vector, k=k)
+        try:
+            # Convert vector to SQL array format
+            query_vector_str = "[" + ", ".join([str(x) for x in query_vector]) + "]"
+            
+            # Query DuckDB for similar vectors
+            query = f"""
+                SELECT horizon, timestamp, array_distance(vector, {query_vector_str}) as distance
+                FROM vectors
+                ORDER BY distance
+                LIMIT ?
+            """
+            results = self.duck_store.conn.execute(query, (k,)).fetchall()
+            
+            return [(float(distance), (int(horizon), int(timestamp))) for horizon, timestamp, distance in results]
+        except Exception as e:
+            print(f"[VectorCacheAgent] Error querying similar vectors: {e}")
+            return []
 
 
 # Example usage
@@ -164,7 +230,7 @@ if __name__ == "__main__":
     config = VectorCacheAgentConfig(
         vector_dim=64,
         n_horizons=24,
-        vector_store_path="data/vector_store",
+        duck_db_path="hrm/data/market.duckdb",
         use_cosine_similarity=True,
         n_neighbors=3,
         skew_factor=0.3
