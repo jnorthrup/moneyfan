@@ -1,0 +1,29 @@
+
+================================================================================
+THE RANKING: 16 CANONICAL TRADE ALGS (Average across Volatile Assets)
+================================================================================
+                       TotalReturn     Sharpe
+Algorithm                                    
+pairs_spread              0.814597  12.020795  (Top Performer: Correlation Mean Reversion)
+rsi_mean_reversion        0.697752   9.986547  (Strong 2nd: RSI Oversold/Overbought)
+hrm_mean_reversion        0.537990   7.481617  (HRM's internal mean reversion logic)
+grid_reversion            0.517244   8.168643  (Grid trading based on recent range)
+bollinger_reversion       0.331166   6.700902  (Classic BB Reversion)
+macd_crossover            0.152072   1.885812  (Lagging trend follower)
+bent_penny                0.136332   2.559434  (Tail risk reversion)
+momentum_x_vol           -0.000163  -3.177646  (Vol-adjusted momentum)
+rsi_x_trend              -0.001921  -1.234558  (Conflicting signals cancel out)
+vol_x_breakout_proven    -0.003865  -4.971468  (Equivalent to volatility_breakout)
+volatility_breakout      -0.003865  -4.971468  (Failed in recent choppy/down market?)
+momentum_trend           -0.004262  -2.948798  (Standard momentum failed)
+sota_momentum            -0.004262  -2.948798  (Alias for momentum_trend)
+technical_ml             -0.024276  -0.292125  (Random baseline proxy)
+dca_baseline             -0.157207  -1.862708  (Market dropped ~15% in this window)
+mom_trend_additive       -0.762747  -7.434651  (Leveraged wrong-way bets?)
+================================================================================
+
+Notes:
+- Period: Last 60 days (2025-12 to 2026-02)
+- Assets: BTC, ETH, SOL, DOGE, AVAX
+- Regime: Bearish/Choppy (DCA Baseline -15%)
+- Result: Mean Reversion strategies dominated. Trend/Breakout strategies suffered from false signals in choppy market.

@@ -45,7 +45,7 @@ python train_ab_independent.py --mode train --epochs 100
 python train_ab_independent.py --mode paper --days 30
 
 # 5. Go live (small capital first)
-node unified_trading_system.js --mode live --risk 1%
+python run_coinbase_live.py --mode live --capital 500 --risk 0.75%
 ```
 
 ### Expected Timeline
@@ -84,7 +84,7 @@ python train_ab_independent.py \
   --output signals.json
 
 # 2. Execute with risk controls
-node unified_trading_system.js \
+python run_coinbase_live.py \
   --input signals.json \
   --risk 1% \
   --broker alpaca \
@@ -145,7 +145,7 @@ moneyfan/
 │   ├── integration/    # end-to-end signal → order
 │   └── live_paper/     # paper-trading regression tests
 ├── config/             # YAML configuration
-├── unified_trading_system.js  # Execution gateway
+├── run_coinbase_live.py  # Single entry point for Coinbase trading
 ├── train_ab_independent.py    # Training & inference
 └── run_live.py         # Single entry point for production
 ```
@@ -155,7 +155,7 @@ moneyfan/
 - **`core/hrm/high_level.py`**: Regime detection + risk budget allocation
 - **`core/hrm/low_level.py`**: Per-codec tactical execution
 - **`train_ab_independent.py`**: A/B testing PyTorch vs MLX
-- **`unified_trading_system.js`**: Multi-exchange execution (Kraken, Coinbase, Alpaca)
+- **`run_coinbase_live.py`**: Single entry point for Coinbase trading with 24 SOTA codecs
 - **`run_live.py`**: Single entry point for production trading
 
 ---
@@ -280,7 +280,7 @@ To claim "alpha achieved", you must:
 **A: Diversity.** 24 SOTA strategies (momentum, mean-reversion, ML, etc.) capture multiple market regimes. HRM learns which to trust when.
 
 ### Q: Can I use this with other brokers?
-**A: Yes.** `unified_trading_system.js` supports Kraken, Coinbase, and Alpaca. Add your own via the ExchangeAPI interface.
+**A: Yes.** `run_coinbase_live.py` supports Coinbase via the Kotlin execution layer. For multi-exchange, use the Kotlin adapter pattern.
 
 ### Q: What's the minimum capital?
 **A: $100** for backtest alignment. Scale up as you validate performance.
