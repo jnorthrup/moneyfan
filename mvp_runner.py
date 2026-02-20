@@ -9,7 +9,7 @@ Runs the complete HRM pipeline with 3 short-horizon predictors:
 
 Vector cache feed into flat PPO HRM (Stage 3/4)
 Full pandas + depth inside live agents only
-Signals → coinbaseXChangeBot.main.kts → paper orders
+Signals → execution engine → paper orders
 Log every tick, P&L, and regime switches
 """
 

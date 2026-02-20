@@ -1,0 +1,518 @@
+[
+  {
+    "timestamp": 100,
+    "equity": 1000.0,
+    "price": 50446.035165652196,
+    "position": 0.0
+  },
+  {
+    "timestamp": 200,
+    "equity": 1000.0,
+    "price": 50078.8541361272,
+    "position": 0.0
+  },
+  {
+    "timestamp": 300,
+    "equity": 1000.0,
+    "price": 50374.83343232617,
+    "position": 0.0
+  },
+  {
+    "timestamp": 400,
+    "equity": 1000.0,
+    "price": 49954.29189914919,
+    "position": 0.0
+  },
+  {
+    "timestamp": 500,
+    "equity": 1000.0,
+    "price": 49811.31091971021,
+    "position": 0.0
+  },
+  {
+    "timestamp": 600,
+    "equity": 1000.0,
+    "price": 48363.23297833197,
+    "position": 0.0
+  },
+  {
+    "timestamp": 700,
+    "equity": 1000.0,
+    "price": 49558.60861520529,
+    "position": 0.0
+  },
+  {
+    "timestamp": 800,
+    "equity": 1000.0,
+    "price": 50190.112508275655,
+    "position": 0.0
+  },
+  {
+    "timestamp": 900,
+    "equity": 1000.0,
+    "price": 49663.37047648078,
+    "position": 0.0
+  },
+  {
+    "timestamp": 1000,
+    "equity": 1000.0,
+    "price": 47857.867150352235,
+    "position": 0.0
+  },
+  {
+    "timestamp": 1100,
+    "equity": 1000.0,
+    "price": 47768.55392633775,
+    "position": 0.0
+  },
+  {
+    "timestamp": 1200,
+    "equity": 1000.0,
+    "price": 48637.50087023164,
+    "position": 0.0
+  },
+  {
+    "timestamp": 1300,
+    "equity": 1000.0,
+    "price": 50284.126703284455,
+    "position": 0.0
+  },
+  {
+    "timestamp": 1400,
+    "equity": 1000.0,
+    "price": 51099.196833160284,
+    "position": 0.0
+  },
+  {
+    "timestamp": 1500,
+    "equity": 1000.0,
+    "price": 49753.322649628906,
+    "position": 0.0
+  },
+  {
+    "timestamp": 1600,
+    "equity": 1000.0,
+    "price": 50335.23763616079,
+    "position": 0.0
+  },
+  {
+    "timestamp": 1700,
+    "equity": 1000.0,
+    "price": 50213.26026467246,
+    "position": 0.0
+  },
+  {
+    "timestamp": 1800,
+    "equity": 1000.0,
+    "price": 49318.603480751415,
+    "position": 0.0
+  },
+  {
+    "timestamp": 1900,
+    "equity": 1000.0,
+    "price": 48363.87377804847,
+    "position": 0.0
+  },
+  {
+    "timestamp": 2000,
+    "equity": 1000.0,
+    "price": 50303.30581412846,
+    "position": 0.0
+  },
+  {
+    "timestamp": 2100,
+    "equity": 1000.0,
+    "price": 50641.66929582088,
+    "position": 0.0
+  },
+  {
+    "timestamp": 2200,
+    "equity": 1000.0,
+    "price": 50318.0804172457,
+    "position": 0.0
+  },
+  {
+    "timestamp": 2300,
+    "equity": 1000.0,
+    "price": 50419.633504487545,
+    "position": 0.0
+  },
+  {
+    "timestamp": 2400,
+    "equity": 1000.0,
+    "price": 50172.40938212479,
+    "position": 0.0
+  },
+  {
+    "timestamp": 2500,
+    "equity": 1000.0,
+    "price": 48870.41458245557,
+    "position": 0.0
+  },
+  {
+    "timestamp": 2600,
+    "equity": 1000.0,
+    "price": 48953.35500790456,
+    "position": 0.0
+  },
+  {
+    "timestamp": 2700,
+    "equity": 1000.0,
+    "price": 49704.726200913305,
+    "position": 0.0
+  },
+  {
+    "timestamp": 2800,
+    "equity": 1000.0,
+    "price": 49219.537383428986,
+    "position": 0.0
+  },
+  {
+    "timestamp": 2900,
+    "equity": 1000.0,
+    "price": 49352.50696189802,
+    "position": 0.0
+  },
+  {
+    "timestamp": 3000,
+    "equity": 1000.0,
+    "price": 49438.92630657455,
+    "position": 0.0
+  },
+  {
+    "timestamp": 3100,
+    "equity": 1000.0,
+    "price": 49615.19524157336,
+    "position": 0.0
+  },
+  {
+    "timestamp": 3200,
+    "equity": 1000.0,
+    "price": 48884.03136029772,
+    "position": 0.0
+  },
+  {
+    "timestamp": 3300,
+    "equity": 1000.0,
+    "price": 48850.31305351452,
+    "position": 0.0
+  },
+  {
+    "timestamp": 3400,
+    "equity": 1000.0,
+    "price": 48672.73622947709,
+    "position": 0.0
+  },
+  {
+    "timestamp": 3500,
+    "equity": 1000.0,
+    "price": 49060.60467083733,
+    "position": 0.0
+  },
+  {
+    "timestamp": 3600,
+    "equity": 1000.0,
+    "price": 47470.17191981755,
+    "position": 0.0
+  },
+  {
+    "timestamp": 3700,
+    "equity": 1000.0,
+    "price": 47524.70102574424,
+    "position": 0.0
+  },
+  {
+    "timestamp": 3800,
+    "equity": 1000.0,
+    "price": 48310.902681858744,
+    "position": 0.0
+  },
+  {
+    "timestamp": 3900,
+    "equity": 1000.0,
+    "price": 48942.91014167177,
+    "position": 0.0
+  },
+  {
+    "timestamp": 4000,
+    "equity": 1000.0,
+    "price": 50716.405902590086,
+    "position": 0.0
+  },
+  {
+    "timestamp": 4100,
+    "equity": 1000.0,
+    "price": 49871.845228752936,
+    "position": 0.0
+  },
+  {
+    "timestamp": 4200,
+    "equity": 1000.0,
+    "price": 49065.19208029782,
+    "position": 0.0
+  },
+  {
+    "timestamp": 4300,
+    "equity": 1000.0,
+    "price": 48418.80182697705,
+    "position": 0.0
+  },
+  {
+    "timestamp": 4400,
+    "equity": 1000.0,
+    "price": 48307.69674824173,
+    "position": 0.0
+  },
+  {
+    "timestamp": 4500,
+    "equity": 1000.0,
+    "price": 48216.98313412907,
+    "position": 0.0
+  },
+  {
+    "timestamp": 4600,
+    "equity": 1000.0,
+    "price": 49540.96836340987,
+    "position": 0.0
+  },
+  {
+    "timestamp": 4700,
+    "equity": 1000.0,
+    "price": 48309.739513224304,
+    "position": 0.0
+  },
+  {
+    "timestamp": 4800,
+    "equity": 1000.0,
+    "price": 48875.92634573437,
+    "position": 0.0
+  },
+  {
+    "timestamp": 4900,
+    "equity": 1000.0,
+    "price": 47643.841881696506,
+    "position": 0.0
+  },
+  {
+    "timestamp": 5000,
+    "equity": 1000.0,
+    "price": 48444.93379705655,
+    "position": 0.0
+  },
+  {
+    "timestamp": 5100,
+    "equity": 1000.0,
+    "price": 50195.950598074174,
+    "position": 0.0
+  },
+  {
+    "timestamp": 5200,
+    "equity": 1000.0,
+    "price": 49408.407862455795,
+    "position": 0.0
+  },
+  {
+    "timestamp": 5300,
+    "equity": 1000.0,
+    "price": 49590.869084796796,
+    "position": 0.0
+  },
+  {
+    "timestamp": 5400,
+    "equity": 1000.0,
+    "price": 50166.146752054614,
+    "position": 0.0
+  },
+  {
+    "timestamp": 5500,
+    "equity": 1000.0,
+    "price": 49580.33550960545,
+    "position": 0.0
+  },
+  {
+    "timestamp": 5600,
+    "equity": 1000.0,
+    "price": 48132.58566760256,
+    "position": 0.0
+  },
+  {
+    "timestamp": 5700,
+    "equity": 1000.0,
+    "price": 50422.232038936505,
+    "position": 0.0
+  },
+  {
+    "timestamp": 5800,
+    "equity": 1000.0,
+    "price": 49833.82240217769,
+    "position": 0.0
+  },
+  {
+    "timestamp": 5900,
+    "equity": 1000.0,
+    "price": 49502.611092684725,
+    "position": 0.0
+  },
+  {
+    "timestamp": 6000,
+    "equity": 1000.0,
+    "price": 48192.41908534485,
+    "position": 0.0
+  },
+  {
+    "timestamp": 6100,
+    "equity": 1000.0,
+    "price": 49636.555854458944,
+    "position": 0.0
+  },
+  {
+    "timestamp": 6200,
+    "equity": 1000.0,
+    "price": 50661.70120530277,
+    "position": 0.0
+  },
+  {
+    "timestamp": 6300,
+    "equity": 1000.0,
+    "price": 48235.114394984485,
+    "position": 0.0
+  },
+  {
+    "timestamp": 6400,
+    "equity": 1000.0,
+    "price": 48168.09060871759,
+    "position": 0.0
+  },
+  {
+    "timestamp": 6500,
+    "equity": 1000.0,
+    "price": 49206.0104573328,
+    "position": 0.0
+  },
+  {
+    "timestamp": 6600,
+    "equity": 1000.0,
+    "price": 49859.23188483355,
+    "position": 0.0
+  },
+  {
+    "timestamp": 6700,
+    "equity": 1000.0,
+    "price": 50220.46297858569,
+    "position": 0.0
+  },
+  {
+    "timestamp": 6800,
+    "equity": 1000.0,
+    "price": 51065.10769151953,
+    "position": 0.0
+  },
+  {
+    "timestamp": 6900,
+    "equity": 1000.0,
+    "price": 50473.52733108937,
+    "position": 0.0
+  },
+  {
+    "timestamp": 7000,
+    "equity": 1000.0,
+    "price": 50760.98208188901,
+    "position": 0.0
+  },
+  {
+    "timestamp": 7100,
+    "equity": 1000.0,
+    "price": 50545.44802482605,
+    "position": 0.0
+  },
+  {
+    "timestamp": 7200,
+    "equity": 1000.0,
+    "price": 51230.49557456997,
+    "position": 0.0
+  },
+  {
+    "timestamp": 7300,
+    "equity": 1000.0,
+    "price": 51021.351197192715,
+    "position": 0.0
+  },
+  {
+    "timestamp": 7400,
+    "equity": 1000.0,
+    "price": 51627.64384600407,
+    "position": 0.0
+  },
+  {
+    "timestamp": 7500,
+    "equity": 1000.0,
+    "price": 50368.09358020442,
+    "position": 0.0
+  },
+  {
+    "timestamp": 7600,
+    "equity": 1000.0,
+    "price": 51927.420305696825,
+    "position": 0.0
+  },
+  {
+    "timestamp": 7700,
+    "equity": 1000.0,
+    "price": 52226.845501277305,
+    "position": 0.0
+  },
+  {
+    "timestamp": 7800,
+    "equity": 1000.0,
+    "price": 50563.51273808982,
+    "position": 0.0
+  },
+  {
+    "timestamp": 7900,
+    "equity": 1000.0,
+    "price": 50257.30180520473,
+    "position": 0.0
+  },
+  {
+    "timestamp": 8000,
+    "equity": 1000.0,
+    "price": 51626.73037895752,
+    "position": 0.0
+  },
+  {
+    "timestamp": 8100,
+    "equity": 1000.0,
+    "price": 51977.887916611915,
+    "position": 0.0
+  },
+  {
+    "timestamp": 8200,
+    "equity": 1000.0,
+    "price": 52114.64332678614,
+    "position": 0.0
+  },
+  {
+    "timestamp": 8300,
+    "equity": 1000.0,
+    "price": 50642.630158614076,
+    "position": 0.0
+  },
+  {
+    "timestamp": 8400,
+    "equity": 1000.0,
+    "price": 49767.355251523826,
+    "position": 0.0
+  },
+  {
+    "timestamp": 8500,
+    "equity": 1000.0,
+    "price": 49511.65370754716,
+    "position": 0.0
+  },
+  {
+    "timestamp": 8600,
+    "equity": 1000.0,
+    "price": 49867.23818833888,
+    "position": 0.0
+  }
+]

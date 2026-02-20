@@ -24,7 +24,6 @@ MoneyFan is a **hierarchical reasoning model (HRM)** for trading that:
 ### Prerequisites
 
 - Python 3.10+ with MLX (Apple Silicon) **or** PyTorch
-- Node.js 18+ for execution layer
 - Broker account with paper trading (Alpaca recommended)
 - Minimum capital: $100 (matches backtest assumptions)
 

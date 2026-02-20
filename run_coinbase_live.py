@@ -8,7 +8,7 @@ Single entry point for live trading on Coinbase with 24 SOTA codec models.
 Architecture:
 1. Python/MLX: Run 24 codecs + HRM hierarchy
 2. SignalWriter: Write signals to stdout (JSON lines)
-3. Kotlin: Read stdin, execute via coinbaseXChangeBot.main.kts
+3. Execution: Receive signals and execute via exchange API
 
 Usage:
     python run_coinbase_live.py --mode live --capital 500 --risk 0.75%
