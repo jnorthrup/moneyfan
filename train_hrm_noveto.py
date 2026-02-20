@@ -116,16 +116,14 @@ def generate_data(n=20000):
     
     # Try to load real data
     data_dir = Path("hrm/data/public_binance")
-    feather_files = list(data_dir.glob("*.feather"))
+    feather_files = list(data_dir.glob("BTC*1m*.feather"))  # Use 1m BTC for training
     
     if feather_files:
-        # Load 5m data (reasonable size)
-        f = [f for f in feather_files if "5m" in f.name]
-        if f:
-            df = pd.read_feather(f[0])
-            print(f"Loaded real data from {f[0]}: {len(df)} rows")
-            
-            prices = df['close'].values.astype(np.float32)
+        # Load 1m data (has better signal)
+        df = pd.read_feather(feather_files[0])
+        print(f"Loaded real data from {feather_files[0]}: {len(df)} rows")
+        
+        prices = df['close'].values.astype(np.float32)
             returns = np.diff(prices, prepend=prices[0]) / prices
             
             n = min(len(df), n)
@@ -246,7 +244,7 @@ def train(n_epochs=100):
     model = HRM()
     optimizer = optim.Adam(learning_rate=5e-4)  # Lower LR for better generalization
     
-    features, target_signal, target_regime, returns = generate_data(20000)
+    features, target_signal, target_regime, returns = generate_data(50000)  # More samples
     
     # Add noise for regularization
     noise_scale = 0.1
@@ -306,10 +304,10 @@ def validate(model, n_ticks=2000):
     from pathlib import Path
     
     data_dir = Path("hrm/data/public_binance")
-    feather_files = list(data_dir.glob("*ETH*5m*.feather"))  # Use ETH 5m for validation
+    feather_files = list(data_dir.glob("*ETH*1m*.feather"))  # Use ETH 1m for validation
     
     if not feather_files:
-        feather_files = list(data_dir.glob("*15m*.feather"))  # Fallback to 15m
+        feather_files = list(data_dir.glob("*ETH*5m*.feather"))  # Fallback to 5m
     
     if feather_files:
         df = pd.read_feather(feather_files[0])
