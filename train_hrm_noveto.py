@@ -240,6 +240,9 @@ def train(n_epochs=100):
     print("HRM TRAINING - NO VETO, PURE BACKPROP")
     print("="*60)
     
+    # Fixed seed for reproducibility
+    np.random.seed(42)
+    
     model = HRM()
     optimizer = optim.Adam(learning_rate=5e-4)  # Lower LR for better generalization
     
