@@ -1,12 +1,40 @@
-
+# General ignore patterns
 .aider.chat.history.md
 
-**/target/
-
+# IDE and editor files
 .idea/
 *.iml
 *.ipr
 *.iws
+*.DS_Store
+.vscode/
+
+# Build and distribution
+**/target/
+node_modules/
+build/
+dist/
+*.egg-info/
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.coverage
+htmlcov/
+
+# Jupyter notebooks
+*.ipynb
+.ipynb_checkpoints/
+
+# Kotlin scripts (not needed)
+*.kts
+
+# Large PDFs (optional)
+*.pdf
+
+# Miscellaneous
 *.class
 *.jar
 *.war
@@ -14,13 +42,26 @@
 *.db
 *.log
 *.hprof
-*.swp       
+*.swp
 *.swo
-*.swn           
-*.DS_Store
-*.class
-*.jar
-*.war
-.aider.*
-.aider*
-.aider.*
+*.swn
+
+# Python cache directories and test artifacts
+.pytest_cache/
+.mypy_cache/
+
+# Data files
+hrm/data/
+# Ignore large generated data artifacts (databases, arrow files, parquet, etc.)
+hrm/data/**/*.db
+hrm/data/**/*.sqlite
+hrm/data/**/*.arrow
+hrm/data/**/*.parquet
+
+# Checkpoint files (training checkpoints)
+hrm/checkpoints/
+
+# Test and runtime artifacts
+test-results/
+logs/
+*_state.json
