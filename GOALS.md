@@ -294,7 +294,7 @@ python train_ab_independent.py \
   --capital 100 \
   --output signals.json
 
-# 2. Execute with risk controls (Python/Kotlin bridge)
+# 2. Execute with risk controls
 python run_coinbase_live.py \
   --capital 500 \
   --risk 0.75% \
@@ -426,7 +426,7 @@ python train_ab_independent.py --mode infer \
   --capital 100 \
   --output signals.json
 
-# Step 3: Execute with risk controls (Python/Kotlin bridge)
+# Step 3: Execute with risk controls
 python run_coinbase_live.py \
   --capital 500 \
   --risk 0.75% \
@@ -548,7 +548,7 @@ python run_coinbase_live.py --mode live --capital 500 --risk 0.75%
 - `stochastic_bag/` - Stochastic compass and bag resampling
 - `core/hrm/high_level.py` - Regime detection & risk allocation
 - `core/hrm/low_level.py` - Per-codec signal generation
-- `exchange/` - Python-Kotlin bridge for execution
+- `exchange/` - Signal output for external execution
 - `run_coinbase_live.py` - Single entry point for Coinbase trading
 
 **MLX Optimization**:

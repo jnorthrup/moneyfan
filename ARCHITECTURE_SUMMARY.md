@@ -45,21 +45,16 @@
 
 - **`test_compass.py`**: Comprehensive tests (7/7 passing)
 
-#### 3. **Python-Kotlin Bridge** (`exchange/`)
+#### 3. **Signal Output Module** (`exchange/`)
 - **`signal_writer.py`**: JSON signal output
-  - Stdout JSON lines for Kotlin consumption
+  - Stdout JSON lines for external consumption
   - Batch writing with throttling
   - Error logging to stderr
-
-- **`kotlin_adapter.py`**: Kotlin integration
-  - stdin/stdout communication with `coinbaseXChangeBot.main.kts`
-  - Signal execution via Kotlin script
-  - Process management
 
 #### 4. **Coinbase Live Trading System** (`run_coinbase_live.py`)
 - **Single entry point** for all trading modes
 - **Paper trading** (7-day validation completed)
-- **Live trading** with Kotlin execution
+- **Live trading** (via stdout signals)
 - **Test-time adaptation** mode
 
 #### 5. **Core HRM Infrastructure** (`core/hrm/`)
@@ -87,9 +82,9 @@
    ↓
 6. Signal Output (JSON to stdout)
    ↓
-7. Kotlin Execution (coinbaseXChangeBot.main.kts)
+7. Signal Output (JSON to stdout)
    ↓
-8. Coinbase API (live trading)
+8. External execution (via API or script)
 ```
 
 ### Test-Time Adaptation Flow
@@ -268,9 +263,8 @@ moneyfan/
 │   ├── resampler.py                # Bag resampling logic
 │   ├── correlation.py              # Portfolio optimization
 │   └── test_compass.py             # Comprehensive tests (7/7)
-├── exchange/                        # Python-Kotlin bridge
+├── exchange/                        # Signal output module
 │   ├── signal_writer.py            # JSON signal output
-│   ├── kotlin_adapter.py           # Kotlin integration
 │   └── __init__.py
 ├── core/hrm/                        # HRM hierarchy
 │   ├── high_level.py               # Regime detection
@@ -280,7 +274,6 @@ moneyfan/
 │   ├── risk_management.py
 │   └── scorecard.py
 ├── run_coinbase_live.py             # Single entry point
-├── coinbaseXChangeBot.main.kts     # Kotlin execution (live-ready)
 ├── GOALS.md                        # 24-list + equations + validation
 └── IMPLEMENTATION_PLAN.md          # 8-week implementation timeline
 ```
@@ -315,8 +308,6 @@ python run_coinbase_live.py --mode paper --days 30 --capital 500
 
 ### 4. Deploy Live with Test-Time Adapters
 ```bash
-# Start Kotlin execution layer
-java -jar coinbaseXChangeBot.main.kts
 # Run live trading with online learning
 python run_coinbase_live.py --mode adapt --learning_rate 0.001
 ```
@@ -333,8 +324,8 @@ python run_coinbase_live.py --mode adapt --learning_rate 0.001
 - ✅ All 24 codecs implemented
 - ✅ MLX compatibility for all codecs
 - ✅ Test-time adapters for all codecs
-- ✅ Python-Kotlin bridge working
-- ✅ `coinbaseXChangeBot.main.kts` executing trades
+- ✅ Signal output module working
+- ✅ External execution compatible
 
 ### Production Readiness
 - ✅ Seeking Alpha article written
