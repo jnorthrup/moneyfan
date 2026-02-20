@@ -2,7 +2,7 @@
 Signal Writer Module
 ====================
 
-Writes MLX signals to stdout for Kotlin to read via stdin/stdout bridge.
+Writes MLX signals to stdout for external consumption.
 Format: JSON lines (one JSON object per line)
 """
 
@@ -16,7 +16,7 @@ import numpy as np
 
 class SignalWriter:
     """
-    Write trading signals to stdout for Kotlin consumption
+    Write trading signals to stdout for external consumption
     """
     
     @staticmethod
