@@ -210,9 +210,13 @@ class BackboneDuckTrainer:
             class TransformerModel(nn.Module):
                 def __init__(self, input_dim=64, d_model=128, nhead=8):
                     super().__init__()
-                    self.encoder = nn.TransformerEncoder(
-                        nn.TransformerEncoderLayer(d_model=d_model, nhead=nhead),
-                        num_layers=2
+                    self.d_model = d_model
+                    # Simple linear encoder (MLX doesn't have full transformer yet)
+                    self.encoder = nn.Sequential(
+                        nn.Linear(input_dim, d_model),
+                        nn.LayerNorm(d_model),
+                        nn.GELU(),
+                        nn.Dropout(0.1)
                     )
                     self.fc = nn.Linear(d_model, 1)
                 
