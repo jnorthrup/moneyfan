@@ -185,11 +185,94 @@ def generate_jwt_token(method: str, host: str, path: str) -> str:
     return token
 
 
+class OrderError(Exception):
+    """Raised when order placement fails; includes full API response for debugging."""
+    def __init__(self, response_data):
+        super().__init__(str(response_data))
+
+
 class AuthenticationError(Exception):
     """Raised when authenticated Coinbase API calls are rejected."""
+    pass
+    """
+    Thin authenticated HTTP client for Coinbase Advanced Trade APIs.
+    """
 
+    def __init__(self, base_url: str | None = None, session: requests.Session | None = None):
+        self.base_url = (base_url or os.getenv("COINBASE_API_URL", "https://api.coinbase.com")).rstrip("/")
+        self._host = urlparse(self.base_url).netloc
+        self._session = session or requests.Session()
 
-class CoinbaseClient:
+    def _request(self, method: str, path: str, **kwargs):
+        clean_path = path if path.startswith("/") else f"/{path}"
+        token = generate_jwt_token(method.upper(), self._host, clean_path)
+        headers = dict(kwargs.pop("headers", {}) or {})
+        headers["Authorization"] = f"Bearer {token}"
+        url = f"{self.base_url}{clean_path}"
+        response = self._session.request(method=method.upper(), url=url, headers=headers, **kwargs)
+        if response.status_code == 401:
+            raise AuthenticationError(
+                f"Coinbase authentication failed (401) for {method.upper()} {clean_path}: {getattr(response, 'text', '')}"
+            )
+        return response
+
+    def get(self, path: str, **kwargs):
+        return self._request("GET", path, **kwargs)
+
+    def post(self, path: str, json: dict | None = None, **kwargs):
+        return self._request("POST", path, json=json, **kwargs)
+
+# Exception for order placement failures
+class OrderError(Exception):
+    """Raised when order placement fails; includes full API response for debugging."""
+    def __init__(self, response_data):
+        super().__init__(str(response_data))
+
+def place_market_order(product_id: str, side: str, base_size: str, client: CoinbaseClient | None = None):
+    """Place a market order via Coinbase Advanced Trade API.
+
+    Args:
+        product_id: Trading pair, e.g., "BTC-USD".
+        side: "BUY" or "SELL".
+        base_size: Order size as string.
+        client: Optional pre‑instantiated CoinbaseClient (used in tests).
+
+    Returns:
+        The ``success_response`` dict from the API on success, or ``None`` when
+        live trading is disabled.
+
+    Raises:
+        OrderError: If the API reports ``success: false``.
+    """
+    # Live trading toggle – must be "true" (case‑insensitive)
+    live_trading = os.getenv("LIVE_TRADING", "").strip().lower() == "true"
+    if not live_trading:
+        print("LIVE_TRADING not enabled – order not placed")
+        return None
+
+    # Use provided client or create a new one
+    client = client or CoinbaseClient()
+
+    payload = {
+        "product_id": product_id,
+        "side": side,
+        "client_order_id": f"cli-{int(time.time() * 1000)}",
+        "order_configuration": {
+            "market_market_ioc": {
+                "base_size": base_size
+            }
+        },
+        "type": "market"
+    }
+
+    response = client.post("/api/v3/brokerage/orders", json=payload)
+    data = response.json()
+    if data.get("success"):
+        return data.get("success_response")
+    else:
+        # Attach error info to exception
+        raise OrderError(str(data.get("error_response", {})))
+
     """Thin authenticated HTTP client for Coinbase Advanced Trade APIs."""
 
     def __init__(self, base_url: str | None = None, session: requests.Session | None = None):

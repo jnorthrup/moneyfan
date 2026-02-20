@@ -12,5 +12,5 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
-## [~] Track: Main track course correction — convergence/perturb/repeat with alpha, PnL, momentum KD ratio
+## [x] Track: Main track course correction — convergence/perturb/repeat with alpha, PnL, momentum KD ratio (Completed)
 *Link: [./conductor/tracks/main_course_correct_20260216/](./conductor/tracks/main_course_correct_20260216/)*
