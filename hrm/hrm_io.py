@@ -35,7 +35,7 @@ import numpy as np
 from datetime import datetime
 from enum import Enum
 
-from instruments import (
+from hrm.instruments import (
     LazyInstrument, 
     InstrumentRegistry, 
     QuantModel,
@@ -43,7 +43,7 @@ from instruments import (
     hrm_choose_model,
     HRMDecision,
 )
-from tradebots import (
+from hrm.tradebots import (
     TradeBot,
     TradeBotRegistry,
     BotType,
@@ -51,13 +51,13 @@ from tradebots import (
     create_default_bots,
     create_bot_registry,
 )
-from membrane import (
+from hrm.membrane import (
     CoinbaseMembrane,
     MembraneConfig,
     MembraneState,
     MarketRegime,
 )
-from convergence import convergence_from_snapshot
+from hrm.convergence import convergence_from_snapshot
 
 
 class HRMInputType(Enum):

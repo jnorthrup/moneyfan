@@ -121,9 +121,14 @@ run_monitoring() {
         echo "  h - Show help"
         echo "============================================================"
         
-        # Check for keyboard input with timeout
-        read -t 2 -n 1 -s input
-        
+        # Check if keyboard input with timeout
+        if [ -t 0 ]; then
+            read -t 2 -n 1 -s input || true
+        else
+            sleep 2
+            input=""
+        fi
+
         case $input in
             q)
                 echo ""
@@ -315,8 +320,8 @@ wait $MONITOR_PID
 # Cleanup
 echo ""
 echo "Cleaning up..."
-kill $MVP_PID 2>/dev/null
-wait $MVP_PID 2>/dev/null
+kill $MVP_PID 2>/dev/null || true
+wait $MVP_PID 2>/dev/null || true
 
 echo "============================================================"
 echo "24-HOUR SESSION COMPLETED"

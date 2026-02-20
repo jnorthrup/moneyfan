@@ -35,8 +35,8 @@ from binance_data_loader import BinanceDataLoader, BinanceDataConfig
 # Import existing pandas infrastructure
 try:
     from hrm.kernels import (
-        rolling_mean, rolling_std, rolling_zscore, rolling_max, rolling_min,
-        rolling_quantile, volatility_breakout_kernel, momentum_trend_kernel,
+        rolling_mean, rolling_std, rolling_zscore, rolling_max_kernel, rolling_min_kernel,
+        rolling_quantile_kernel, volatility_breakout_kernel, momentum_trend_kernel,
         mean_reversion_kernel, cross_sectional_rank, cross_sectional_zscore
     )
     HAS_KERNELS = True
@@ -295,10 +295,10 @@ class BinanceStochasticBagTrainer:
             df['rolling_mean_20'] = rolling_mean(df['close'], 20)
             df['rolling_std_20'] = rolling_std(df['close'], 20)
             df['rolling_zscore_20'] = rolling_zscore(df['close'], 20)
-            df['rolling_max_20'] = rolling_max(df['close'], 20)
-            df['rolling_min_20'] = rolling_min(df['close'], 20)
-            df['rolling_quantile_20_0.25'] = rolling_quantile(df['close'], 20, 0.25)
-            df['rolling_quantile_20_0.75'] = rolling_quantile(df['close'], 20, 0.75)
+            df['rolling_max_20'] = pd.Series(rolling_max_kernel(df['close'].values.astype(float), 20), index=df.index)
+            df['rolling_min_20'] = pd.Series(rolling_min_kernel(df['close'].values.astype(float), 20), index=df.index)
+            df['rolling_quantile_20_0.25'] = pd.Series(rolling_quantile_kernel(df['close'].values.astype(float), 20, 0.25), index=df.index)
+            df['rolling_quantile_20_0.75'] = pd.Series(rolling_quantile_kernel(df['close'].values.astype(float), 20, 0.75), index=df.index)
             
             # Compute signal features
             signals = volatility_breakout_kernel(
@@ -473,8 +473,9 @@ class BinanceStochasticBagTrainer:
             def __init__(self, input_dim=64, d_model=128, nhead=8, num_layers=2):
                 super().__init__()
                 self.encoder = nn.TransformerEncoder(
-                    nn.TransformerEncoderLayer(d_model=d_model, nhead=nhead),
-                    num_layers=num_layers
+                    num_layers=num_layers,
+                    dims=d_model,
+                    num_heads=nhead
                 )
                 self.fc = nn.Linear(d_model, 1)
             
