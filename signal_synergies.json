@@ -1,0 +1,226 @@
+{
+  "synergies": [
+    {
+      "signals": [
+        "grid",
+        "trend"
+      ],
+      "model": "multiply",
+      "synergy": 0.0013946855193201738,
+      "symbol": "ETH"
+    },
+    {
+      "signals": [
+        "rsi",
+        "trend"
+      ],
+      "model": "multiply",
+      "synergy": 0.0012533711679773765,
+      "symbol": "ETH"
+    },
+    {
+      "signals": [
+        "grid",
+        "trend"
+      ],
+      "model": "takeda",
+      "synergy": 0.0011291186696986328,
+      "symbol": "XRP"
+    },
+    {
+      "signals": [
+        "rsi",
+        "trend"
+      ],
+      "model": "multiply",
+      "synergy": 0.0011039634387931827,
+      "symbol": "SOL"
+    },
+    {
+      "signals": [
+        "trend",
+        "volatility"
+      ],
+      "model": "multiply",
+      "synergy": 0.0010737143091164847,
+      "symbol": "XRP"
+    },
+    {
+      "signals": [
+        "rsi",
+        "trend"
+      ],
+      "model": "takeda",
+      "synergy": 0.0010585988119145618,
+      "symbol": "XRP"
+    },
+    {
+      "signals": [
+        "grid",
+        "trend"
+      ],
+      "model": "takeda",
+      "synergy": 0.0010571120919403577,
+      "symbol": "ETH"
+    },
+    {
+      "signals": [
+        "rsi",
+        "trend"
+      ],
+      "model": "takeda",
+      "synergy": 0.0010449952194438834,
+      "symbol": "ETH"
+    },
+    {
+      "signals": [
+        "momentum",
+        "trend"
+      ],
+      "model": "takeda",
+      "synergy": 0.001037692014612049,
+      "symbol": "XRP"
+    },
+    {
+      "signals": [
+        "momentum",
+        "trend"
+      ],
+      "model": "multiply",
+      "synergy": 0.0009013015267497148,
+      "symbol": "ETH"
+    },
+    {
+      "signals": [
+        "momentum",
+        "trend"
+      ],
+      "model": "takeda",
+      "synergy": 0.0008633422749382298,
+      "symbol": "ETH"
+    },
+    {
+      "signals": [
+        "rsi",
+        "trend"
+      ],
+      "model": "multiply",
+      "synergy": 0.0008449920419658653,
+      "symbol": "BTC"
+    },
+    {
+      "signals": [
+        "momentum",
+        "trend"
+      ],
+      "model": "multiply",
+      "synergy": 0.0008325563223572721,
+      "symbol": "DOGE"
+    },
+    {
+      "signals": [
+        "momentum",
+        "volatility"
+      ],
+      "model": "multiply",
+      "synergy": 0.0008325197284970055,
+      "symbol": "DOGE"
+    },
+    {
+      "signals": [
+        "momentum",
+        "trend"
+      ],
+      "model": "multiply",
+      "synergy": 0.000789517456882952,
+      "symbol": "XRP"
+    },
+    {
+      "signals": [
+        "trend",
+        "volatility"
+      ],
+      "model": "multiply",
+      "synergy": 0.0007791281829320052,
+      "symbol": "DOGE"
+    },
+    {
+      "signals": [
+        "rsi",
+        "trend"
+      ],
+      "model": "takeda",
+      "synergy": 0.0007769114056074682,
+      "symbol": "SOL"
+    },
+    {
+      "signals": [
+        "rsi",
+        "trend"
+      ],
+      "model": "takeda",
+      "synergy": 0.0007719561994174157,
+      "symbol": "BTC"
+    },
+    {
+      "signals": [
+        "grid",
+        "trend"
+      ],
+      "model": "takeda",
+      "synergy": 0.0007613851159776952,
+      "symbol": "DOGE"
+    },
+    {
+      "signals": [
+        "grid",
+        "trend"
+      ],
+      "model": "takeda",
+      "synergy": 0.0007513082772412919,
+      "symbol": "SOL"
+    }
+  ],
+  "best_per_symbol": {
+    "BTC": {
+      "signals": [
+        "rsi",
+        "trend"
+      ],
+      "model": "multiply",
+      "synergy": 0.0008449920419658653
+    },
+    "ETH": {
+      "signals": [
+        "grid",
+        "trend"
+      ],
+      "model": "multiply",
+      "synergy": 0.0013946855193201738
+    },
+    "SOL": {
+      "signals": [
+        "rsi",
+        "trend"
+      ],
+      "model": "multiply",
+      "synergy": 0.0011039634387931827
+    },
+    "XRP": {
+      "signals": [
+        "grid",
+        "trend"
+      ],
+      "model": "takeda",
+      "synergy": 0.0011291186696986328
+    },
+    "DOGE": {
+      "signals": [
+        "momentum",
+        "trend"
+      ],
+      "model": "multiply",
+      "synergy": 0.0008325563223572721
+    }
+  }
+}

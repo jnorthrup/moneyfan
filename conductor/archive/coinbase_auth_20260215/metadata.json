@@ -1,8 +1,0 @@
-{
-  "track_id": "coinbase_auth_20260215",
-  "type": "bug",
-  "status": "new",
-  "created_at": "2026-02-15T00:00:00Z",
-  "updated_at": "2026-02-15T00:00:00Z",
-  "description": "Fix Coinbase Advanced Trade authentication and enable live order placement"
-}

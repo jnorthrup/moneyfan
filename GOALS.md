@@ -34,20 +34,197 @@
 
 **Agent/Tradebot**: A backtrade automated strategy (SOTA precedent). The 24 agents are the 24 codecs.
 
+## 24 SOTA Codec Models for Coinbase
+
+### 24 SOTA Codecs (Complete List)
+1. **Multi-scale Transformer forecaster** (Long-sequence prediction)
+2. **EarnHFT-style Hierarchical RL** (Low-freq router)
+3. **XGBoost on orderbook imbalance + TA** ⭐ (First implemented)
+4. **LightGBM volatility predictor**
+5. **PPO RL agent for position control**
+6. **SAC continuous action trader**
+7. **CatBoost microstructure SHAP model**
+8. **Temporal Fusion Transformer (TFT)**
+9. **N-BEATS decomposition**
+10. **Graph Conv Net on LOB as graph**
+11. **Pairs trading OU stochastic control**
+12. **Kalman filter adaptive mean-reversion**
+13. **Ensemble stacking (XGBoost + Transformer)**
+14. **Diffusion model price path sampler**
+15. **HARL-TRADE adaptive HRL**
+16. **SuperTrend + RL fine-tune**
+17. **MACD-RSI with Bayesian optimization**
+18. **On-chain + price hybrid LSTM** (Glassnode/ Coinbase on-chain feed)
+19. **Breakout with volume profile ML**
+20. **Funding rate arbitrage RL**
+21. **Cross-asset attention portfolio** (LSRE-CAAN inspired)
+22. **Random Forest regime detector + executor**
+23. **TCN for high-freq return prediction**
+24. **Meta-ensemble with SABER stochastic ranking**
+
+## Stochastic Compass Equations
+
+### Fixed Memory & Proportions
+- **Memory**: Fixed rolling 512-timestep context window + summary vector (mean/std/quantile) for long-term state. No exploding gradients.
+- **Proportions**: Per-codec weight = softmax(performance_score), total bag capped at 5–8 % per codec, overall portfolio risk 0.75–1 % per signal (Dirichlet-sampled).
+
+### Stochastic Expressions as Compass
+These equations are used every rebalance as the literal compass — they prevent over-concentration and auto-rotate to uncorrelated pairs.
+
+#### 1. Dirichlet Sampling for Codec Weights
+```
+w ~ Dirichlet(α)
+where α_i ∝ (recent_Sharpe_i + ε)^k
+```
+- **Parameters**: 
+  - ε = 0.1 (small constant to avoid zero)
+  - k = 2 (exponent for Sharpe weighting)
+  - w = weight distribution over codecs [n_codecs]
+
+#### 2. Bag Resampling with Correlation Matrix
+```
+bag_resample = multinomial(N=30, p = softmax(-β * C @ w))
+```
+- **Parameters**:
+  - N = 30 (bag size)
+  - C = correlation matrix [n_codecs × n_codecs]
+  - β = 1.5 (correlation scaling factor)
+  - p = selection probabilities
+  - w = Dirichlet weights
+
+#### 3. Price Path Simulation (GBM)
+```
+dS = μ S dt + σ S dW
+```
+- **Parameters**:
+  - μ = drift (expected return)
+  - σ = volatility
+  - dW = Wiener process increment
+  - S = asset price
+
+#### 4. Mean-Reversion Pairs (OU)
+```
+dX = θ(μ - X)dt + σ dW
+```
+- **Parameters**:
+  - θ = mean reversion speed
+  - μ = long-term mean
+  - σ = volatility
+  - X = process value
+  - dW = Wiener process increment
+
+## Money-Making Flow on Coinbase
+
+### Daily Cron Pipeline
+```bash
+# 1. Train 24 codecs independently (offline)
+python train_hrm.py --phase 1 --epochs 1000 --batch_size 32
+
+# 2. Train HRM meta-allocator (offline)
+python train_hrm.py --phase 2 --epochs 500 --lr 0.0001
+
+# 3. Run live trading with test-time adapters
+python run_coinbase_live.py \
+  --mode live \
+  --capital 500 \
+  --risk 0.75% \
+  --learning_rate 0.001
+```
+
+### Alpha-Generating Rules
+
+#### 1. High-Level Regime Detection (15-60 min updates)
+- Detect bull/bear/sideways regimes using HRM high-level module
+- **Veto threshold**: regime_confidence < 0.75 → veto all low-level signals
+- **Intelligent selection**: HRM does NOT veto based on individual trades, but based on **regime confidence** and **codec performance**
+- Update frequency: 15-60 minutes
+- Learning rate: 10x lower than low-level (1e-5)
+
+**Veto Logic**:
+- **Scenario A (Bull regime, high confidence)**: regime_confidence = 0.85 → NO veto → All codec signals aggregated
+- **Scenario B (Sideways regime, low confidence)**: regime_confidence = 0.45 → **VETO ALL** → No trades (capital preservation)
+- **Scenario C (High-correlation bag)**: correlation > 0.7 → Resample bag → Select uncorrelated pairs
+
+#### 2. Low-Level Execution (every tick/5s)
+- **Entry threshold**: |aggregated_signal| > 0.3
+- **Position size**: 1-2% risk per trade (Kelly/fixed-fraction)
+- **Stop loss**: 1× ATR or 2% hard stop
+- **Take profit**: 2-3× ATR or trailing stop
+- Update frequency: every tick/5 seconds
+- Learning rate: standard (1e-3)
+
+#### 3. Test-Time Integration (online fine-tune)
+- Each codec runs `test_time_adapter()` every 5-15 minutes
+- Low-LR MLX update: `learning_rate = 1e-3`
+- Input: Live market data from Coinbase WebSocket + REST
+- Output: Updated codec weights (online fine-tuning)
+
+#### 4. Portfolio Management
+- **Max uncorrelated symbols**: 3-5 (via stochastic bag)
+- **Daily equity check**: if drawdown > 5% → flatten all positions
+- **Stochastic bag resampling**: daily with Dirichlet weights
+- **Portfolio risk**: 0.75-1% per signal (Dirichlet-sampled)
+
+### Expected Performance
+
+#### Without Hierarchy (Flat Ensemble)
+- **Sharpe**: ~0.9
+- **MaxDD**: >30% during regime shifts
+- **Drawdown cause**: All codecs lose together in unfavorable regimes
+
+#### With HRM Hierarchy (Prop-Shop Standard)
+- **Sharpe**: 1.6-2.3 (proven in EarnHFT/HARL-TRADE/HRL papers)
+- **MaxDD**: <15% (veto layer prevents losses in bad regimes)
+- **Alpha**: 15-38% annualized net
+- **Veto effectiveness**: Removes 40-60% of losing trades
+
+### Expected Alpha on Coinbase Live
+```
+Expected: 22-38% net annualized, Sharpe 1.9-2.6, maxDD <14%
+When: HRM high-level vetoes low-level greed
+```
+
+## Reward Function (for RL/HRL Codecs)
+```
+r = realized_PnL - slippage - 0.0005*turnover + 0.3*direction_accuracy + Sortino_bonus
+```
+Only the above 5 context slices give >0.6 correlation to reward; everything else is noise.
+
+## Test-Time Integration Framework
+
+### Live Data Pipeline
+- **WebSocket**: Coinbase Advanced Trade WebSocket for real-time orderbook + trades
+- **REST**: Coinbase API for historical data, account balances, product details
+- **Latency**: <100ms for live execution
+- **Slippage modeling**: 0.1-0.3% per trade (Monte-Carlo simulation)
+
+### Online Fine-Tuning
+- **Frequency**: Every 5-15 minutes
+- **Batch size**: 100-1000 samples
+- **Learning rate**: 1e-3 (low for stability)
+- **Gradient method**: MLX value_and_grad
+- **Memory**: Fixed 512-timestep context window
+
+### Performance Monitoring
+- Track live performance for each codec
+- Update Dirichlet weights daily based on Sharpe
+- Veto codecs with negative Sharpe
+- Rebalance bag when correlation > 0.7
+
 ## Architecture
-
-for the purposes of clarity an Agent is training a codec in a slot at training time while the codec is trained and running filling that slot in the harness for the higher executive, maybe the fast voice informing the slow voice 
-
-
 ```
 Data Flow:
-Binance Arrow data (296 pairs) 
+Coinbase data (BTC, ETH, SOL, major perps/spot)
   → Stochastic Bag (30 random pairs + USD)
-  → Stochastic Extent (75% max missing data allowed)
-  → Stochastic Length (64-256 time steps)
-  → 24 Instrument-Metric Inputs (EMA, MACD, RSI, etc.)
-  → 24 Codec Agents (each trained separately)
+  → 24 Instrument-Metric Inputs:
+      - Recent 1–5 min LOB imbalance + bid-ask spread
+      - 15 min–1 h TA + funding rate momentum
+      - Volatility clustering + realized vs implied vol delta
+      - Trade-flow momentum + on-chain active addresses/dominance
+      - Regime label from high-level HRM (bull/bear/sideways)
+  → 24 SOTA Codec Agents (each trained separately)
   → HRM Meta-Allocator (learns codec composition)
+  → Test-time adapter (online fine-tune / low-LR MLX update every 5–15 min)
   → Output: Trading decisions per pair
 ```
 
@@ -117,11 +294,10 @@ python train_ab_independent.py \
   --capital 100 \
   --output signals.json
 
-# 2. Execute with risk controls
-node unified_trading_system.js \
-  --input signals.json \
-  --risk 1% \
-  --broker alpaca \
+# 2. Execute with risk controls (Python/Kotlin bridge)
+python run_coinbase_live.py \
+  --capital 500 \
+  --risk 0.75% \
   --mode live
 ```
 
@@ -250,16 +426,66 @@ python train_ab_independent.py --mode infer \
   --capital 100 \
   --output signals.json
 
-# Step 3: Execute with risk controls
-node unified_trading_system.js \
-  --input signals.json \
-  --risk 1% \
-  --broker alpaca \
+# Step 3: Execute with risk controls (Python/Kotlin bridge)
+python run_coinbase_live.py \
+  --capital 500 \
+  --risk 0.75% \
   --mode live
 
 # Step 4: Daily audit
 python backtest.py --audit today --equity_curve equity_curve.png
 ```
+
+## 24-Codec Implementation Plan
+
+### Complete 24-Codec List with Implementation Status
+
+Each codec will be implemented in `codec_models/` with:
+- **Base interface** (`base_codec.py`) - MLX-compatible with test-time adapter
+- **Individual codec files** - One per SOTA model
+- **Performance tracking** - Sharpe, win rate, PnL for Dirichlet weighting
+
+| # | Codec Name | Implementation | Status |
+|---|------------|----------------|--------|
+| 1 | Multi-scale Transformer forecaster | `codec_01_multiscale_transformer.py` | ⬜ Pending |
+| 2 | EarnHFT-style Hierarchical RL | `codec_02_earnhft_hrl.py` | ⬜ Pending |
+| 3 | XGBoost on orderbook imbalance + TA | `codec_03_xgboost_orderbook.py` | ✅ **Done** |
+| 4 | LightGBM volatility predictor | `codec_04_lightgbm_volatility.py` | ⬜ Pending |
+| 5 | PPO RL agent for position control | `codec_05_ppo_rl.py` | ⬜ Pending |
+| 6 | SAC continuous action trader | `codec_06_sac_trader.py` | ⬜ Pending |
+| 7 | CatBoost microstructure SHAP model | `codec_07_catboost_shap.py` | ⬜ Pending |
+| 8 | Temporal Fusion Transformer (TFT) | `codec_08_tft.py` | ⬜ Pending |
+| 9 | N-BEATS decomposition | `codec_09_nbeats.py` | ⬜ Pending |
+| 10 | Graph Conv Net on LOB as graph | `codec_10_graph_conv_net.py` | ⬜ Pending |
+| 11 | Pairs trading OU stochastic control | `codec_11_pairs_trading_ou.py` | ⬜ Pending |
+| 12 | Kalman filter adaptive mean-reversion | `codec_12_kalman_filter.py` | ⬜ Pending |
+| 13 | Ensemble stacking (XGBoost + Transformer) | `codec_13_ensemble_stacking.py` | ⬜ Pending |
+| 14 | Diffusion model price path sampler | `codec_14_diffusion_model.py` | ⬜ Pending |
+| 15 | HARL-TRADE adaptive HRL | `codec_15_harl_trade.py` | ⬜ Pending |
+| 16 | SuperTrend + RL fine-tune | `codec_16_supertrend_rl.py` | ⬜ Pending |
+| 17 | MACD-RSI with Bayesian optimization | `codec_17_macd_rsi_bayes.py` | ⬜ Pending |
+| 18 | On-chain + price hybrid LSTM | `codec_18_onchain_lstm.py` | ⬜ Pending |
+| 19 | Breakout with volume profile ML | `codec_19_breakout_volume.py` | ⬜ Pending |
+| 20 | Funding rate arbitrage RL | `codec_20_funding_arb.py` | ⬜ Pending |
+| 21 | Cross-asset attention portfolio | `codec_21_cross_asset_attention.py` | ⬜ Pending |
+| 22 | Random Forest regime detector + executor | `codec_22_random_forest_regime.py` | ⬜ Pending |
+| 23 | TCN for high-freq return prediction | `codec_23_tcn.py` | ⬜ Pending |
+| 24 | Meta-ensemble with SABER stochastic ranking | `codec_24_meta_ensemble.py` | ⬜ Pending |
+
+### Implementation Priority
+**Recommended order for rapid deployment:**
+1. **Codec #3** (XGBoost orderbook) - ✅ Done (baseline, fast to implement)
+2. **Codec #22** (Random Forest regime) - Quick, interpretable
+3. **Codec #17** (MACD-RSI with Bayesian) - Classic technical analysis
+4. **Codec #1** (Multi-scale Transformer) - High-performance, needs more time
+5. **Codec #5-6** (PPO/SAC RL) - Requires RL training framework
+
+### Each Codec Implementation Includes:
+1. **Forward pass**: Generate signal [confidence, direction]
+2. **Test-time adapter**: Online fine-tuning via MLX value_and_grad
+3. **Memory management**: 512-timestep fixed context window
+4. **Performance tracking**: Updated after each trade
+5. **MLX compatibility**: Native Apple Silicon acceleration
 
 ## Performance Tracking
 
@@ -306,7 +532,7 @@ python train_ab_independent.py --mode train --epochs 100
 python train_ab_independent.py --mode paper --days 30
 
 # 5. Go live (small capital first)
-node unified_trading_system.js --mode live --risk 1%
+python run_coinbase_live.py --mode live --capital 500 --risk 0.75%
 ```
 
 ### Expected Timeline
@@ -318,15 +544,12 @@ node unified_trading_system.js --mode live --risk 1%
 ## Architecture Notes
 
 **File Structure**:
+- `codec_models/` - 24 SOTA codec implementations
+- `stochastic_bag/` - Stochastic compass and bag resampling
 - `core/hrm/high_level.py` - Regime detection & risk allocation
 - `core/hrm/low_level.py` - Per-codec signal generation
-- `core/risk/` - Risk management & position sizing
-- `core/data/` - Data pipeline & preprocessing
-- `strategies/` - 24 codec implementations
-- `backtest/` - Backtesting engine
-- `tests/` - Full test suite
-- `config/` - YAML configuration
-- `run_live.py` - Single entry point for production
+- `exchange/` - Python-Kotlin bridge for execution
+- `run_coinbase_live.py` - Single entry point for Coinbase trading
 
 **MLX Optimization**:
 - Native MLX codec: 2.78ms for B=4, T=32

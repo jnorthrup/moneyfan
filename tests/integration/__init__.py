@@ -1,0 +1,1 @@
+"""Integration tests for HRM system"""
