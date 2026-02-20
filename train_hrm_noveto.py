@@ -64,9 +64,11 @@ class HRM(nn.Module):
         # Signal synthesis (combines everything)
         # Input: encoder(128) + trust(24) + regime(4) + weighted_codec_signal(1)
         self.signal_head = nn.Sequential(
-            nn.Linear(128 + n_codecs + 4 + 1, 64),
+            nn.Linear(128 + n_codecs + 4 + 1, 128),
             nn.ReLU(),
-            nn.Linear(64, 1)
+            nn.Linear(128, 32),
+            nn.ReLU(),
+            nn.Linear(32, 1)
         )
     
     def __call__(self, x):
@@ -95,7 +97,9 @@ class HRM(nn.Module):
         
         # Signal synthesis (backprop learns optimal combination)
         signal_in = mx.concatenate([h, trust, regime, weighted.reshape(-1, 1)], axis=-1)
-        signal = mx.tanh(self.signal_head(signal_in)[:, 0])
+        raw_signal = self.signal_head(signal_in)[:, 0]
+        # Scale to [-1, 1] range with learnable amplification
+        signal = mx.tanh(raw_signal * 3)  # Amplify before tanh
         
         return {
             'signal': signal,
@@ -108,53 +112,124 @@ class HRM(nn.Module):
 
 
 def generate_data(n=20000):
-    """Generate training data with regime structure"""
+    """Load real data from feather files"""
+    import pandas as pd
+    from pathlib import Path
+    
+    # Try to load real data
+    data_dir = Path("hrm/data/public_binance")
+    feather_files = list(data_dir.glob("*.feather"))
+    
+    if feather_files:
+        # Load 5m data (reasonable size)
+        f = [f for f in feather_files if "5m" in f.name]
+        if f:
+            df = pd.read_feather(f[0])
+            print(f"Loaded real data from {f[0]}: {len(df)} rows")
+            
+            prices = df['close'].values.astype(np.float32)
+            returns = np.diff(prices, prepend=prices[0]) / prices
+            
+            n = min(len(df), n)
+            
+            # Features (64-dim from available columns)
+            features = np.zeros((n, 64), dtype=np.float32)
+            
+            # Use existing computed features
+            feature_cols = ['open', 'high', 'low', 'close', 'volume', 'rsi_14', 
+                           'macd', 'macd_hist', 'bb_upper', 'bb_lower', 'atr_14', 
+                           'adx_14', 'ob_imbalance', 'spread_pct', 'vol_5m',
+                           'returns_1m', 'returns_5m', 'returns_15m', 'returns_1h']
+            
+            for i, col in enumerate(feature_cols[:20]):
+                if col in df.columns:
+                    val = df[col].values[:n].astype(np.float32)
+                    val = np.nan_to_num(val, nan=0.0, posinf=0.0, neginf=0.0)
+                    features[:, i] = val
+            
+            # Add more features
+            if 'sma_5' in df.columns and 'sma_15' in df.columns:
+                sma5 = np.nan_to_num(df['sma_5'].values[:n], nan=1.0)
+                sma15 = np.nan_to_num(df['sma_15'].values[:n], nan=1.0)
+                features[:, 20] = np.where(sma15 != 0, (sma5 / sma15 - 1) * 100, 0)
+            
+            if 'bid_price' in df.columns and 'ask_price' in df.columns:
+                bid = np.nan_to_num(df['bid_price'].values[:n], nan=prices[:n])
+                ask = np.nan_to_num(df['ask_price'].values[:n], nan=prices[:n])
+                features[:, 21] = np.where(prices[:n] != 0, (ask - bid) / prices[:n] * 10000, 0)
+            
+            # Normalize
+            mean = np.nan_to_num(features.mean(axis=0), nan=0.0)
+            std = np.nan_to_num(features.std(axis=0), nan=1.0) + 1e-8
+            features = np.nan_to_num((features - mean) / std, nan=0.0)
+            
+            # Target: use returns_5m if available, else compute
+            if 'returns_5m' in df.columns:
+                target_signal = np.nan_to_num(df['returns_5m'].values[:n].astype(np.float32), nan=0.0)
+            else:
+                target_signal = np.roll(returns[:n], -5)
+            
+            # Scale based on actual distribution
+            target_std = np.nan_to_num(np.std(target_signal), nan=1.0) + 1e-8
+            target_signal = target_signal / target_std  # Normalize to std=1
+            target_signal = np.clip(target_signal, -3, 3) / 3  # Scale to [-1, 1]
+            target_signal = np.roll(target_signal, -1)  # Predict next step
+            target_signal[-1] = 0
+            target_signal = np.nan_to_num(target_signal, nan=0.0)
+            
+            # Regime (simplified: based on return sign)
+            target_regime = np.zeros((n, 4), dtype=np.float32)
+            for i in range(n):
+                if target_signal[i] > 0.3:
+                    target_regime[i, 2] = 1  # Up
+                elif target_signal[i] < -0.3:
+                    target_regime[i, 0] = 1  # Down
+                elif abs(returns[i]) > 0.01:
+                    target_regime[i, 3] = 1  # Volatile
+                else:
+                    target_regime[i, 1] = 1  # Sideways
+            
+            return features, target_signal, target_regime, returns[:n]
+    
+    # Fallback to synthetic data
+    print("Using synthetic data (no real data found)")
     np.random.seed(42)
     
-    # Simulate regimes
     returns = np.zeros(n)
     regimes = np.zeros(n, dtype=int)
     
     current_regime = 1
     for i in range(n):
-        # Regime switching
         if np.random.rand() < 0.005:
             current_regime = np.random.randint(4)
         regimes[i] = current_regime
         
-        # Regime-dependent returns
-        if current_regime == 0:  # Down
+        if current_regime == 0:
             returns[i] = np.random.randn() * 0.015 - 0.003
-        elif current_regime == 1:  # Sideways
+        elif current_regime == 1:
             returns[i] = np.random.randn() * 0.005
-        elif current_regime == 2:  # Up
+        elif current_regime == 2:
             returns[i] = np.random.randn() * 0.015 + 0.003
-        else:  # Volatile
+        else:
             returns[i] = np.random.randn() * 0.03
     
     prices = 50000 * np.cumprod(1 + returns)
     
-    # Features (64-dim)
     features = np.zeros((n, 64), dtype=np.float32)
     features[:, 0] = (prices - np.mean(prices)) / np.std(prices)
     features[:, 1] = returns
     
-    # Lagged returns
     for lag in range(2, 15):
         features[:, lag] = np.roll(returns, lag-1)
     
-    # Rolling stats
     for w in [5, 10, 20]:
         features[:, 15 + w] = np.sqrt(np.convolve(returns**2, np.ones(w)/w, mode='same'))
     
-    # Random features for remaining
     features[:, 40:] = np.random.randn(n, 24) * 0.1
     
-    # Target: next return (scaled)
     target_signal = np.roll(returns, -1).astype(np.float32)
-    target_signal = np.clip(target_signal * 25, -1, 1)
+    target_signal = np.clip(target_signal * 50, -1, 1)
     
-    # Regime target
     target_regime = np.zeros((n, 4), dtype=np.float32)
     for i in range(n):
         target_regime[i, regimes[i]] = 1.0
@@ -203,7 +278,10 @@ def train(n_epochs=100):
         if epoch % 10 == 0:
             out = model(x[:1000])
             sig = out['signal']
-            corr = float(mx.corrcoef(mx.stack([sig, y_signal[:1000]]))[0, 1])
+            # Manual correlation
+            sig_np = np.array(sig)
+            y_np = np.array(y_signal[:1000])
+            corr = np.corrcoef(sig_np, y_np)[0, 1]
             trust = np.array(out['trust'][0])
             print(f"Epoch {epoch:3d}: loss={float(loss):.4f}, signal_corr={corr:.3f}, trust_top3={trust.argsort()[-3:]}")
     
@@ -215,27 +293,62 @@ def validate(model, n_ticks=2000):
     print("VALIDATION")
     print("="*60)
     
-    np.random.seed(123)
+    # Load different real data for validation
+    import pandas as pd
+    from pathlib import Path
     
-    # Realistic price series
-    returns = np.random.randn(n_ticks) * 0.02
-    prices = 50000 * np.cumprod(1 + returns)
+    data_dir = Path("hrm/data/public_binance")
+    feather_files = list(data_dir.glob("*15m*.feather"))  # Use 15m for validation
+    
+    if feather_files:
+        df = pd.read_feather(feather_files[0])
+        print(f"Loaded validation data from {feather_files[0]}: {len(df)} rows")
+        
+        prices = df['close'].values.astype(np.float32)
+        n_ticks = min(len(prices), n_ticks)
+        
+        # Build features same way as training
+        features = np.zeros((n_ticks, 64), dtype=np.float32)
+        
+        feature_cols = ['open', 'high', 'low', 'close', 'volume', 'rsi_14', 
+                       'macd', 'macd_hist', 'bb_upper', 'bb_lower', 'atr_14', 
+                       'adx_14', 'ob_imbalance', 'spread_pct', 'vol_5m',
+                       'returns_1m', 'returns_5m', 'returns_15m', 'returns_1h']
+        
+        for i, col in enumerate(feature_cols[:20]):
+            if col in df.columns:
+                val = df[col].values[:n_ticks].astype(np.float32)
+                val = np.nan_to_num(val, nan=0.0, posinf=0.0, neginf=0.0)
+                features[:, i] = val
+        
+        if 'sma_5' in df.columns and 'sma_15' in df.columns:
+            sma5 = np.nan_to_num(df['sma_5'].values[:n_ticks], nan=1.0)
+            sma15 = np.nan_to_num(df['sma_15'].values[:n_ticks], nan=1.0)
+            features[:, 20] = np.where(sma15 != 0, (sma5 / sma15 - 1) * 100, 0)
+        
+        mean = np.nan_to_num(features.mean(axis=0), nan=0.0)
+        std = np.nan_to_num(features.std(axis=0), nan=1.0) + 1e-8
+        features = np.nan_to_num((features - mean) / std, nan=0.0)
+        
+        np.random.seed(123)  # For reproducibility
+    else:
+        # Fallback to synthetic
+        np.random.seed(123)
+        returns = np.random.randn(n_ticks) * 0.02
+        prices = 50000 * np.cumprod(1 + returns)
+        features = np.zeros((n_ticks, 64), dtype=np.float32)
+        features[:, 0] = (prices - 50000) / 10000
     
     equity = 1000.0
     cash = 1000.0
     position = 0.0
-    entry_price = 50000.0
+    entry_price = prices[0] if len(prices) > 0 else 50000.0
     trades = []
     
-    for i in range(n_ticks):
+    for i in range(min(n_ticks, len(features))):
         price = prices[i]
         
-        # Features
-        f = np.zeros(64, dtype=np.float32)
-        f[0] = (price - 50000) / 10000
-        f[1] = returns[i]
-        
-        x = mx.array(f.reshape(1, -1))
+        x = mx.array(features[i].reshape(1, -1))
         out = model(x)
         
         signal = float(out['signal'])
@@ -243,10 +356,10 @@ def validate(model, n_ticks=2000):
         regime = int(np.argmax(out['regime']))
         
         # Trade based on signal (no veto - backprop learned when to trade)
-        if abs(signal) > 0.15:
+        if abs(signal) > 0.08:  # Lower threshold
             direction = 1 if signal > 0 else -1
-            confidence = abs(signal)
-            size = equity * 0.02 * confidence
+            confidence = abs(signal) * 2  # Scale confidence
+            size = equity * 0.02 * min(confidence, 1.5)
             
             if position == 0:
                 position = direction * size
