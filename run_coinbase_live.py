@@ -37,7 +37,7 @@ sys.path.insert(0, str(project_root))
 # Import our modules
 from codec_models.base_codec import BaseCodec, CodecFactory, get_all_codecs
 from stochastic_bag import StochasticCompass, StochasticBagResampler
-from exchange import SignalWriter, KotlinReader, KotlinAdapter, KotlinSignalExecutor
+from exchange import SignalWriter
 from paper_trading import HRMMetaAllocator, PaperTradingConfig, PaperTradingEngine
 
 
@@ -62,7 +62,6 @@ class CoinbaseLiveTradingSystem:
         self._initialize_codecs()
         self._initialize_hrm()
         self._initialize_compass()
-        self._initialize_kotlin_adapter()
         
         # State
         self.current_bag = []
@@ -119,30 +118,7 @@ class CoinbaseLiveTradingSystem:
         
         print("✅ Stochastic compass initialized")
     
-    def _initialize_kotlin_adapter(self):
-        """Initialize Kotlin adapter for execution"""
-        print("\n🔄 Initializing Kotlin adapter...")
-        
-        if self.mode == 'paper':
-            # For paper trading, we don't need Kotlin adapter
-            self.kotlin_adapter = None
-            print("✅ Kotlin adapter skipped (paper trading mode)")
-            return
-        
-        try:
-            script_path = self.config.get('kotlin_script', 'coinbaseXChangeBot.main.kts')
-            self.kotlin_adapter = KotlinAdapter(kotlin_script=script_path)
-            self.kotlin_executor = KotlinSignalExecutor(self.kotlin_adapter)
-            
-            # Start Kotlin process
-            if not self.kotlin_adapter.start():
-                print("⚠️  Failed to start Kotlin adapter, continuing without execution")
-                self.kotlin_adapter = None
-            else:
-                print("✅ Kotlin adapter started")
-        except Exception as e:
-            print(f"⚠️  Kotlin adapter initialization failed: {e}")
-            self.kotlin_adapter = None
+
     
     def generate_market_data(self, symbol: str, timestamp: datetime) -> Dict[str, Any]:
         """
@@ -363,21 +339,13 @@ class CoinbaseLiveTradingSystem:
                 
                 # Process signals
                 if signals:
-                    if self.mode == 'live' and self.kotlin_adapter:
-                        # Send signals to Kotlin for execution
-                        results = self.kotlin_executor.execute_batch(signals)
-                        
-                        for result in results:
-                            if result.get('success'):
-                                print(f"✅ Executed signal: {result.get('signal_id')}")
-                            else:
-                                print(f"❌ Failed: {result.get('error')}")
+                    # Paper trading - just log signals
+                    print(f"\n📊 Generated {len(signals)} signal(s) at {timestamp}")
+                    for signal in signals:
+                        print(f"   {signal['symbol']}: {signal['signal_strength']:.3f}")
                     
-                    else:
-                        # Paper trading - just log signals
-                        print(f"\n📊 Generated {len(signals)} signal(s) at {timestamp}")
-                        for signal in signals:
-                            print(f"   {signal['symbol']}: {signal['signal_strength']:.3f}")
+                    # Write signals to stdout (for any external process)
+                    SignalWriter.write_signals_batch(signals)
                 
                 # Heartbeat
                 if step_count % 10 == 0:
@@ -534,9 +502,6 @@ class CoinbaseLiveTradingSystem:
         """Cleanup resources"""
         print("\n🔄 Cleaning up resources...")
         
-        if self.kotlin_adapter:
-            self.kotlin_adapter.stop()
-        
         # Save performance history
         if self.performance_history:
             history_file = Path("performance_history.json")
@@ -604,12 +569,7 @@ def main():
         help='Size of stochastic bag'
     )
     
-    parser.add_argument(
-        '--kotlin_script',
-        type=str,
-        default='coinbaseXChangeBot.main.kts',
-        help='Path to Kotlin execution script'
-    )
+
     
     parser.add_argument(
         '--seed',
