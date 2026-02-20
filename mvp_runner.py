@@ -43,6 +43,14 @@ except ImportError:
     HAS_LIVE_EXECUTOR = False
     print("[MVP Runner] LiveExecutor not available")
 
+# Import kill switch
+try:
+    from execution.kill_switch import KillSwitch, KillSwitchConfig
+    HAS_KILL_SWITCH = True
+except ImportError:
+    HAS_KILL_SWITCH = False
+    print("[MVP Runner] KillSwitch not available")
+
 @dataclass
 class MVPConfig:
     """Configuration for MVP paper trading run"""
@@ -158,6 +166,12 @@ class MVPPaperTrading:
                 api_secret=config.coinbase_api_secret
             )
             self.live_executor = LiveExecutor(executor_config)
+        
+        # Kill switch
+        self.kill_switch = None
+        if HAS_KILL_SWITCH:
+            kill_switch_config = KillSwitchConfig()
+            self.kill_switch = KillSwitch(kill_switch_config)
         
         print(f"[MVP Runner] Initialized with {config.n_predictors} predictors")
         print(f"[MVP Runner] Paper capital: ${config.paper_capital:.2f}")
@@ -374,6 +388,8 @@ class MVPPaperTrading:
                 "size_usd": size_usd,
                 "direction": direction
             }
+            self.trades.append(trade)
+            self.metrics["total_trades"] += 1
         else:
             # Simulate execution (no live executor)
             # Check if we should exit current position
@@ -653,7 +669,49 @@ if __name__ == "__main__":
     # Initialize MVP runner
     runner = MVPPaperTrading(config)
     
-    # Create 30-day historical data
+    # Option 1: Load emulated models from emulated_fast_feed_trainer
+    # Uncomment the following lines to use emulated models
+    """
+    try:
+        from train.emulated_fast_feed_trainer import EmulatedFastFeedTrainer, EmulatedTrainerConfig
+        print("Loading emulated models...")
+        
+        # Load the trained models
+        model_dir = "hrm/data/models"
+        import pickle
+        import os
+        
+        predictor_5m = None
+        predictor_15m = None
+        predictor_1h = None
+        
+        if os.path.exists(f"{model_dir}/predictor_5m_transformer.pkl"):
+            with open(f"{model_dir}/predictor_5m_transformer.pkl", 'rb') as f:
+                predictor_5m = pickle.load(f)
+                print("✅ Loaded 5m Transformer predictor")
+        
+        if os.path.exists(f"{model_dir}/predictor_15m_xgboost.pkl"):
+            with open(f"{model_dir}/predictor_15m_xgboost.pkl", 'rb') as f:
+                predictor_15m = pickle.load(f)
+                print("✅ Loaded 15m XGBoost predictor")
+        
+        if os.path.exists(f"{model_dir}/predictor_1h_lightgbm.pkl"):
+            with open(f"{model_dir}/predictor_1h_lightgbm.pkl", 'rb') as f:
+                predictor_1h = pickle.load(f)
+                print("✅ Loaded 1h LightGBM predictor")
+        
+        if predictor_5m and predictor_15m and predictor_1h:
+            print("✅ All emulated models loaded successfully")
+        else:
+            print("⚠️  Some emulated models missing - using fallback")
+            
+    except Exception as e:
+        print(f"⚠️  Could not load emulated models: {e}")
+        print("Falling back to synthetic data generation...")
+    """
+    
+    # Option 2: Generate synthetic data for 30-day validation
+    # This is the current implementation
     historical_data = create_realistic_historical_data(days=30)
     print(f"Generated {len(historical_data)} ticks for 30-day validation")
     
