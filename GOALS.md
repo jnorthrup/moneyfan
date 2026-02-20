@@ -512,7 +512,6 @@ Each codec will be implemented in `codec_models/` with:
 
 ### Prerequisites
 - Python 3.10+ with MLX (Apple Silicon) or PyTorch
-- Node.js 18+ for execution layer
 - Broker account with paper trading enabled (Alpaca recommended)
 - Minimum capital: $100 (to match backtest assumptions)
 

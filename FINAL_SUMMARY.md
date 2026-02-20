@@ -71,20 +71,15 @@
 
 ## 🗑️ Removed Components
 
-### JavaScript Execution Layer
-- ✅ `unified_trading_system.js` (already removed)
-- ✅ `nodejs-reboot/` directory (complete Node.js implementation)
-- ✅ All `.js` files
-- ✅ `package.json` files
-- ✅ TypeScript configs
+### Execution Layer
+- ✅ Python execution engine
+- ✅ SignalWriter module
+- ✅ Exchange integration
 
-### Kotlin Execution Layer
-- ✅ `coinbaseXChangeBot.main.kts` (Kotlin execution script)
-- ✅ `src/main/kotlin/` directory (all Kotlin source files)
-- ✅ All `.kts` and `.kt` files
-- ✅ Maven configs (`pom.xml`)
-- ✅ Kotlin adapter (`exchange/kotlin_adapter.py`)
-- ✅ KotlinReader (`exchange/signal_writer.py`)
+### Execution Layer
+- ✅ Python execution engine
+- ✅ SignalWriter module
+- ✅ Exchange integration
 
 ### Other Removed Files
 - ✅ `playwright.config.ts` (TypeScript)

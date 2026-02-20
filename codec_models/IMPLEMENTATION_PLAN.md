@@ -285,7 +285,7 @@ python run_coinbase_live.py --mode live --capital 500 --risk 0.75%
 2. ✅ Achieve MaxDD ≤ 15% (30-day paper trading)
 3. ✅ Generate 22-38% annualized returns
 4. ✅ Support test-time adaptation every 5-15 minutes
-5. ✅ Run live via coinbaseXChangeBot.main.kts
+5. ✅ Run live via execution engine
 6. ✅ Pass all integration tests
 
 ## Timeline
