@@ -10,6 +10,6 @@ Architecture:
 - Kotlin: Reads stdin, executes via coinbaseXChangeBot.main.kts
 """
 
-from .signal_writer import SignalWriter, KotlinReader
+from .signal_writer import SignalWriter
 
-__all__ = ['SignalWriter', 'KotlinReader']
+__all__ = ['SignalWriter']
