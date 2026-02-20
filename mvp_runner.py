@@ -35,6 +35,14 @@ except ImportError:
     HAS_PANDAS = False
     print("[MVP Runner] Pandas not available - using numpy fallback")
 
+# Import live executor
+try:
+    from execution.live_executor import LiveExecutor, LiveExecutorConfig
+    HAS_LIVE_EXECUTOR = True
+except ImportError:
+    HAS_LIVE_EXECUTOR = False
+    print("[MVP Runner] LiveExecutor not available")
+
 @dataclass
 class MVPConfig:
     """Configuration for MVP paper trading run"""
@@ -68,6 +76,7 @@ class MVPConfig:
     coinbase_api_key: str = ""
     coinbase_api_secret: str = ""
     paper_mode: bool = True
+    live_execution_enabled: bool = False  # Set to True for live paper trading
     
     def __post_init__(self):
         # Set predictor paths based on types
@@ -140,9 +149,20 @@ class MVPPaperTrading:
         self.live_agents = []
         self._init_live_agents()
         
+        # Live executor
+        self.live_executor = None
+        if config.live_execution_enabled:
+            executor_config = LiveExecutorConfig(
+                paper_mode=config.paper_mode,
+                api_key=config.coinbase_api_key,
+                api_secret=config.coinbase_api_secret
+            )
+            self.live_executor = LiveExecutor(executor_config)
+        
         print(f"[MVP Runner] Initialized with {config.n_predictors} predictors")
         print(f"[MVP Runner] Paper capital: ${config.paper_capital:.2f}")
         print(f"[MVP Runner] Validation days: {config.validation_days}")
+        print(f"[MVP Runner] Live execution: {'ENABLED' if config.live_execution_enabled else 'DISABLED'}")
     
     def _init_live_agents(self):
         """Initialize live HRM agents (pandas allowed)"""
@@ -304,42 +324,90 @@ class MVPPaperTrading:
         if signal_strength < 0.3:  # Threshold for entry
             return
         
+        # Determine direction
+        if signal > 0:
+            direction = "long"
+        elif signal < 0:
+            direction = "short"
+        else:
+            direction = "flat"
+        
         # Calculate position size (risk-based)
         risk_per_trade = 0.02  # 2% risk per trade
-        position_size = self.equity * risk_per_trade * signal_strength
+        size_usd = self.equity * risk_per_trade * signal_strength
         
-        # Determine direction
-        direction = 1 if signal > 0 else -1
+        # Prepare HRM signal for live executor
+        hrm_signal = {
+            "timestamp": timestamp,
+            "product_id": "BTC-USD",  # Default, can be dynamic
+            "direction": direction,
+            "size_usd": size_usd,
+            "stop_loss_pct": 0.75,  # 25% stop loss
+            "take_profit_pct": 1.50,  # 50% take profit
+            "hrm_weight": signal_strength,
+            "convergence_score": 0.6,  # Simulated
+            "price": price,
+            "signal": signal
+        }
         
-        # Check if we should exit current position
-        if self.position != 0:
-            current_direction = np.sign(self.position)
-            if current_direction != direction:
-                # Exit current position
-                self._close_position(price, timestamp)
-        
-        # Enter new position
-        if direction != 0:
-            # Calculate entry price with slippage
-            slippage = self.config.paper_slippage * abs(signal)
-            entry_price = price * (1 + slippage * direction)
+        # Execute via live executor (if enabled)
+        if self.live_executor:
+            execution_result = self.live_executor.execute_hrm_signal(hrm_signal)
             
-            # Calculate commission
-            commission = position_size * self.config.paper_commission
-            
-            # Update cash and position
-            self.cash -= commission
-            self.position = direction * position_size
+            # Update position based on execution result
+            if execution_result.get("action") in ["BUY", "BUY_MOCK"]:
+                self.position = size_usd
+                self.cash -= size_usd  # Deduct from cash
+            elif execution_result.get("action") in ["SELL", "SELL_MOCK"]:
+                self.position = -size_usd
+                self.cash -= size_usd
+            elif execution_result.get("action") in ["CLOSE_ALL", "CLOSE_ALL_MOCK"]:
+                self.position = 0
             
             # Record trade
             trade = {
                 "timestamp": timestamp,
-                "price": entry_price,
+                "price": price,
                 "position": self.position,
                 "signal": signal,
-                "commission": commission,
-                "slippage": slippage * price,
+                "execution_result": execution_result,
+                "size_usd": size_usd,
+                "direction": direction
             }
+        else:
+            # Simulate execution (no live executor)
+            # Check if we should exit current position
+            if self.position != 0:
+                current_direction = np.sign(self.position)
+                new_direction = 1 if signal > 0 else -1
+                if current_direction != new_direction:
+                    # Exit current position
+                    self._close_position(price, timestamp)
+            
+            # Enter new position
+            if direction != "flat":
+                # Calculate entry price with slippage
+                slippage = self.config.paper_slippage * abs(signal)
+                entry_price = price * (1 + slippage * (1 if direction == "long" else -1))
+                
+                # Calculate commission
+                commission = size_usd * self.config.paper_commission
+                
+                # Update cash and position
+                self.cash -= commission
+                self.position = (1 if direction == "long" else -1) * size_usd
+                
+                # Record trade
+                trade = {
+                    "timestamp": timestamp,
+                    "price": entry_price,
+                    "position": self.position,
+                    "signal": signal,
+                    "commission": commission,
+                    "slippage": slippage * price,
+                    "size_usd": size_usd,
+                    "direction": direction
+                }
             self.trades.append(trade)
             
             # Update metrics
