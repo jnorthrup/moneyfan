@@ -65,3 +65,4 @@ hrm/checkpoints/
 test-results/
 logs/
 *_state.json
+data/
