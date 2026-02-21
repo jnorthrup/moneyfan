@@ -78,13 +78,13 @@ def main():
             if st.button("▶️ Start", type="primary", use_container_width=True):
                 if not st.session_state.training_active:
                     config = TrainingConfig(
-                        n_bags=n_bags,
-                        capital=capital,
-                        bag_size=bag_size,
+                        n_epoch_baskets=n_bags,
+                        notional=capital,
+                        pair_width=bag_size,
                         epochs=epochs,
-                        per_extent_length=per_extent_length,
-                        extent_outlier_z=extent_outlier_z,
-                        max_optimizer_replays=max_optimizer_replays
+                        candles_per_extent=per_extent_length,
+                        shock_z_threshold=extent_outlier_z,
+                        max_adaptive_replays=max_optimizer_replays
                     )
                     
                     st.session_state.trainer = UnifiedTrainer(config)
