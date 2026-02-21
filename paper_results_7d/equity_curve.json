@@ -1,0 +1,122 @@
+[
+  {
+    "timestamp": 100,
+    "equity": 1000.0,
+    "price": 51262.697495491855,
+    "position": 0.0
+  },
+  {
+    "timestamp": 200,
+    "equity": 1000.0,
+    "price": 50840.548519079064,
+    "position": 0.0
+  },
+  {
+    "timestamp": 300,
+    "equity": 1000.0,
+    "price": 49914.543973259206,
+    "position": 0.0
+  },
+  {
+    "timestamp": 400,
+    "equity": 1000.0,
+    "price": 51342.180552832426,
+    "position": 0.0
+  },
+  {
+    "timestamp": 500,
+    "equity": 1000.0,
+    "price": 50843.15172441219,
+    "position": 0.0
+  },
+  {
+    "timestamp": 600,
+    "equity": 1000.0,
+    "price": 51346.471642190496,
+    "position": 0.0
+  },
+  {
+    "timestamp": 700,
+    "equity": 1000.0,
+    "price": 50983.28901558534,
+    "position": 0.0
+  },
+  {
+    "timestamp": 800,
+    "equity": 1000.0,
+    "price": 50207.68901248934,
+    "position": 0.0
+  },
+  {
+    "timestamp": 900,
+    "equity": 1000.0,
+    "price": 50516.09422837625,
+    "position": 0.0
+  },
+  {
+    "timestamp": 1000,
+    "equity": 1000.0,
+    "price": 51843.270437639054,
+    "position": 0.0
+  },
+  {
+    "timestamp": 1100,
+    "equity": 1000.0,
+    "price": 50135.92905443359,
+    "position": 0.0
+  },
+  {
+    "timestamp": 1200,
+    "equity": 1000.0,
+    "price": 50334.225020070226,
+    "position": 0.0
+  },
+  {
+    "timestamp": 1300,
+    "equity": 1000.0,
+    "price": 50385.97502591596,
+    "position": 0.0
+  },
+  {
+    "timestamp": 1400,
+    "equity": 1000.0,
+    "price": 51427.562338115684,
+    "position": 0.0
+  },
+  {
+    "timestamp": 1500,
+    "equity": 1000.0,
+    "price": 50337.10944455392,
+    "position": 0.0
+  },
+  {
+    "timestamp": 1600,
+    "equity": 1000.0,
+    "price": 50238.850894658564,
+    "position": 0.0
+  },
+  {
+    "timestamp": 1700,
+    "equity": 1000.0,
+    "price": 49274.742332581576,
+    "position": 0.0
+  },
+  {
+    "timestamp": 1800,
+    "equity": 1000.0,
+    "price": 49768.35474834975,
+    "position": 0.0
+  },
+  {
+    "timestamp": 1900,
+    "equity": 1000.0,
+    "price": 48787.19528243892,
+    "position": 0.0
+  },
+  {
+    "timestamp": 2000,
+    "equity": 1000.0,
+    "price": 49358.9294021686,
+    "position": 0.0
+  }
+]
