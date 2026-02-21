@@ -1,0 +1,31 @@
+# ONE TRUE PATH - Essential files for GOALS.md mission
+
+# Core training
+train.py
+dashboard.py
+
+# HRM Core
+hrm/__init__.py
+hrm/hierarchical_codec.py
+hrm/hierarchical_codec_mlx.py
+hrm/duck_store.py
+
+# 24 Codecs
+codec_models/*.py
+
+# Data
+data/*.py
+
+# Config
+config/*
+
+# Tests (minimal)
+tests/test_training_framework.py
+
+# Documentation
+GOALS.md
+README.md
+TRAINING_README.md
+
+# Setup
+.gitignore

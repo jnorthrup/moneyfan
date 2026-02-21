@@ -1,0 +1,3507 @@
+{
+  "completed_bags": 250,
+  "total_bags": 500,
+  "results": [
+    {
+      "bag_id": 0,
+      "symbols": [
+        "ETHUSDT",
+        "DOGEUSDT",
+        "DOTUSDT"
+      ],
+      "final_capital": 105.95122273638502,
+      "pnl": 5.95122273638502,
+      "wins": 71,
+      "total_trades": 142,
+      "win_rate": 0.5,
+      "timestamp": "2026-02-21T08:13:25.078278"
+    },
+    {
+      "bag_id": 1,
+      "symbols": [
+        "BNBUSDT",
+        "AVAXUSDT",
+        "DOGEUSDT"
+      ],
+      "final_capital": 93.32624001303036,
+      "pnl": -6.6737599869696425,
+      "wins": 70,
+      "total_trades": 145,
+      "win_rate": 0.4827586206896552,
+      "timestamp": "2026-02-21T08:13:25.994829"
+    },
+    {
+      "bag_id": 2,
+      "symbols": [
+        "UNIUSDT",
+        "XRPUSDT",
+        "ADAUSDT"
+      ],
+      "final_capital": 111.28445873755061,
+      "pnl": 11.284458737550608,
+      "wins": 73,
+      "total_trades": 141,
+      "win_rate": 0.5177304964539007,
+      "timestamp": "2026-02-21T08:13:26.903941"
+    },
+    {
+      "bag_id": 3,
+      "symbols": [
+        "ATOMUSDT",
+        "XRPUSDT",
+        "ETHUSDT"
+      ],
+      "final_capital": 89.07692902844515,
+      "pnl": -10.92307097155485,
+      "wins": 73,
+      "total_trades": 156,
+      "win_rate": 0.46794871794871795,
+      "timestamp": "2026-02-21T08:13:27.771149"
+    },
+    {
+      "bag_id": 4,
+      "symbols": [
+        "ATOMUSDT",
+        "BTCUSDT",
+        "DOGEUSDT"
+      ],
+      "final_capital": 89.53916075479748,
+      "pnl": -10.460839245202521,
+      "wins": 69,
+      "total_trades": 147,
+      "win_rate": 0.46938775510204084,
+      "timestamp": "2026-02-21T08:13:28.764332"
+    },
+    {
+      "bag_id": 5,
+      "symbols": [
+        "ADAUSDT",
+        "ETHUSDT",
+        "AVAXUSDT"
+      ],
+      "final_capital": 122.77582355164145,
+      "pnl": 22.77582355164145,
+      "wins": 72,
+      "total_trades": 148,
+      "win_rate": 0.4864864864864865,
+      "timestamp": "2026-02-21T08:13:29.814413"
+    },
+    {
+      "bag_id": 6,
+      "symbols": [
+        "UNIUSDT",
+        "LTCUSDT",
+        "DOGEUSDT"
+      ],
+      "final_capital": 101.06013763589867,
+      "pnl": 1.0601376358986698,
+      "wins": 79,
+      "total_trades": 154,
+      "win_rate": 0.512987012987013,
+      "timestamp": "2026-02-21T08:13:30.763500"
+    },
+    {
+      "bag_id": 7,
+      "symbols": [
+        "DOTUSDT",
+        "ADAUSDT",
+        "LINKUSDT"
+      ],
+      "final_capital": 76.12871996200457,
+      "pnl": -23.871280037995433,
+      "wins": 65,
+      "total_trades": 144,
+      "win_rate": 0.4513888888888889,
+      "timestamp": "2026-02-21T08:13:31.671625"
+    },
+    {
+      "bag_id": 8,
+      "symbols": [
+        "DOGEUSDT",
+        "UNIUSDT",
+        "SOLUSDT"
+      ],
+      "final_capital": 121.08521547643085,
+      "pnl": 21.085215476430847,
+      "wins": 81,
+      "total_trades": 147,
+      "win_rate": 0.5510204081632653,
+      "timestamp": "2026-02-21T08:13:32.593790"
+    },
+    {
+      "bag_id": 9,
+      "symbols": [
+        "LTCUSDT",
+        "AVAXUSDT",
+        "LINKUSDT"
+      ],
+      "final_capital": 75.63232204497943,
+      "pnl": -24.367677955020568,
+      "wins": 59,
+      "total_trades": 144,
+      "win_rate": 0.4097222222222222,
+      "timestamp": "2026-02-21T08:13:33.495657"
+    },
+    {
+      "bag_id": 10,
+      "symbols": [
+        "BNBUSDT",
+        "AVAXUSDT",
+        "ATOMUSDT"
+      ],
+      "final_capital": 133.30287047438523,
+      "pnl": 33.30287047438523,
+      "wins": 94,
+      "total_trades": 150,
+      "win_rate": 0.6266666666666667,
+      "timestamp": "2026-02-21T08:13:34.391790"
+    },
+    {
+      "bag_id": 11,
+      "symbols": [
+        "DOTUSDT",
+        "BNBUSDT",
+        "BCHUSDT"
+      ],
+      "final_capital": 100.97725633088079,
+      "pnl": 0.9772563308807918,
+      "wins": 73,
+      "total_trades": 150,
+      "win_rate": 0.4866666666666667,
+      "timestamp": "2026-02-21T08:13:35.291186"
+    },
+    {
+      "bag_id": 12,
+      "symbols": [
+        "ATOMUSDT",
+        "LINKUSDT",
+        "DOTUSDT"
+      ],
+      "final_capital": 91.56405283001583,
+      "pnl": -8.435947169984175,
+      "wins": 73,
+      "total_trades": 151,
+      "win_rate": 0.48344370860927155,
+      "timestamp": "2026-02-21T08:13:36.182140"
+    },
+    {
+      "bag_id": 13,
+      "symbols": [
+        "AVAXUSDT",
+        "ATOMUSDT",
+        "UNIUSDT"
+      ],
+      "final_capital": 92.55247487082688,
+      "pnl": -7.4475251291731155,
+      "wins": 80,
+      "total_trades": 163,
+      "win_rate": 0.49079754601226994,
+      "timestamp": "2026-02-21T08:13:37.076042"
+    },
+    {
+      "bag_id": 14,
+      "symbols": [
+        "ADAUSDT",
+        "BNBUSDT",
+        "LTCUSDT"
+      ],
+      "final_capital": 95.38668039482303,
+      "pnl": -4.613319605176969,
+      "wins": 84,
+      "total_trades": 166,
+      "win_rate": 0.5060240963855421,
+      "timestamp": "2026-02-21T08:13:37.967116"
+    },
+    {
+      "bag_id": 15,
+      "symbols": [
+        "BCHUSDT",
+        "SOLUSDT",
+        "MATICUSDT"
+      ],
+      "final_capital": 101.94966904560589,
+      "pnl": 1.9496690456058872,
+      "wins": 74,
+      "total_trades": 148,
+      "win_rate": 0.5,
+      "timestamp": "2026-02-21T08:13:38.859306"
+    },
+    {
+      "bag_id": 16,
+      "symbols": [
+        "UNIUSDT",
+        "ATOMUSDT",
+        "BNBUSDT"
+      ],
+      "final_capital": 105.13976878616909,
+      "pnl": 5.1397687861690855,
+      "wins": 83,
+      "total_trades": 154,
+      "win_rate": 0.538961038961039,
+      "timestamp": "2026-02-21T08:13:39.741267"
+    },
+    {
+      "bag_id": 17,
+      "symbols": [
+        "LINKUSDT",
+        "BNBUSDT",
+        "ADAUSDT"
+      ],
+      "final_capital": 95.21144806863619,
+      "pnl": -4.788551931363813,
+      "wins": 74,
+      "total_trades": 148,
+      "win_rate": 0.5,
+      "timestamp": "2026-02-21T08:13:40.660602"
+    },
+    {
+      "bag_id": 18,
+      "symbols": [
+        "DOGEUSDT",
+        "UNIUSDT",
+        "LTCUSDT"
+      ],
+      "final_capital": 109.54183168167498,
+      "pnl": 9.541831681674978,
+      "wins": 74,
+      "total_trades": 141,
+      "win_rate": 0.524822695035461,
+      "timestamp": "2026-02-21T08:13:41.593410"
+    },
+    {
+      "bag_id": 19,
+      "symbols": [
+        "MATICUSDT",
+        "AVAXUSDT",
+        "LINKUSDT"
+      ],
+      "final_capital": 112.1279529731797,
+      "pnl": 12.127952973179703,
+      "wins": 80,
+      "total_trades": 145,
+      "win_rate": 0.5517241379310345,
+      "timestamp": "2026-02-21T08:13:42.519454"
+    },
+    {
+      "bag_id": 20,
+      "symbols": [
+        "BCHUSDT",
+        "UNIUSDT",
+        "DOTUSDT"
+      ],
+      "final_capital": 111.86475117354813,
+      "pnl": 11.864751173548129,
+      "wins": 78,
+      "total_trades": 142,
+      "win_rate": 0.5492957746478874,
+      "timestamp": "2026-02-21T08:13:43.483556"
+    },
+    {
+      "bag_id": 21,
+      "symbols": [
+        "BCHUSDT",
+        "ADAUSDT",
+        "AVAXUSDT"
+      ],
+      "final_capital": 73.94656399580283,
+      "pnl": -26.053436004197167,
+      "wins": 72,
+      "total_trades": 162,
+      "win_rate": 0.4444444444444444,
+      "timestamp": "2026-02-21T08:13:44.395882"
+    },
+    {
+      "bag_id": 22,
+      "symbols": [
+        "AVAXUSDT",
+        "BCHUSDT",
+        "SOLUSDT"
+      ],
+      "final_capital": 110.52050662746106,
+      "pnl": 10.52050662746106,
+      "wins": 88,
+      "total_trades": 152,
+      "win_rate": 0.5789473684210527,
+      "timestamp": "2026-02-21T08:13:45.292416"
+    },
+    {
+      "bag_id": 23,
+      "symbols": [
+        "UNIUSDT",
+        "XRPUSDT",
+        "BTCUSDT"
+      ],
+      "final_capital": 92.9639608663156,
+      "pnl": -7.0360391336843975,
+      "wins": 65,
+      "total_trades": 146,
+      "win_rate": 0.4452054794520548,
+      "timestamp": "2026-02-21T08:13:46.179703"
+    },
+    {
+      "bag_id": 24,
+      "symbols": [
+        "ADAUSDT",
+        "ATOMUSDT",
+        "DOTUSDT"
+      ],
+      "final_capital": 93.62568649400683,
+      "pnl": -6.374313505993172,
+      "wins": 78,
+      "total_trades": 163,
+      "win_rate": 0.4785276073619632,
+      "timestamp": "2026-02-21T08:13:47.057206"
+    },
+    {
+      "bag_id": 25,
+      "symbols": [
+        "LTCUSDT",
+        "ATOMUSDT",
+        "BTCUSDT"
+      ],
+      "final_capital": 92.44956089349402,
+      "pnl": -7.550439106505976,
+      "wins": 71,
+      "total_trades": 142,
+      "win_rate": 0.5,
+      "timestamp": "2026-02-21T08:13:47.954349"
+    },
+    {
+      "bag_id": 26,
+      "symbols": [
+        "DOTUSDT",
+        "LINKUSDT",
+        "AVAXUSDT"
+      ],
+      "final_capital": 114.10739435190162,
+      "pnl": 14.107394351901618,
+      "wins": 87,
+      "total_trades": 161,
+      "win_rate": 0.5403726708074534,
+      "timestamp": "2026-02-21T08:13:48.854664"
+    },
+    {
+      "bag_id": 27,
+      "symbols": [
+        "LINKUSDT",
+        "DOGEUSDT",
+        "XRPUSDT"
+      ],
+      "final_capital": 110.86784845178799,
+      "pnl": 10.867848451787992,
+      "wins": 80,
+      "total_trades": 150,
+      "win_rate": 0.5333333333333333,
+      "timestamp": "2026-02-21T08:13:49.747165"
+    },
+    {
+      "bag_id": 28,
+      "symbols": [
+        "BCHUSDT",
+        "SOLUSDT",
+        "ATOMUSDT"
+      ],
+      "final_capital": 84.01441971849236,
+      "pnl": -15.985580281507637,
+      "wins": 75,
+      "total_trades": 160,
+      "win_rate": 0.46875,
+      "timestamp": "2026-02-21T08:13:50.642109"
+    },
+    {
+      "bag_id": 29,
+      "symbols": [
+        "XRPUSDT",
+        "AVAXUSDT",
+        "DOGEUSDT"
+      ],
+      "final_capital": 90.93150730284997,
+      "pnl": -9.068492697150035,
+      "wins": 75,
+      "total_trades": 143,
+      "win_rate": 0.5244755244755245,
+      "timestamp": "2026-02-21T08:13:51.543962"
+    },
+    {
+      "bag_id": 30,
+      "symbols": [
+        "BTCUSDT",
+        "LINKUSDT",
+        "UNIUSDT"
+      ],
+      "final_capital": 110.80213415081207,
+      "pnl": 10.802134150812066,
+      "wins": 71,
+      "total_trades": 137,
+      "win_rate": 0.5182481751824818,
+      "timestamp": "2026-02-21T08:13:52.467067"
+    },
+    {
+      "bag_id": 31,
+      "symbols": [
+        "DOTUSDT",
+        "XRPUSDT",
+        "ATOMUSDT"
+      ],
+      "final_capital": 97.18259266082588,
+      "pnl": -2.8174073391741246,
+      "wins": 70,
+      "total_trades": 131,
+      "win_rate": 0.5343511450381679,
+      "timestamp": "2026-02-21T08:13:53.359041"
+    },
+    {
+      "bag_id": 32,
+      "symbols": [
+        "XRPUSDT",
+        "ATOMUSDT",
+        "BTCUSDT"
+      ],
+      "final_capital": 125.3961782516049,
+      "pnl": 25.396178251604894,
+      "wins": 85,
+      "total_trades": 152,
+      "win_rate": 0.5592105263157895,
+      "timestamp": "2026-02-21T08:13:54.231639"
+    },
+    {
+      "bag_id": 33,
+      "symbols": [
+        "BTCUSDT",
+        "LTCUSDT",
+        "ETHUSDT"
+      ],
+      "final_capital": 92.76779684501417,
+      "pnl": -7.232203154985825,
+      "wins": 68,
+      "total_trades": 149,
+      "win_rate": 0.4563758389261745,
+      "timestamp": "2026-02-21T08:13:55.157526"
+    },
+    {
+      "bag_id": 34,
+      "symbols": [
+        "ATOMUSDT",
+        "BTCUSDT",
+        "BCHUSDT"
+      ],
+      "final_capital": 103.10656334844373,
+      "pnl": 3.1065633484437285,
+      "wins": 73,
+      "total_trades": 148,
+      "win_rate": 0.49324324324324326,
+      "timestamp": "2026-02-21T08:13:56.092640"
+    },
+    {
+      "bag_id": 35,
+      "symbols": [
+        "DOGEUSDT",
+        "XRPUSDT",
+        "SOLUSDT"
+      ],
+      "final_capital": 94.83108977266919,
+      "pnl": -5.168910227330812,
+      "wins": 70,
+      "total_trades": 149,
+      "win_rate": 0.4697986577181208,
+      "timestamp": "2026-02-21T08:13:56.989521"
+    },
+    {
+      "bag_id": 36,
+      "symbols": [
+        "UNIUSDT",
+        "ATOMUSDT",
+        "LTCUSDT"
+      ],
+      "final_capital": 98.88048456309019,
+      "pnl": -1.1195154369098077,
+      "wins": 78,
+      "total_trades": 154,
+      "win_rate": 0.5064935064935064,
+      "timestamp": "2026-02-21T08:13:57.882011"
+    },
+    {
+      "bag_id": 37,
+      "symbols": [
+        "ETHUSDT",
+        "DOTUSDT",
+        "AVAXUSDT"
+      ],
+      "final_capital": 114.25675633987755,
+      "pnl": 14.256756339877555,
+      "wins": 80,
+      "total_trades": 154,
+      "win_rate": 0.5194805194805194,
+      "timestamp": "2026-02-21T08:13:58.764496"
+    },
+    {
+      "bag_id": 38,
+      "symbols": [
+        "ATOMUSDT",
+        "DOGEUSDT",
+        "LTCUSDT"
+      ],
+      "final_capital": 88.83693190562344,
+      "pnl": -11.163068094376555,
+      "wins": 73,
+      "total_trades": 149,
+      "win_rate": 0.4899328859060403,
+      "timestamp": "2026-02-21T08:13:59.657446"
+    },
+    {
+      "bag_id": 39,
+      "symbols": [
+        "SOLUSDT",
+        "ATOMUSDT",
+        "ETHUSDT"
+      ],
+      "final_capital": 85.56020578749731,
+      "pnl": -14.43979421250269,
+      "wins": 67,
+      "total_trades": 158,
+      "win_rate": 0.4240506329113924,
+      "timestamp": "2026-02-21T08:14:00.557763"
+    },
+    {
+      "bag_id": 40,
+      "symbols": [
+        "BTCUSDT",
+        "ATOMUSDT",
+        "LTCUSDT"
+      ],
+      "final_capital": 90.0887260438697,
+      "pnl": -9.911273956130302,
+      "wins": 70,
+      "total_trades": 152,
+      "win_rate": 0.4605263157894737,
+      "timestamp": "2026-02-21T08:14:01.480587"
+    },
+    {
+      "bag_id": 41,
+      "symbols": [
+        "AVAXUSDT",
+        "DOTUSDT",
+        "DOGEUSDT"
+      ],
+      "final_capital": 89.42115797859044,
+      "pnl": -10.578842021409557,
+      "wins": 72,
+      "total_trades": 147,
+      "win_rate": 0.4897959183673469,
+      "timestamp": "2026-02-21T08:14:02.375741"
+    },
+    {
+      "bag_id": 42,
+      "symbols": [
+        "MATICUSDT",
+        "UNIUSDT",
+        "BTCUSDT"
+      ],
+      "final_capital": 80.26264986230142,
+      "pnl": -19.737350137698584,
+      "wins": 63,
+      "total_trades": 145,
+      "win_rate": 0.43448275862068964,
+      "timestamp": "2026-02-21T08:14:03.260636"
+    },
+    {
+      "bag_id": 43,
+      "symbols": [
+        "MATICUSDT",
+        "AVAXUSDT",
+        "UNIUSDT"
+      ],
+      "final_capital": 104.0158306354692,
+      "pnl": 4.0158306354692,
+      "wins": 81,
+      "total_trades": 149,
+      "win_rate": 0.5436241610738255,
+      "timestamp": "2026-02-21T08:14:04.149657"
+    },
+    {
+      "bag_id": 44,
+      "symbols": [
+        "ADAUSDT",
+        "DOTUSDT",
+        "DOGEUSDT"
+      ],
+      "final_capital": 107.33406600675198,
+      "pnl": 7.334066006751982,
+      "wins": 76,
+      "total_trades": 147,
+      "win_rate": 0.5170068027210885,
+      "timestamp": "2026-02-21T08:14:05.028564"
+    },
+    {
+      "bag_id": 45,
+      "symbols": [
+        "MATICUSDT",
+        "DOTUSDT",
+        "DOGEUSDT"
+      ],
+      "final_capital": 84.19784774803166,
+      "pnl": -15.802152251968337,
+      "wins": 67,
+      "total_trades": 155,
+      "win_rate": 0.432258064516129,
+      "timestamp": "2026-02-21T08:14:05.911096"
+    },
+    {
+      "bag_id": 46,
+      "symbols": [
+        "ETHUSDT",
+        "DOGEUSDT",
+        "ATOMUSDT"
+      ],
+      "final_capital": 88.26946286254905,
+      "pnl": -11.730537137450952,
+      "wins": 83,
+      "total_trades": 166,
+      "win_rate": 0.5,
+      "timestamp": "2026-02-21T08:14:06.793799"
+    },
+    {
+      "bag_id": 47,
+      "symbols": [
+        "XRPUSDT",
+        "ADAUSDT",
+        "SOLUSDT"
+      ],
+      "final_capital": 107.83989858053864,
+      "pnl": 7.8398985805386445,
+      "wins": 83,
+      "total_trades": 148,
+      "win_rate": 0.5608108108108109,
+      "timestamp": "2026-02-21T08:14:07.666314"
+    },
+    {
+      "bag_id": 48,
+      "symbols": [
+        "AVAXUSDT",
+        "LTCUSDT",
+        "ATOMUSDT"
+      ],
+      "final_capital": 100.80503818089399,
+      "pnl": 0.8050381808939875,
+      "wins": 73,
+      "total_trades": 148,
+      "win_rate": 0.49324324324324326,
+      "timestamp": "2026-02-21T08:14:08.567205"
+    },
+    {
+      "bag_id": 49,
+      "symbols": [
+        "BNBUSDT",
+        "BTCUSDT",
+        "ATOMUSDT"
+      ],
+      "final_capital": 109.15921811933117,
+      "pnl": 9.159218119331172,
+      "wins": 78,
+      "total_trades": 157,
+      "win_rate": 0.4968152866242038,
+      "timestamp": "2026-02-21T08:14:09.450988"
+    },
+    {
+      "bag_id": 50,
+      "symbols": [
+        "LTCUSDT",
+        "ATOMUSDT",
+        "LINKUSDT"
+      ],
+      "final_capital": 104.05782882745775,
+      "pnl": 4.0578288274577545,
+      "wins": 79,
+      "total_trades": 149,
+      "win_rate": 0.5302013422818792,
+      "timestamp": "2026-02-21T08:14:10.374152"
+    },
+    {
+      "bag_id": 51,
+      "symbols": [
+        "BNBUSDT",
+        "DOTUSDT",
+        "SOLUSDT"
+      ],
+      "final_capital": 84.49945919763762,
+      "pnl": -15.50054080236238,
+      "wins": 73,
+      "total_trades": 158,
+      "win_rate": 0.4620253164556962,
+      "timestamp": "2026-02-21T08:14:11.251695"
+    },
+    {
+      "bag_id": 52,
+      "symbols": [
+        "DOTUSDT",
+        "XRPUSDT",
+        "ETHUSDT"
+      ],
+      "final_capital": 96.65975384388798,
+      "pnl": -3.3402461561120163,
+      "wins": 77,
+      "total_trades": 155,
+      "win_rate": 0.4967741935483871,
+      "timestamp": "2026-02-21T08:14:12.131623"
+    },
+    {
+      "bag_id": 53,
+      "symbols": [
+        "BNBUSDT",
+        "AVAXUSDT",
+        "UNIUSDT"
+      ],
+      "final_capital": 93.80444601548187,
+      "pnl": -6.195553984518128,
+      "wins": 74,
+      "total_trades": 144,
+      "win_rate": 0.5138888888888888,
+      "timestamp": "2026-02-21T08:14:13.029957"
+    },
+    {
+      "bag_id": 54,
+      "symbols": [
+        "LTCUSDT",
+        "BCHUSDT",
+        "BNBUSDT"
+      ],
+      "final_capital": 110.46493361374169,
+      "pnl": 10.464933613741692,
+      "wins": 76,
+      "total_trades": 153,
+      "win_rate": 0.49673202614379086,
+      "timestamp": "2026-02-21T08:14:13.915368"
+    },
+    {
+      "bag_id": 55,
+      "symbols": [
+        "UNIUSDT",
+        "DOGEUSDT",
+        "XRPUSDT"
+      ],
+      "final_capital": 115.65619407124079,
+      "pnl": 15.65619407124079,
+      "wins": 66,
+      "total_trades": 130,
+      "win_rate": 0.5076923076923077,
+      "timestamp": "2026-02-21T08:14:14.808230"
+    },
+    {
+      "bag_id": 56,
+      "symbols": [
+        "DOTUSDT",
+        "ATOMUSDT",
+        "BCHUSDT"
+      ],
+      "final_capital": 84.82817296140863,
+      "pnl": -15.171827038591374,
+      "wins": 70,
+      "total_trades": 156,
+      "win_rate": 0.44871794871794873,
+      "timestamp": "2026-02-21T08:14:15.705010"
+    },
+    {
+      "bag_id": 57,
+      "symbols": [
+        "LINKUSDT",
+        "ATOMUSDT",
+        "XRPUSDT"
+      ],
+      "final_capital": 91.13943686052498,
+      "pnl": -8.860563139475019,
+      "wins": 74,
+      "total_trades": 152,
+      "win_rate": 0.4868421052631579,
+      "timestamp": "2026-02-21T08:14:16.594088"
+    },
+    {
+      "bag_id": 58,
+      "symbols": [
+        "DOGEUSDT",
+        "UNIUSDT",
+        "DOTUSDT"
+      ],
+      "final_capital": 85.75406273250351,
+      "pnl": -14.245937267496487,
+      "wins": 69,
+      "total_trades": 140,
+      "win_rate": 0.4928571428571429,
+      "timestamp": "2026-02-21T08:14:17.506804"
+    },
+    {
+      "bag_id": 59,
+      "symbols": [
+        "SOLUSDT",
+        "LINKUSDT",
+        "BCHUSDT"
+      ],
+      "final_capital": 88.38518376006776,
+      "pnl": -11.614816239932239,
+      "wins": 71,
+      "total_trades": 155,
+      "win_rate": 0.45806451612903226,
+      "timestamp": "2026-02-21T08:14:18.403137"
+    },
+    {
+      "bag_id": 60,
+      "symbols": [
+        "ADAUSDT",
+        "UNIUSDT",
+        "ATOMUSDT"
+      ],
+      "final_capital": 97.99143444293514,
+      "pnl": -2.0085655570648555,
+      "wins": 68,
+      "total_trades": 151,
+      "win_rate": 0.4503311258278146,
+      "timestamp": "2026-02-21T08:14:19.316503"
+    },
+    {
+      "bag_id": 61,
+      "symbols": [
+        "LINKUSDT",
+        "MATICUSDT",
+        "UNIUSDT"
+      ],
+      "final_capital": 93.75964199833768,
+      "pnl": -6.240358001662315,
+      "wins": 69,
+      "total_trades": 144,
+      "win_rate": 0.4791666666666667,
+      "timestamp": "2026-02-21T08:14:20.213439"
+    },
+    {
+      "bag_id": 62,
+      "symbols": [
+        "BCHUSDT",
+        "BTCUSDT",
+        "LINKUSDT"
+      ],
+      "final_capital": 143.58573326861205,
+      "pnl": 43.585733268612046,
+      "wins": 98,
+      "total_trades": 161,
+      "win_rate": 0.6086956521739131,
+      "timestamp": "2026-02-21T08:14:21.103586"
+    },
+    {
+      "bag_id": 63,
+      "symbols": [
+        "ADAUSDT",
+        "BCHUSDT",
+        "DOTUSDT"
+      ],
+      "final_capital": 99.0582719252658,
+      "pnl": -0.9417280747342005,
+      "wins": 77,
+      "total_trades": 152,
+      "win_rate": 0.506578947368421,
+      "timestamp": "2026-02-21T08:14:22.035647"
+    },
+    {
+      "bag_id": 64,
+      "symbols": [
+        "DOTUSDT",
+        "MATICUSDT",
+        "ATOMUSDT"
+      ],
+      "final_capital": 83.6051082158697,
+      "pnl": -16.394891784130294,
+      "wins": 64,
+      "total_trades": 146,
+      "win_rate": 0.4383561643835616,
+      "timestamp": "2026-02-21T08:14:22.944058"
+    },
+    {
+      "bag_id": 65,
+      "symbols": [
+        "SOLUSDT",
+        "XRPUSDT",
+        "UNIUSDT"
+      ],
+      "final_capital": 99.30921282780693,
+      "pnl": -0.690787172193069,
+      "wins": 72,
+      "total_trades": 148,
+      "win_rate": 0.4864864864864865,
+      "timestamp": "2026-02-21T08:14:23.833449"
+    },
+    {
+      "bag_id": 66,
+      "symbols": [
+        "DOGEUSDT",
+        "ETHUSDT",
+        "LTCUSDT"
+      ],
+      "final_capital": 91.40231118493335,
+      "pnl": -8.597688815066647,
+      "wins": 80,
+      "total_trades": 163,
+      "win_rate": 0.49079754601226994,
+      "timestamp": "2026-02-21T08:14:24.826372"
+    },
+    {
+      "bag_id": 67,
+      "symbols": [
+        "SOLUSDT",
+        "ATOMUSDT",
+        "BTCUSDT"
+      ],
+      "final_capital": 93.59212377426248,
+      "pnl": -6.407876225737525,
+      "wins": 74,
+      "total_trades": 149,
+      "win_rate": 0.4966442953020134,
+      "timestamp": "2026-02-21T08:14:25.778132"
+    },
+    {
+      "bag_id": 68,
+      "symbols": [
+        "BCHUSDT",
+        "ETHUSDT",
+        "UNIUSDT"
+      ],
+      "final_capital": 77.71307169856617,
+      "pnl": -22.286928301433832,
+      "wins": 63,
+      "total_trades": 151,
+      "win_rate": 0.41721854304635764,
+      "timestamp": "2026-02-21T08:14:26.736350"
+    },
+    {
+      "bag_id": 69,
+      "symbols": [
+        "BNBUSDT",
+        "DOTUSDT",
+        "SOLUSDT"
+      ],
+      "final_capital": 82.82069924077602,
+      "pnl": -17.179300759223977,
+      "wins": 75,
+      "total_trades": 159,
+      "win_rate": 0.4716981132075472,
+      "timestamp": "2026-02-21T08:14:27.658517"
+    },
+    {
+      "bag_id": 70,
+      "symbols": [
+        "ETHUSDT",
+        "ATOMUSDT",
+        "LINKUSDT"
+      ],
+      "final_capital": 91.23768227730126,
+      "pnl": -8.76231772269874,
+      "wins": 66,
+      "total_trades": 146,
+      "win_rate": 0.4520547945205479,
+      "timestamp": "2026-02-21T08:14:28.543106"
+    },
+    {
+      "bag_id": 71,
+      "symbols": [
+        "BNBUSDT",
+        "ADAUSDT",
+        "DOGEUSDT"
+      ],
+      "final_capital": 115.40305292127552,
+      "pnl": 15.403052921275517,
+      "wins": 84,
+      "total_trades": 155,
+      "win_rate": 0.5419354838709678,
+      "timestamp": "2026-02-21T08:14:29.414280"
+    },
+    {
+      "bag_id": 72,
+      "symbols": [
+        "SOLUSDT",
+        "ETHUSDT",
+        "LTCUSDT"
+      ],
+      "final_capital": 102.31456769977443,
+      "pnl": 2.314567699774429,
+      "wins": 71,
+      "total_trades": 145,
+      "win_rate": 0.4896551724137931,
+      "timestamp": "2026-02-21T08:14:30.285263"
+    },
+    {
+      "bag_id": 73,
+      "symbols": [
+        "UNIUSDT",
+        "MATICUSDT",
+        "AVAXUSDT"
+      ],
+      "final_capital": 96.25274434839316,
+      "pnl": -3.747255651606835,
+      "wins": 70,
+      "total_trades": 142,
+      "win_rate": 0.49295774647887325,
+      "timestamp": "2026-02-21T08:14:31.186342"
+    },
+    {
+      "bag_id": 74,
+      "symbols": [
+        "LINKUSDT",
+        "DOGEUSDT",
+        "SOLUSDT"
+      ],
+      "final_capital": 107.18646593710464,
+      "pnl": 7.186465937104643,
+      "wins": 81,
+      "total_trades": 156,
+      "win_rate": 0.5192307692307693,
+      "timestamp": "2026-02-21T08:14:32.082936"
+    },
+    {
+      "bag_id": 75,
+      "symbols": [
+        "ADAUSDT",
+        "AVAXUSDT",
+        "XRPUSDT"
+      ],
+      "final_capital": 91.61535093868669,
+      "pnl": -8.384649061313311,
+      "wins": 82,
+      "total_trades": 167,
+      "win_rate": 0.49101796407185627,
+      "timestamp": "2026-02-21T08:14:32.991261"
+    },
+    {
+      "bag_id": 76,
+      "symbols": [
+        "MATICUSDT",
+        "ATOMUSDT",
+        "BNBUSDT"
+      ],
+      "final_capital": 108.71936807655807,
+      "pnl": 8.71936807655807,
+      "wins": 85,
+      "total_trades": 169,
+      "win_rate": 0.5029585798816568,
+      "timestamp": "2026-02-21T08:14:33.868025"
+    },
+    {
+      "bag_id": 77,
+      "symbols": [
+        "BCHUSDT",
+        "DOGEUSDT",
+        "SOLUSDT"
+      ],
+      "final_capital": 81.5490886634667,
+      "pnl": -18.450911336533295,
+      "wins": 60,
+      "total_trades": 146,
+      "win_rate": 0.410958904109589,
+      "timestamp": "2026-02-21T08:14:34.840779"
+    },
+    {
+      "bag_id": 78,
+      "symbols": [
+        "ETHUSDT",
+        "ATOMUSDT",
+        "BTCUSDT"
+      ],
+      "final_capital": 107.7717997980485,
+      "pnl": 7.771799798048505,
+      "wins": 77,
+      "total_trades": 149,
+      "win_rate": 0.5167785234899329,
+      "timestamp": "2026-02-21T08:14:35.770970"
+    },
+    {
+      "bag_id": 79,
+      "symbols": [
+        "BCHUSDT",
+        "ADAUSDT",
+        "ATOMUSDT"
+      ],
+      "final_capital": 102.14790376905796,
+      "pnl": 2.1479037690579617,
+      "wins": 75,
+      "total_trades": 148,
+      "win_rate": 0.5067567567567568,
+      "timestamp": "2026-02-21T08:14:36.672781"
+    },
+    {
+      "bag_id": 80,
+      "symbols": [
+        "XRPUSDT",
+        "ADAUSDT",
+        "DOTUSDT"
+      ],
+      "final_capital": 98.72977370579444,
+      "pnl": -1.2702262942055569,
+      "wins": 77,
+      "total_trades": 160,
+      "win_rate": 0.48125,
+      "timestamp": "2026-02-21T08:14:37.575699"
+    },
+    {
+      "bag_id": 81,
+      "symbols": [
+        "DOGEUSDT",
+        "XRPUSDT",
+        "BTCUSDT"
+      ],
+      "final_capital": 86.93888189495071,
+      "pnl": -13.061118105049289,
+      "wins": 65,
+      "total_trades": 142,
+      "win_rate": 0.45774647887323944,
+      "timestamp": "2026-02-21T08:14:38.490621"
+    },
+    {
+      "bag_id": 82,
+      "symbols": [
+        "DOTUSDT",
+        "AVAXUSDT",
+        "ATOMUSDT"
+      ],
+      "final_capital": 87.04334099262776,
+      "pnl": -12.956659007372238,
+      "wins": 73,
+      "total_trades": 158,
+      "win_rate": 0.4620253164556962,
+      "timestamp": "2026-02-21T08:14:39.418516"
+    },
+    {
+      "bag_id": 83,
+      "symbols": [
+        "ETHUSDT",
+        "ADAUSDT",
+        "UNIUSDT"
+      ],
+      "final_capital": 98.58883660534268,
+      "pnl": -1.411163394657322,
+      "wins": 76,
+      "total_trades": 156,
+      "win_rate": 0.48717948717948717,
+      "timestamp": "2026-02-21T08:14:40.405505"
+    },
+    {
+      "bag_id": 84,
+      "symbols": [
+        "DOGEUSDT",
+        "ATOMUSDT",
+        "BNBUSDT"
+      ],
+      "final_capital": 106.01286246814354,
+      "pnl": 6.012862468143538,
+      "wins": 72,
+      "total_trades": 144,
+      "win_rate": 0.5,
+      "timestamp": "2026-02-21T08:14:41.396863"
+    },
+    {
+      "bag_id": 85,
+      "symbols": [
+        "BCHUSDT",
+        "DOGEUSDT",
+        "MATICUSDT"
+      ],
+      "final_capital": 96.95335146530395,
+      "pnl": -3.046648534696047,
+      "wins": 79,
+      "total_trades": 153,
+      "win_rate": 0.5163398692810458,
+      "timestamp": "2026-02-21T08:14:42.360433"
+    },
+    {
+      "bag_id": 86,
+      "symbols": [
+        "AVAXUSDT",
+        "BCHUSDT",
+        "UNIUSDT"
+      ],
+      "final_capital": 102.66135789469278,
+      "pnl": 2.6613578946927845,
+      "wins": 82,
+      "total_trades": 157,
+      "win_rate": 0.5222929936305732,
+      "timestamp": "2026-02-21T08:14:43.390026"
+    },
+    {
+      "bag_id": 87,
+      "symbols": [
+        "DOTUSDT",
+        "ADAUSDT",
+        "SOLUSDT"
+      ],
+      "final_capital": 116.2386368141867,
+      "pnl": 16.238636814186705,
+      "wins": 85,
+      "total_trades": 168,
+      "win_rate": 0.5059523809523809,
+      "timestamp": "2026-02-21T08:14:44.343217"
+    },
+    {
+      "bag_id": 88,
+      "symbols": [
+        "BNBUSDT",
+        "BCHUSDT",
+        "DOGEUSDT"
+      ],
+      "final_capital": 91.35769562084735,
+      "pnl": -8.642304379152648,
+      "wins": 71,
+      "total_trades": 153,
+      "win_rate": 0.46405228758169936,
+      "timestamp": "2026-02-21T08:14:45.326683"
+    },
+    {
+      "bag_id": 89,
+      "symbols": [
+        "ATOMUSDT",
+        "BTCUSDT",
+        "LINKUSDT"
+      ],
+      "final_capital": 103.15311240427734,
+      "pnl": 3.153112404277337,
+      "wins": 90,
+      "total_trades": 158,
+      "win_rate": 0.569620253164557,
+      "timestamp": "2026-02-21T08:14:46.287606"
+    },
+    {
+      "bag_id": 90,
+      "symbols": [
+        "ETHUSDT",
+        "DOTUSDT",
+        "DOGEUSDT"
+      ],
+      "final_capital": 91.08678935040751,
+      "pnl": -8.913210649592486,
+      "wins": 70,
+      "total_trades": 142,
+      "win_rate": 0.49295774647887325,
+      "timestamp": "2026-02-21T08:14:47.263308"
+    },
+    {
+      "bag_id": 91,
+      "symbols": [
+        "DOGEUSDT",
+        "BTCUSDT",
+        "BNBUSDT"
+      ],
+      "final_capital": 138.6207308653774,
+      "pnl": 38.620730865377396,
+      "wins": 78,
+      "total_trades": 134,
+      "win_rate": 0.582089552238806,
+      "timestamp": "2026-02-21T08:14:48.170552"
+    },
+    {
+      "bag_id": 92,
+      "symbols": [
+        "LTCUSDT",
+        "MATICUSDT",
+        "UNIUSDT"
+      ],
+      "final_capital": 105.90687151638785,
+      "pnl": 5.906871516387852,
+      "wins": 74,
+      "total_trades": 144,
+      "win_rate": 0.5138888888888888,
+      "timestamp": "2026-02-21T08:14:49.080784"
+    },
+    {
+      "bag_id": 93,
+      "symbols": [
+        "LTCUSDT",
+        "SOLUSDT",
+        "BNBUSDT"
+      ],
+      "final_capital": 123.28378735690872,
+      "pnl": 23.283787356908718,
+      "wins": 90,
+      "total_trades": 155,
+      "win_rate": 0.5806451612903226,
+      "timestamp": "2026-02-21T08:14:49.995819"
+    },
+    {
+      "bag_id": 94,
+      "symbols": [
+        "DOTUSDT",
+        "XRPUSDT",
+        "AVAXUSDT"
+      ],
+      "final_capital": 113.89669019566017,
+      "pnl": 13.89669019566017,
+      "wins": 80,
+      "total_trades": 145,
+      "win_rate": 0.5517241379310345,
+      "timestamp": "2026-02-21T08:14:50.899701"
+    },
+    {
+      "bag_id": 95,
+      "symbols": [
+        "UNIUSDT",
+        "LINKUSDT",
+        "DOTUSDT"
+      ],
+      "final_capital": 98.08109224446918,
+      "pnl": -1.9189077555308245,
+      "wins": 81,
+      "total_trades": 161,
+      "win_rate": 0.5031055900621118,
+      "timestamp": "2026-02-21T08:14:51.823961"
+    },
+    {
+      "bag_id": 96,
+      "symbols": [
+        "BTCUSDT",
+        "UNIUSDT",
+        "AVAXUSDT"
+      ],
+      "final_capital": 113.56257470476717,
+      "pnl": 13.562574704767172,
+      "wins": 82,
+      "total_trades": 148,
+      "win_rate": 0.5540540540540541,
+      "timestamp": "2026-02-21T08:14:52.748659"
+    },
+    {
+      "bag_id": 97,
+      "symbols": [
+        "ATOMUSDT",
+        "DOGEUSDT",
+        "ETHUSDT"
+      ],
+      "final_capital": 89.81395651453613,
+      "pnl": -10.18604348546387,
+      "wins": 52,
+      "total_trades": 118,
+      "win_rate": 0.4406779661016949,
+      "timestamp": "2026-02-21T08:14:53.648993"
+    },
+    {
+      "bag_id": 98,
+      "symbols": [
+        "BTCUSDT",
+        "ADAUSDT",
+        "DOTUSDT"
+      ],
+      "final_capital": 81.49313936999263,
+      "pnl": -18.506860630007367,
+      "wins": 68,
+      "total_trades": 156,
+      "win_rate": 0.4358974358974359,
+      "timestamp": "2026-02-21T08:14:54.541937"
+    },
+    {
+      "bag_id": 99,
+      "symbols": [
+        "BTCUSDT",
+        "DOGEUSDT",
+        "LINKUSDT"
+      ],
+      "final_capital": 110.03977730296627,
+      "pnl": 10.039777302966272,
+      "wins": 72,
+      "total_trades": 132,
+      "win_rate": 0.5454545454545454,
+      "timestamp": "2026-02-21T08:14:55.424175"
+    },
+    {
+      "bag_id": 100,
+      "symbols": [
+        "MATICUSDT",
+        "ETHUSDT",
+        "ATOMUSDT"
+      ],
+      "final_capital": 104.29152292754439,
+      "pnl": 4.291522927544392,
+      "wins": 73,
+      "total_trades": 140,
+      "win_rate": 0.5214285714285715,
+      "timestamp": "2026-02-21T08:14:56.348865"
+    },
+    {
+      "bag_id": 101,
+      "symbols": [
+        "LTCUSDT",
+        "SOLUSDT",
+        "BNBUSDT"
+      ],
+      "final_capital": 115.52000166659782,
+      "pnl": 15.520001666597821,
+      "wins": 87,
+      "total_trades": 155,
+      "win_rate": 0.5612903225806452,
+      "timestamp": "2026-02-21T08:14:57.266209"
+    },
+    {
+      "bag_id": 102,
+      "symbols": [
+        "AVAXUSDT",
+        "LINKUSDT",
+        "DOGEUSDT"
+      ],
+      "final_capital": 93.54242453162814,
+      "pnl": -6.457575468371857,
+      "wins": 70,
+      "total_trades": 146,
+      "win_rate": 0.4794520547945205,
+      "timestamp": "2026-02-21T08:14:58.167601"
+    },
+    {
+      "bag_id": 103,
+      "symbols": [
+        "SOLUSDT",
+        "DOTUSDT",
+        "BTCUSDT"
+      ],
+      "final_capital": 102.70466780280856,
+      "pnl": 2.704667802808558,
+      "wins": 75,
+      "total_trades": 155,
+      "win_rate": 0.4838709677419355,
+      "timestamp": "2026-02-21T08:14:59.094464"
+    },
+    {
+      "bag_id": 104,
+      "symbols": [
+        "SOLUSDT",
+        "BCHUSDT",
+        "LINKUSDT"
+      ],
+      "final_capital": 106.50269450272476,
+      "pnl": 6.502694502724765,
+      "wins": 83,
+      "total_trades": 152,
+      "win_rate": 0.5460526315789473,
+      "timestamp": "2026-02-21T08:14:59.994916"
+    },
+    {
+      "bag_id": 105,
+      "symbols": [
+        "ATOMUSDT",
+        "BNBUSDT",
+        "LTCUSDT"
+      ],
+      "final_capital": 103.91318583044463,
+      "pnl": 3.9131858304446325,
+      "wins": 80,
+      "total_trades": 153,
+      "win_rate": 0.5228758169934641,
+      "timestamp": "2026-02-21T08:15:00.907127"
+    },
+    {
+      "bag_id": 106,
+      "symbols": [
+        "UNIUSDT",
+        "BTCUSDT",
+        "ATOMUSDT"
+      ],
+      "final_capital": 87.08562663341641,
+      "pnl": -12.91437336658359,
+      "wins": 69,
+      "total_trades": 154,
+      "win_rate": 0.44805194805194803,
+      "timestamp": "2026-02-21T08:15:01.813378"
+    },
+    {
+      "bag_id": 107,
+      "symbols": [
+        "XRPUSDT",
+        "BNBUSDT",
+        "AVAXUSDT"
+      ],
+      "final_capital": 125.66395813287053,
+      "pnl": 25.663958132870533,
+      "wins": 83,
+      "total_trades": 151,
+      "win_rate": 0.5496688741721855,
+      "timestamp": "2026-02-21T08:15:02.722745"
+    },
+    {
+      "bag_id": 108,
+      "symbols": [
+        "LTCUSDT",
+        "BCHUSDT",
+        "DOTUSDT"
+      ],
+      "final_capital": 113.71696215880996,
+      "pnl": 13.716962158809963,
+      "wins": 76,
+      "total_trades": 145,
+      "win_rate": 0.5241379310344828,
+      "timestamp": "2026-02-21T08:15:03.626681"
+    },
+    {
+      "bag_id": 109,
+      "symbols": [
+        "DOTUSDT",
+        "AVAXUSDT",
+        "LINKUSDT"
+      ],
+      "final_capital": 88.8171689076064,
+      "pnl": -11.182831092393599,
+      "wins": 79,
+      "total_trades": 154,
+      "win_rate": 0.512987012987013,
+      "timestamp": "2026-02-21T08:15:04.522146"
+    },
+    {
+      "bag_id": 110,
+      "symbols": [
+        "AVAXUSDT",
+        "DOTUSDT",
+        "ADAUSDT"
+      ],
+      "final_capital": 102.39292303406229,
+      "pnl": 2.3929230340622922,
+      "wins": 86,
+      "total_trades": 150,
+      "win_rate": 0.5733333333333334,
+      "timestamp": "2026-02-21T08:15:05.434963"
+    },
+    {
+      "bag_id": 111,
+      "symbols": [
+        "UNIUSDT",
+        "AVAXUSDT",
+        "ADAUSDT"
+      ],
+      "final_capital": 107.50031707302102,
+      "pnl": 7.500317073021023,
+      "wins": 79,
+      "total_trades": 154,
+      "win_rate": 0.512987012987013,
+      "timestamp": "2026-02-21T08:15:06.367084"
+    },
+    {
+      "bag_id": 112,
+      "symbols": [
+        "BNBUSDT",
+        "ATOMUSDT",
+        "DOGEUSDT"
+      ],
+      "final_capital": 115.52639987637556,
+      "pnl": 15.526399876375564,
+      "wins": 81,
+      "total_trades": 138,
+      "win_rate": 0.5869565217391305,
+      "timestamp": "2026-02-21T08:15:07.286265"
+    },
+    {
+      "bag_id": 113,
+      "symbols": [
+        "DOTUSDT",
+        "XRPUSDT",
+        "UNIUSDT"
+      ],
+      "final_capital": 93.19798251294006,
+      "pnl": -6.802017487059942,
+      "wins": 70,
+      "total_trades": 149,
+      "win_rate": 0.4697986577181208,
+      "timestamp": "2026-02-21T08:15:08.190412"
+    },
+    {
+      "bag_id": 114,
+      "symbols": [
+        "ETHUSDT",
+        "AVAXUSDT",
+        "BCHUSDT"
+      ],
+      "final_capital": 117.0476949792034,
+      "pnl": 17.0476949792034,
+      "wins": 83,
+      "total_trades": 145,
+      "win_rate": 0.5724137931034483,
+      "timestamp": "2026-02-21T08:15:09.099177"
+    },
+    {
+      "bag_id": 115,
+      "symbols": [
+        "LINKUSDT",
+        "MATICUSDT",
+        "ATOMUSDT"
+      ],
+      "final_capital": 110.82587573813862,
+      "pnl": 10.82587573813862,
+      "wins": 73,
+      "total_trades": 139,
+      "win_rate": 0.5251798561151079,
+      "timestamp": "2026-02-21T08:15:10.010863"
+    },
+    {
+      "bag_id": 116,
+      "symbols": [
+        "BCHUSDT",
+        "MATICUSDT",
+        "AVAXUSDT"
+      ],
+      "final_capital": 81.01214709872995,
+      "pnl": -18.987852901270045,
+      "wins": 56,
+      "total_trades": 139,
+      "win_rate": 0.4028776978417266,
+      "timestamp": "2026-02-21T08:15:10.992882"
+    },
+    {
+      "bag_id": 117,
+      "symbols": [
+        "XRPUSDT",
+        "LINKUSDT",
+        "DOGEUSDT"
+      ],
+      "final_capital": 93.88028116080098,
+      "pnl": -6.119718839199024,
+      "wins": 64,
+      "total_trades": 135,
+      "win_rate": 0.4740740740740741,
+      "timestamp": "2026-02-21T08:15:11.932795"
+    },
+    {
+      "bag_id": 118,
+      "symbols": [
+        "BNBUSDT",
+        "ADAUSDT",
+        "LINKUSDT"
+      ],
+      "final_capital": 109.68782100071549,
+      "pnl": 9.687821000715488,
+      "wins": 81,
+      "total_trades": 153,
+      "win_rate": 0.5294117647058824,
+      "timestamp": "2026-02-21T08:15:12.868278"
+    },
+    {
+      "bag_id": 119,
+      "symbols": [
+        "BNBUSDT",
+        "ETHUSDT",
+        "UNIUSDT"
+      ],
+      "final_capital": 100.58426477224204,
+      "pnl": 0.5842647722420367,
+      "wins": 89,
+      "total_trades": 167,
+      "win_rate": 0.5329341317365269,
+      "timestamp": "2026-02-21T08:15:13.809815"
+    },
+    {
+      "bag_id": 120,
+      "symbols": [
+        "SOLUSDT",
+        "ADAUSDT",
+        "ATOMUSDT"
+      ],
+      "final_capital": 83.43098320048617,
+      "pnl": -16.569016799513832,
+      "wins": 71,
+      "total_trades": 153,
+      "win_rate": 0.46405228758169936,
+      "timestamp": "2026-02-21T08:15:14.753774"
+    },
+    {
+      "bag_id": 121,
+      "symbols": [
+        "ATOMUSDT",
+        "LINKUSDT",
+        "LTCUSDT"
+      ],
+      "final_capital": 109.38098414578984,
+      "pnl": 9.380984145789839,
+      "wins": 85,
+      "total_trades": 153,
+      "win_rate": 0.5555555555555556,
+      "timestamp": "2026-02-21T08:15:15.671010"
+    },
+    {
+      "bag_id": 122,
+      "symbols": [
+        "LTCUSDT",
+        "UNIUSDT",
+        "MATICUSDT"
+      ],
+      "final_capital": 93.96833532966181,
+      "pnl": -6.031664670338188,
+      "wins": 71,
+      "total_trades": 149,
+      "win_rate": 0.47651006711409394,
+      "timestamp": "2026-02-21T08:15:16.605133"
+    },
+    {
+      "bag_id": 123,
+      "symbols": [
+        "AVAXUSDT",
+        "LINKUSDT",
+        "XRPUSDT"
+      ],
+      "final_capital": 101.52140495159865,
+      "pnl": 1.5214049515986545,
+      "wins": 79,
+      "total_trades": 155,
+      "win_rate": 0.5096774193548387,
+      "timestamp": "2026-02-21T08:15:17.526596"
+    },
+    {
+      "bag_id": 124,
+      "symbols": [
+        "LINKUSDT",
+        "DOTUSDT",
+        "LTCUSDT"
+      ],
+      "final_capital": 80.10735761327804,
+      "pnl": -19.89264238672196,
+      "wins": 61,
+      "total_trades": 141,
+      "win_rate": 0.4326241134751773,
+      "timestamp": "2026-02-21T08:15:18.445796"
+    },
+    {
+      "bag_id": 125,
+      "symbols": [
+        "XRPUSDT",
+        "DOTUSDT",
+        "ETHUSDT"
+      ],
+      "final_capital": 102.42996356232355,
+      "pnl": 2.4299635623235503,
+      "wins": 79,
+      "total_trades": 154,
+      "win_rate": 0.512987012987013,
+      "timestamp": "2026-02-21T08:15:19.375748"
+    },
+    {
+      "bag_id": 126,
+      "symbols": [
+        "DOTUSDT",
+        "AVAXUSDT",
+        "MATICUSDT"
+      ],
+      "final_capital": 80.3216765596067,
+      "pnl": -19.6783234403933,
+      "wins": 71,
+      "total_trades": 157,
+      "win_rate": 0.45222929936305734,
+      "timestamp": "2026-02-21T08:15:20.320112"
+    },
+    {
+      "bag_id": 127,
+      "symbols": [
+        "DOTUSDT",
+        "ADAUSDT",
+        "BTCUSDT"
+      ],
+      "final_capital": 115.31076068708587,
+      "pnl": 15.310760687085875,
+      "wins": 73,
+      "total_trades": 136,
+      "win_rate": 0.5367647058823529,
+      "timestamp": "2026-02-21T08:15:21.294338"
+    },
+    {
+      "bag_id": 128,
+      "symbols": [
+        "MATICUSDT",
+        "DOTUSDT",
+        "DOGEUSDT"
+      ],
+      "final_capital": 101.43233715876681,
+      "pnl": 1.4323371587668134,
+      "wins": 89,
+      "total_trades": 169,
+      "win_rate": 0.5266272189349113,
+      "timestamp": "2026-02-21T08:15:22.246792"
+    },
+    {
+      "bag_id": 129,
+      "symbols": [
+        "MATICUSDT",
+        "BCHUSDT",
+        "BNBUSDT"
+      ],
+      "final_capital": 91.74553718158789,
+      "pnl": -8.254462818412108,
+      "wins": 62,
+      "total_trades": 139,
+      "win_rate": 0.4460431654676259,
+      "timestamp": "2026-02-21T08:15:23.167002"
+    },
+    {
+      "bag_id": 130,
+      "symbols": [
+        "DOGEUSDT",
+        "BCHUSDT",
+        "DOTUSDT"
+      ],
+      "final_capital": 108.73549350897986,
+      "pnl": 8.735493508979857,
+      "wins": 80,
+      "total_trades": 157,
+      "win_rate": 0.5095541401273885,
+      "timestamp": "2026-02-21T08:15:24.094317"
+    },
+    {
+      "bag_id": 131,
+      "symbols": [
+        "XRPUSDT",
+        "DOGEUSDT",
+        "BCHUSDT"
+      ],
+      "final_capital": 110.19946508211228,
+      "pnl": 10.199465082112283,
+      "wins": 76,
+      "total_trades": 149,
+      "win_rate": 0.5100671140939598,
+      "timestamp": "2026-02-21T08:15:24.999891"
+    },
+    {
+      "bag_id": 132,
+      "symbols": [
+        "ATOMUSDT",
+        "BTCUSDT",
+        "BNBUSDT"
+      ],
+      "final_capital": 82.52606602450568,
+      "pnl": -17.47393397549432,
+      "wins": 67,
+      "total_trades": 151,
+      "win_rate": 0.44370860927152317,
+      "timestamp": "2026-02-21T08:15:25.922637"
+    },
+    {
+      "bag_id": 133,
+      "symbols": [
+        "AVAXUSDT",
+        "BTCUSDT",
+        "MATICUSDT"
+      ],
+      "final_capital": 99.47430934406982,
+      "pnl": -0.5256906559301768,
+      "wins": 70,
+      "total_trades": 145,
+      "win_rate": 0.4827586206896552,
+      "timestamp": "2026-02-21T08:15:26.849399"
+    },
+    {
+      "bag_id": 134,
+      "symbols": [
+        "UNIUSDT",
+        "ETHUSDT",
+        "MATICUSDT"
+      ],
+      "final_capital": 91.27438252640376,
+      "pnl": -8.725617473596245,
+      "wins": 68,
+      "total_trades": 150,
+      "win_rate": 0.4533333333333333,
+      "timestamp": "2026-02-21T08:15:27.796565"
+    },
+    {
+      "bag_id": 135,
+      "symbols": [
+        "ETHUSDT",
+        "SOLUSDT",
+        "MATICUSDT"
+      ],
+      "final_capital": 82.82465871613523,
+      "pnl": -17.175341283864768,
+      "wins": 64,
+      "total_trades": 142,
+      "win_rate": 0.4507042253521127,
+      "timestamp": "2026-02-21T08:15:28.757929"
+    },
+    {
+      "bag_id": 136,
+      "symbols": [
+        "BNBUSDT",
+        "DOTUSDT",
+        "BTCUSDT"
+      ],
+      "final_capital": 89.09391407187563,
+      "pnl": -10.90608592812437,
+      "wins": 70,
+      "total_trades": 154,
+      "win_rate": 0.45454545454545453,
+      "timestamp": "2026-02-21T08:15:29.668346"
+    },
+    {
+      "bag_id": 137,
+      "symbols": [
+        "SOLUSDT",
+        "UNIUSDT",
+        "ADAUSDT"
+      ],
+      "final_capital": 72.32481802219374,
+      "pnl": -27.67518197780626,
+      "wins": 69,
+      "total_trades": 172,
+      "win_rate": 0.4011627906976744,
+      "timestamp": "2026-02-21T08:15:30.613968"
+    },
+    {
+      "bag_id": 138,
+      "symbols": [
+        "AVAXUSDT",
+        "BNBUSDT",
+        "BCHUSDT"
+      ],
+      "final_capital": 82.18365227505494,
+      "pnl": -17.81634772494506,
+      "wins": 70,
+      "total_trades": 160,
+      "win_rate": 0.4375,
+      "timestamp": "2026-02-21T08:15:31.536354"
+    },
+    {
+      "bag_id": 139,
+      "symbols": [
+        "SOLUSDT",
+        "DOTUSDT",
+        "LINKUSDT"
+      ],
+      "final_capital": 98.31805053041899,
+      "pnl": -1.6819494695810135,
+      "wins": 75,
+      "total_trades": 152,
+      "win_rate": 0.4934210526315789,
+      "timestamp": "2026-02-21T08:15:32.453119"
+    },
+    {
+      "bag_id": 140,
+      "symbols": [
+        "XRPUSDT",
+        "ATOMUSDT",
+        "MATICUSDT"
+      ],
+      "final_capital": 84.23629968837241,
+      "pnl": -15.763700311627588,
+      "wins": 65,
+      "total_trades": 148,
+      "win_rate": 0.4391891891891892,
+      "timestamp": "2026-02-21T08:15:33.366333"
+    },
+    {
+      "bag_id": 141,
+      "symbols": [
+        "ATOMUSDT",
+        "BCHUSDT",
+        "XRPUSDT"
+      ],
+      "final_capital": 113.17873483719148,
+      "pnl": 13.178734837191485,
+      "wins": 79,
+      "total_trades": 140,
+      "win_rate": 0.5642857142857143,
+      "timestamp": "2026-02-21T08:15:34.287722"
+    },
+    {
+      "bag_id": 142,
+      "symbols": [
+        "MATICUSDT",
+        "ATOMUSDT",
+        "DOGEUSDT"
+      ],
+      "final_capital": 108.22919203226533,
+      "pnl": 8.229192032265331,
+      "wins": 73,
+      "total_trades": 149,
+      "win_rate": 0.4899328859060403,
+      "timestamp": "2026-02-21T08:15:35.238333"
+    },
+    {
+      "bag_id": 143,
+      "symbols": [
+        "DOGEUSDT",
+        "BTCUSDT",
+        "BNBUSDT"
+      ],
+      "final_capital": 102.07453382214119,
+      "pnl": 2.0745338221411913,
+      "wins": 70,
+      "total_trades": 143,
+      "win_rate": 0.48951048951048953,
+      "timestamp": "2026-02-21T08:15:36.217376"
+    },
+    {
+      "bag_id": 144,
+      "symbols": [
+        "MATICUSDT",
+        "ADAUSDT",
+        "UNIUSDT"
+      ],
+      "final_capital": 110.33269931669916,
+      "pnl": 10.332699316699163,
+      "wins": 76,
+      "total_trades": 147,
+      "win_rate": 0.5170068027210885,
+      "timestamp": "2026-02-21T08:15:37.139036"
+    },
+    {
+      "bag_id": 145,
+      "symbols": [
+        "XRPUSDT",
+        "BNBUSDT",
+        "ATOMUSDT"
+      ],
+      "final_capital": 92.62563198563905,
+      "pnl": -7.374368014360954,
+      "wins": 73,
+      "total_trades": 149,
+      "win_rate": 0.4899328859060403,
+      "timestamp": "2026-02-21T08:15:38.064965"
+    },
+    {
+      "bag_id": 146,
+      "symbols": [
+        "AVAXUSDT",
+        "BNBUSDT",
+        "DOTUSDT"
+      ],
+      "final_capital": 109.39986793432696,
+      "pnl": 9.399867934326963,
+      "wins": 71,
+      "total_trades": 131,
+      "win_rate": 0.5419847328244275,
+      "timestamp": "2026-02-21T08:15:38.987439"
+    },
+    {
+      "bag_id": 147,
+      "symbols": [
+        "LTCUSDT",
+        "BNBUSDT",
+        "BTCUSDT"
+      ],
+      "final_capital": 96.34952792479815,
+      "pnl": -3.650472075201847,
+      "wins": 74,
+      "total_trades": 152,
+      "win_rate": 0.4868421052631579,
+      "timestamp": "2026-02-21T08:15:39.920915"
+    },
+    {
+      "bag_id": 148,
+      "symbols": [
+        "UNIUSDT",
+        "LINKUSDT",
+        "AVAXUSDT"
+      ],
+      "final_capital": 89.15436691019087,
+      "pnl": -10.845633089809127,
+      "wins": 60,
+      "total_trades": 136,
+      "win_rate": 0.4411764705882353,
+      "timestamp": "2026-02-21T08:15:41.033213"
+    },
+    {
+      "bag_id": 149,
+      "symbols": [
+        "BNBUSDT",
+        "DOGEUSDT",
+        "MATICUSDT"
+      ],
+      "final_capital": 92.83634466967247,
+      "pnl": -7.163655330327529,
+      "wins": 76,
+      "total_trades": 153,
+      "win_rate": 0.49673202614379086,
+      "timestamp": "2026-02-21T08:15:41.959987"
+    },
+    {
+      "bag_id": 150,
+      "symbols": [
+        "BNBUSDT",
+        "LTCUSDT",
+        "ETHUSDT"
+      ],
+      "final_capital": 81.71265270283027,
+      "pnl": -18.28734729716973,
+      "wins": 75,
+      "total_trades": 164,
+      "win_rate": 0.4573170731707317,
+      "timestamp": "2026-02-21T08:15:42.872595"
+    },
+    {
+      "bag_id": 151,
+      "symbols": [
+        "BCHUSDT",
+        "XRPUSDT",
+        "ETHUSDT"
+      ],
+      "final_capital": 83.8322260779426,
+      "pnl": -16.167773922057407,
+      "wins": 75,
+      "total_trades": 146,
+      "win_rate": 0.5136986301369864,
+      "timestamp": "2026-02-21T08:15:43.791967"
+    },
+    {
+      "bag_id": 152,
+      "symbols": [
+        "SOLUSDT",
+        "BNBUSDT",
+        "LINKUSDT"
+      ],
+      "final_capital": 81.92324671222987,
+      "pnl": -18.07675328777013,
+      "wins": 59,
+      "total_trades": 150,
+      "win_rate": 0.3933333333333333,
+      "timestamp": "2026-02-21T08:15:44.737813"
+    },
+    {
+      "bag_id": 153,
+      "symbols": [
+        "LINKUSDT",
+        "MATICUSDT",
+        "XRPUSDT"
+      ],
+      "final_capital": 108.93245435329847,
+      "pnl": 8.932454353298468,
+      "wins": 73,
+      "total_trades": 132,
+      "win_rate": 0.553030303030303,
+      "timestamp": "2026-02-21T08:15:45.641748"
+    },
+    {
+      "bag_id": 154,
+      "symbols": [
+        "UNIUSDT",
+        "BTCUSDT",
+        "ETHUSDT"
+      ],
+      "final_capital": 111.18219076953562,
+      "pnl": 11.182190769535623,
+      "wins": 70,
+      "total_trades": 144,
+      "win_rate": 0.4861111111111111,
+      "timestamp": "2026-02-21T08:15:46.591597"
+    },
+    {
+      "bag_id": 155,
+      "symbols": [
+        "UNIUSDT",
+        "LINKUSDT",
+        "DOTUSDT"
+      ],
+      "final_capital": 102.95076590210226,
+      "pnl": 2.950765902102262,
+      "wins": 81,
+      "total_trades": 149,
+      "win_rate": 0.5436241610738255,
+      "timestamp": "2026-02-21T08:15:47.521551"
+    },
+    {
+      "bag_id": 156,
+      "symbols": [
+        "BNBUSDT",
+        "MATICUSDT",
+        "DOTUSDT"
+      ],
+      "final_capital": 96.39380535191435,
+      "pnl": -3.6061946480856477,
+      "wins": 75,
+      "total_trades": 155,
+      "win_rate": 0.4838709677419355,
+      "timestamp": "2026-02-21T08:15:48.449196"
+    },
+    {
+      "bag_id": 157,
+      "symbols": [
+        "BCHUSDT",
+        "AVAXUSDT",
+        "DOGEUSDT"
+      ],
+      "final_capital": 86.07188965118965,
+      "pnl": -13.92811034881035,
+      "wins": 75,
+      "total_trades": 151,
+      "win_rate": 0.4966887417218543,
+      "timestamp": "2026-02-21T08:15:49.369417"
+    },
+    {
+      "bag_id": 158,
+      "symbols": [
+        "BTCUSDT",
+        "BNBUSDT",
+        "ATOMUSDT"
+      ],
+      "final_capital": 103.27257834689209,
+      "pnl": 3.2725783468920895,
+      "wins": 81,
+      "total_trades": 153,
+      "win_rate": 0.5294117647058824,
+      "timestamp": "2026-02-21T08:15:50.310133"
+    },
+    {
+      "bag_id": 159,
+      "symbols": [
+        "SOLUSDT",
+        "ATOMUSDT",
+        "ETHUSDT"
+      ],
+      "final_capital": 85.84071539709412,
+      "pnl": -14.159284602905885,
+      "wins": 66,
+      "total_trades": 156,
+      "win_rate": 0.4230769230769231,
+      "timestamp": "2026-02-21T08:15:51.254355"
+    },
+    {
+      "bag_id": 160,
+      "symbols": [
+        "MATICUSDT",
+        "BNBUSDT",
+        "DOGEUSDT"
+      ],
+      "final_capital": 82.86222452750788,
+      "pnl": -17.137775472492123,
+      "wins": 61,
+      "total_trades": 141,
+      "win_rate": 0.4326241134751773,
+      "timestamp": "2026-02-21T08:15:52.260430"
+    },
+    {
+      "bag_id": 161,
+      "symbols": [
+        "LTCUSDT",
+        "DOTUSDT",
+        "DOGEUSDT"
+      ],
+      "final_capital": 80.1382100563353,
+      "pnl": -19.861789943664704,
+      "wins": 63,
+      "total_trades": 139,
+      "win_rate": 0.45323741007194246,
+      "timestamp": "2026-02-21T08:15:53.178688"
+    },
+    {
+      "bag_id": 162,
+      "symbols": [
+        "DOTUSDT",
+        "AVAXUSDT",
+        "MATICUSDT"
+      ],
+      "final_capital": 94.20286675245535,
+      "pnl": -5.79713324754465,
+      "wins": 74,
+      "total_trades": 150,
+      "win_rate": 0.49333333333333335,
+      "timestamp": "2026-02-21T08:15:54.125925"
+    },
+    {
+      "bag_id": 163,
+      "symbols": [
+        "ATOMUSDT",
+        "BCHUSDT",
+        "MATICUSDT"
+      ],
+      "final_capital": 89.11739841026072,
+      "pnl": -10.88260158973928,
+      "wins": 59,
+      "total_trades": 143,
+      "win_rate": 0.4125874125874126,
+      "timestamp": "2026-02-21T08:15:55.055334"
+    },
+    {
+      "bag_id": 164,
+      "symbols": [
+        "ADAUSDT",
+        "LINKUSDT",
+        "DOGEUSDT"
+      ],
+      "final_capital": 101.98046388194047,
+      "pnl": 1.9804638819404659,
+      "wins": 82,
+      "total_trades": 154,
+      "win_rate": 0.5324675324675324,
+      "timestamp": "2026-02-21T08:15:55.976146"
+    },
+    {
+      "bag_id": 165,
+      "symbols": [
+        "AVAXUSDT",
+        "UNIUSDT",
+        "DOGEUSDT"
+      ],
+      "final_capital": 98.6036781332543,
+      "pnl": -1.3963218667456943,
+      "wins": 72,
+      "total_trades": 147,
+      "win_rate": 0.4897959183673469,
+      "timestamp": "2026-02-21T08:15:56.915657"
+    },
+    {
+      "bag_id": 166,
+      "symbols": [
+        "LTCUSDT",
+        "DOTUSDT",
+        "BCHUSDT"
+      ],
+      "final_capital": 131.65882050112896,
+      "pnl": 31.658820501128957,
+      "wins": 71,
+      "total_trades": 138,
+      "win_rate": 0.5144927536231884,
+      "timestamp": "2026-02-21T08:15:57.847798"
+    },
+    {
+      "bag_id": 167,
+      "symbols": [
+        "SOLUSDT",
+        "BCHUSDT",
+        "XRPUSDT"
+      ],
+      "final_capital": 103.70324659044454,
+      "pnl": 3.703246590444536,
+      "wins": 79,
+      "total_trades": 150,
+      "win_rate": 0.5266666666666666,
+      "timestamp": "2026-02-21T08:15:58.799023"
+    },
+    {
+      "bag_id": 168,
+      "symbols": [
+        "SOLUSDT",
+        "BNBUSDT",
+        "LTCUSDT"
+      ],
+      "final_capital": 104.53432154913524,
+      "pnl": 4.534321549135242,
+      "wins": 88,
+      "total_trades": 158,
+      "win_rate": 0.5569620253164557,
+      "timestamp": "2026-02-21T08:15:59.751090"
+    },
+    {
+      "bag_id": 169,
+      "symbols": [
+        "DOGEUSDT",
+        "MATICUSDT",
+        "AVAXUSDT"
+      ],
+      "final_capital": 84.7182802783314,
+      "pnl": -15.281719721668594,
+      "wins": 72,
+      "total_trades": 149,
+      "win_rate": 0.48322147651006714,
+      "timestamp": "2026-02-21T08:16:00.721504"
+    },
+    {
+      "bag_id": 170,
+      "symbols": [
+        "ETHUSDT",
+        "BTCUSDT",
+        "MATICUSDT"
+      ],
+      "final_capital": 96.2940719731538,
+      "pnl": -3.7059280268461947,
+      "wins": 69,
+      "total_trades": 137,
+      "win_rate": 0.5036496350364964,
+      "timestamp": "2026-02-21T08:16:01.648874"
+    },
+    {
+      "bag_id": 171,
+      "symbols": [
+        "BNBUSDT",
+        "UNIUSDT",
+        "LINKUSDT"
+      ],
+      "final_capital": 100.47588361406267,
+      "pnl": 0.475883614062667,
+      "wins": 77,
+      "total_trades": 160,
+      "win_rate": 0.48125,
+      "timestamp": "2026-02-21T08:16:02.593341"
+    },
+    {
+      "bag_id": 172,
+      "symbols": [
+        "BCHUSDT",
+        "ADAUSDT",
+        "BTCUSDT"
+      ],
+      "final_capital": 76.4437348882878,
+      "pnl": -23.556265111712193,
+      "wins": 61,
+      "total_trades": 155,
+      "win_rate": 0.3935483870967742,
+      "timestamp": "2026-02-21T08:16:03.513900"
+    },
+    {
+      "bag_id": 173,
+      "symbols": [
+        "AVAXUSDT",
+        "LINKUSDT",
+        "DOGEUSDT"
+      ],
+      "final_capital": 107.98003410119657,
+      "pnl": 7.980034101196566,
+      "wins": 73,
+      "total_trades": 151,
+      "win_rate": 0.48344370860927155,
+      "timestamp": "2026-02-21T08:16:04.436973"
+    },
+    {
+      "bag_id": 174,
+      "symbols": [
+        "BNBUSDT",
+        "ATOMUSDT",
+        "UNIUSDT"
+      ],
+      "final_capital": 98.05169255064558,
+      "pnl": -1.9483074493544166,
+      "wins": 67,
+      "total_trades": 141,
+      "win_rate": 0.475177304964539,
+      "timestamp": "2026-02-21T08:16:05.375811"
+    },
+    {
+      "bag_id": 175,
+      "symbols": [
+        "AVAXUSDT",
+        "SOLUSDT",
+        "LTCUSDT"
+      ],
+      "final_capital": 115.99996617611879,
+      "pnl": 15.99996617611879,
+      "wins": 90,
+      "total_trades": 162,
+      "win_rate": 0.5555555555555556,
+      "timestamp": "2026-02-21T08:16:06.310303"
+    },
+    {
+      "bag_id": 176,
+      "symbols": [
+        "SOLUSDT",
+        "ETHUSDT",
+        "ATOMUSDT"
+      ],
+      "final_capital": 118.0595100164521,
+      "pnl": 18.059510016452094,
+      "wins": 83,
+      "total_trades": 146,
+      "win_rate": 0.5684931506849316,
+      "timestamp": "2026-02-21T08:16:07.267355"
+    },
+    {
+      "bag_id": 177,
+      "symbols": [
+        "BNBUSDT",
+        "LINKUSDT",
+        "BTCUSDT"
+      ],
+      "final_capital": 95.18568149419981,
+      "pnl": -4.814318505800188,
+      "wins": 77,
+      "total_trades": 157,
+      "win_rate": 0.49044585987261147,
+      "timestamp": "2026-02-21T08:16:08.246435"
+    },
+    {
+      "bag_id": 178,
+      "symbols": [
+        "LINKUSDT",
+        "BTCUSDT",
+        "BCHUSDT"
+      ],
+      "final_capital": 103.82048343631624,
+      "pnl": 3.8204834363162377,
+      "wins": 71,
+      "total_trades": 138,
+      "win_rate": 0.5144927536231884,
+      "timestamp": "2026-02-21T08:16:09.188608"
+    },
+    {
+      "bag_id": 179,
+      "symbols": [
+        "DOTUSDT",
+        "BCHUSDT",
+        "BTCUSDT"
+      ],
+      "final_capital": 109.1153194247933,
+      "pnl": 9.115319424793299,
+      "wins": 78,
+      "total_trades": 148,
+      "win_rate": 0.527027027027027,
+      "timestamp": "2026-02-21T08:16:10.126570"
+    },
+    {
+      "bag_id": 180,
+      "symbols": [
+        "LINKUSDT",
+        "SOLUSDT",
+        "BTCUSDT"
+      ],
+      "final_capital": 93.64698123560132,
+      "pnl": -6.3530187643986835,
+      "wins": 76,
+      "total_trades": 145,
+      "win_rate": 0.5241379310344828,
+      "timestamp": "2026-02-21T08:16:11.071719"
+    },
+    {
+      "bag_id": 181,
+      "symbols": [
+        "BTCUSDT",
+        "ATOMUSDT",
+        "UNIUSDT"
+      ],
+      "final_capital": 97.75523137539139,
+      "pnl": -2.2447686246086107,
+      "wins": 71,
+      "total_trades": 143,
+      "win_rate": 0.4965034965034965,
+      "timestamp": "2026-02-21T08:16:11.998825"
+    },
+    {
+      "bag_id": 182,
+      "symbols": [
+        "XRPUSDT",
+        "AVAXUSDT",
+        "ETHUSDT"
+      ],
+      "final_capital": 104.89072196422508,
+      "pnl": 4.890721964225079,
+      "wins": 77,
+      "total_trades": 145,
+      "win_rate": 0.5310344827586206,
+      "timestamp": "2026-02-21T08:16:12.939346"
+    },
+    {
+      "bag_id": 183,
+      "symbols": [
+        "DOTUSDT",
+        "LTCUSDT",
+        "LINKUSDT"
+      ],
+      "final_capital": 71.83167917675603,
+      "pnl": -28.168320823243974,
+      "wins": 63,
+      "total_trades": 158,
+      "win_rate": 0.3987341772151899,
+      "timestamp": "2026-02-21T08:16:13.873750"
+    },
+    {
+      "bag_id": 184,
+      "symbols": [
+        "ADAUSDT",
+        "DOGEUSDT",
+        "MATICUSDT"
+      ],
+      "final_capital": 98.75036736910059,
+      "pnl": -1.2496326308994128,
+      "wins": 73,
+      "total_trades": 140,
+      "win_rate": 0.5214285714285715,
+      "timestamp": "2026-02-21T08:16:14.825266"
+    },
+    {
+      "bag_id": 185,
+      "symbols": [
+        "XRPUSDT",
+        "ATOMUSDT",
+        "AVAXUSDT"
+      ],
+      "final_capital": 102.76485515385285,
+      "pnl": 2.7648551538528494,
+      "wins": 75,
+      "total_trades": 148,
+      "win_rate": 0.5067567567567568,
+      "timestamp": "2026-02-21T08:16:15.760147"
+    },
+    {
+      "bag_id": 186,
+      "symbols": [
+        "SOLUSDT",
+        "DOTUSDT",
+        "XRPUSDT"
+      ],
+      "final_capital": 111.77832136446013,
+      "pnl": 11.778321364460126,
+      "wins": 82,
+      "total_trades": 158,
+      "win_rate": 0.5189873417721519,
+      "timestamp": "2026-02-21T08:16:16.742697"
+    },
+    {
+      "bag_id": 187,
+      "symbols": [
+        "DOTUSDT",
+        "ATOMUSDT",
+        "ADAUSDT"
+      ],
+      "final_capital": 98.80290207609093,
+      "pnl": -1.1970979239090696,
+      "wins": 58,
+      "total_trades": 126,
+      "win_rate": 0.4603174603174603,
+      "timestamp": "2026-02-21T08:16:17.660848"
+    },
+    {
+      "bag_id": 188,
+      "symbols": [
+        "ATOMUSDT",
+        "MATICUSDT",
+        "LTCUSDT"
+      ],
+      "final_capital": 98.16657526020491,
+      "pnl": -1.8334247397950918,
+      "wins": 79,
+      "total_trades": 151,
+      "win_rate": 0.5231788079470199,
+      "timestamp": "2026-02-21T08:16:18.615641"
+    },
+    {
+      "bag_id": 189,
+      "symbols": [
+        "XRPUSDT",
+        "LINKUSDT",
+        "BCHUSDT"
+      ],
+      "final_capital": 83.65731441186949,
+      "pnl": -16.342685588130507,
+      "wins": 62,
+      "total_trades": 142,
+      "win_rate": 0.43661971830985913,
+      "timestamp": "2026-02-21T08:16:19.584215"
+    },
+    {
+      "bag_id": 190,
+      "symbols": [
+        "MATICUSDT",
+        "SOLUSDT",
+        "LINKUSDT"
+      ],
+      "final_capital": 87.69416843981493,
+      "pnl": -12.30583156018507,
+      "wins": 78,
+      "total_trades": 147,
+      "win_rate": 0.5306122448979592,
+      "timestamp": "2026-02-21T08:16:20.531826"
+    },
+    {
+      "bag_id": 191,
+      "symbols": [
+        "MATICUSDT",
+        "AVAXUSDT",
+        "SOLUSDT"
+      ],
+      "final_capital": 107.11681738086595,
+      "pnl": 7.116817380865953,
+      "wins": 83,
+      "total_trades": 163,
+      "win_rate": 0.50920245398773,
+      "timestamp": "2026-02-21T08:16:21.479690"
+    },
+    {
+      "bag_id": 192,
+      "symbols": [
+        "BNBUSDT",
+        "UNIUSDT",
+        "BCHUSDT"
+      ],
+      "final_capital": 90.82546415210057,
+      "pnl": -9.174535847899435,
+      "wins": 71,
+      "total_trades": 148,
+      "win_rate": 0.4797297297297297,
+      "timestamp": "2026-02-21T08:16:22.409229"
+    },
+    {
+      "bag_id": 193,
+      "symbols": [
+        "BNBUSDT",
+        "ETHUSDT",
+        "ATOMUSDT"
+      ],
+      "final_capital": 109.1554850575425,
+      "pnl": 9.155485057542506,
+      "wins": 67,
+      "total_trades": 133,
+      "win_rate": 0.5037593984962406,
+      "timestamp": "2026-02-21T08:16:23.360313"
+    },
+    {
+      "bag_id": 194,
+      "symbols": [
+        "BCHUSDT",
+        "DOTUSDT",
+        "XRPUSDT"
+      ],
+      "final_capital": 97.70511047080065,
+      "pnl": -2.2948895291993523,
+      "wins": 77,
+      "total_trades": 148,
+      "win_rate": 0.5202702702702703,
+      "timestamp": "2026-02-21T08:16:24.304592"
+    },
+    {
+      "bag_id": 195,
+      "symbols": [
+        "LINKUSDT",
+        "ATOMUSDT",
+        "XRPUSDT"
+      ],
+      "final_capital": 96.43490311612271,
+      "pnl": -3.5650968838772883,
+      "wins": 64,
+      "total_trades": 133,
+      "win_rate": 0.48120300751879697,
+      "timestamp": "2026-02-21T08:16:25.270277"
+    },
+    {
+      "bag_id": 196,
+      "symbols": [
+        "DOGEUSDT",
+        "UNIUSDT",
+        "XRPUSDT"
+      ],
+      "final_capital": 109.52051051363233,
+      "pnl": 9.520510513632331,
+      "wins": 85,
+      "total_trades": 158,
+      "win_rate": 0.5379746835443038,
+      "timestamp": "2026-02-21T08:16:26.190532"
+    },
+    {
+      "bag_id": 197,
+      "symbols": [
+        "BCHUSDT",
+        "DOTUSDT",
+        "AVAXUSDT"
+      ],
+      "final_capital": 83.03184032538319,
+      "pnl": -16.968159674616814,
+      "wins": 67,
+      "total_trades": 151,
+      "win_rate": 0.44370860927152317,
+      "timestamp": "2026-02-21T08:16:27.139767"
+    },
+    {
+      "bag_id": 198,
+      "symbols": [
+        "ETHUSDT",
+        "DOTUSDT",
+        "XRPUSDT"
+      ],
+      "final_capital": 105.17186343781174,
+      "pnl": 5.171863437811737,
+      "wins": 71,
+      "total_trades": 139,
+      "win_rate": 0.5107913669064749,
+      "timestamp": "2026-02-21T08:16:28.074530"
+    },
+    {
+      "bag_id": 199,
+      "symbols": [
+        "ETHUSDT",
+        "ATOMUSDT",
+        "UNIUSDT"
+      ],
+      "final_capital": 95.8502084841288,
+      "pnl": -4.1497915158712,
+      "wins": 64,
+      "total_trades": 151,
+      "win_rate": 0.423841059602649,
+      "timestamp": "2026-02-21T08:16:29.001599"
+    },
+    {
+      "bag_id": 200,
+      "symbols": [
+        "DOTUSDT",
+        "LTCUSDT",
+        "ADAUSDT"
+      ],
+      "final_capital": 120.2743319259356,
+      "pnl": 20.2743319259356,
+      "wins": 88,
+      "total_trades": 150,
+      "win_rate": 0.5866666666666667,
+      "timestamp": "2026-02-21T08:16:29.937266"
+    },
+    {
+      "bag_id": 201,
+      "symbols": [
+        "DOGEUSDT",
+        "DOTUSDT",
+        "LINKUSDT"
+      ],
+      "final_capital": 100.62422193257099,
+      "pnl": 0.6242219325709897,
+      "wins": 71,
+      "total_trades": 148,
+      "win_rate": 0.4797297297297297,
+      "timestamp": "2026-02-21T08:16:30.863794"
+    },
+    {
+      "bag_id": 202,
+      "symbols": [
+        "BCHUSDT",
+        "ADAUSDT",
+        "SOLUSDT"
+      ],
+      "final_capital": 91.32472653411679,
+      "pnl": -8.675273465883208,
+      "wins": 72,
+      "total_trades": 144,
+      "win_rate": 0.5,
+      "timestamp": "2026-02-21T08:16:31.810962"
+    },
+    {
+      "bag_id": 203,
+      "symbols": [
+        "LTCUSDT",
+        "BNBUSDT",
+        "AVAXUSDT"
+      ],
+      "final_capital": 94.27069832548774,
+      "pnl": -5.729301674512257,
+      "wins": 67,
+      "total_trades": 135,
+      "win_rate": 0.4962962962962963,
+      "timestamp": "2026-02-21T08:16:32.799801"
+    },
+    {
+      "bag_id": 204,
+      "symbols": [
+        "DOTUSDT",
+        "AVAXUSDT",
+        "UNIUSDT"
+      ],
+      "final_capital": 114.97954017331948,
+      "pnl": 14.979540173319478,
+      "wins": 81,
+      "total_trades": 148,
+      "win_rate": 0.5472972972972973,
+      "timestamp": "2026-02-21T08:16:33.725417"
+    },
+    {
+      "bag_id": 205,
+      "symbols": [
+        "ADAUSDT",
+        "UNIUSDT",
+        "ETHUSDT"
+      ],
+      "final_capital": 110.03339385747141,
+      "pnl": 10.03339385747141,
+      "wins": 73,
+      "total_trades": 133,
+      "win_rate": 0.5488721804511278,
+      "timestamp": "2026-02-21T08:16:34.684160"
+    },
+    {
+      "bag_id": 206,
+      "symbols": [
+        "BNBUSDT",
+        "AVAXUSDT",
+        "BTCUSDT"
+      ],
+      "final_capital": 93.39641874401012,
+      "pnl": -6.60358125598988,
+      "wins": 65,
+      "total_trades": 135,
+      "win_rate": 0.48148148148148145,
+      "timestamp": "2026-02-21T08:16:35.610748"
+    },
+    {
+      "bag_id": 207,
+      "symbols": [
+        "AVAXUSDT",
+        "LTCUSDT",
+        "XRPUSDT"
+      ],
+      "final_capital": 107.38761132089039,
+      "pnl": 7.387611320890386,
+      "wins": 77,
+      "total_trades": 147,
+      "win_rate": 0.5238095238095238,
+      "timestamp": "2026-02-21T08:16:36.529496"
+    },
+    {
+      "bag_id": 208,
+      "symbols": [
+        "ATOMUSDT",
+        "AVAXUSDT",
+        "DOTUSDT"
+      ],
+      "final_capital": 92.03526874204194,
+      "pnl": -7.964731257958064,
+      "wins": 69,
+      "total_trades": 138,
+      "win_rate": 0.5,
+      "timestamp": "2026-02-21T08:16:37.464580"
+    },
+    {
+      "bag_id": 209,
+      "symbols": [
+        "BNBUSDT",
+        "SOLUSDT",
+        "XRPUSDT"
+      ],
+      "final_capital": 83.64797966533038,
+      "pnl": -16.352020334669618,
+      "wins": 64,
+      "total_trades": 137,
+      "win_rate": 0.46715328467153283,
+      "timestamp": "2026-02-21T08:16:38.404828"
+    },
+    {
+      "bag_id": 210,
+      "symbols": [
+        "UNIUSDT",
+        "DOTUSDT",
+        "SOLUSDT"
+      ],
+      "final_capital": 94.71769642130167,
+      "pnl": -5.282303578698333,
+      "wins": 78,
+      "total_trades": 163,
+      "win_rate": 0.4785276073619632,
+      "timestamp": "2026-02-21T08:16:39.358181"
+    },
+    {
+      "bag_id": 211,
+      "symbols": [
+        "MATICUSDT",
+        "ADAUSDT",
+        "UNIUSDT"
+      ],
+      "final_capital": 91.2857282359402,
+      "pnl": -8.714271764059802,
+      "wins": 83,
+      "total_trades": 153,
+      "win_rate": 0.5424836601307189,
+      "timestamp": "2026-02-21T08:16:40.320935"
+    },
+    {
+      "bag_id": 212,
+      "symbols": [
+        "ATOMUSDT",
+        "BCHUSDT",
+        "LINKUSDT"
+      ],
+      "final_capital": 99.36056922941349,
+      "pnl": -0.6394307705865145,
+      "wins": 67,
+      "total_trades": 131,
+      "win_rate": 0.5114503816793893,
+      "timestamp": "2026-02-21T08:16:41.272493"
+    },
+    {
+      "bag_id": 213,
+      "symbols": [
+        "LINKUSDT",
+        "ATOMUSDT",
+        "LTCUSDT"
+      ],
+      "final_capital": 101.12561679103324,
+      "pnl": 1.125616791033238,
+      "wins": 74,
+      "total_trades": 145,
+      "win_rate": 0.5103448275862069,
+      "timestamp": "2026-02-21T08:16:42.202691"
+    },
+    {
+      "bag_id": 214,
+      "symbols": [
+        "ATOMUSDT",
+        "BCHUSDT",
+        "SOLUSDT"
+      ],
+      "final_capital": 109.53947028723115,
+      "pnl": 9.539470287231154,
+      "wins": 77,
+      "total_trades": 150,
+      "win_rate": 0.5133333333333333,
+      "timestamp": "2026-02-21T08:16:43.125638"
+    },
+    {
+      "bag_id": 215,
+      "symbols": [
+        "MATICUSDT",
+        "DOTUSDT",
+        "ATOMUSDT"
+      ],
+      "final_capital": 120.12888137802902,
+      "pnl": 20.12888137802902,
+      "wins": 79,
+      "total_trades": 143,
+      "win_rate": 0.5524475524475524,
+      "timestamp": "2026-02-21T08:16:44.046015"
+    },
+    {
+      "bag_id": 216,
+      "symbols": [
+        "LTCUSDT",
+        "BNBUSDT",
+        "ETHUSDT"
+      ],
+      "final_capital": 102.95739048932764,
+      "pnl": 2.9573904893276364,
+      "wins": 68,
+      "total_trades": 145,
+      "win_rate": 0.4689655172413793,
+      "timestamp": "2026-02-21T08:16:44.970732"
+    },
+    {
+      "bag_id": 217,
+      "symbols": [
+        "XRPUSDT",
+        "AVAXUSDT",
+        "UNIUSDT"
+      ],
+      "final_capital": 106.9985977171316,
+      "pnl": 6.998597717131602,
+      "wins": 66,
+      "total_trades": 150,
+      "win_rate": 0.44,
+      "timestamp": "2026-02-21T08:16:45.901184"
+    },
+    {
+      "bag_id": 218,
+      "symbols": [
+        "BCHUSDT",
+        "ATOMUSDT",
+        "BTCUSDT"
+      ],
+      "final_capital": 100.13178782157237,
+      "pnl": 0.1317878215723738,
+      "wins": 68,
+      "total_trades": 133,
+      "win_rate": 0.5112781954887218,
+      "timestamp": "2026-02-21T08:16:46.849475"
+    },
+    {
+      "bag_id": 219,
+      "symbols": [
+        "ADAUSDT",
+        "LINKUSDT",
+        "AVAXUSDT"
+      ],
+      "final_capital": 96.1272585792011,
+      "pnl": -3.872741420798903,
+      "wins": 70,
+      "total_trades": 151,
+      "win_rate": 0.46357615894039733,
+      "timestamp": "2026-02-21T08:16:47.814739"
+    },
+    {
+      "bag_id": 220,
+      "symbols": [
+        "MATICUSDT",
+        "UNIUSDT",
+        "ETHUSDT"
+      ],
+      "final_capital": 91.64291695530066,
+      "pnl": -8.357083044699337,
+      "wins": 73,
+      "total_trades": 155,
+      "win_rate": 0.47096774193548385,
+      "timestamp": "2026-02-21T08:16:48.801435"
+    },
+    {
+      "bag_id": 221,
+      "symbols": [
+        "LINKUSDT",
+        "ETHUSDT",
+        "DOTUSDT"
+      ],
+      "final_capital": 100.08410951426524,
+      "pnl": 0.08410951426523638,
+      "wins": 85,
+      "total_trades": 152,
+      "win_rate": 0.5592105263157895,
+      "timestamp": "2026-02-21T08:16:49.742162"
+    },
+    {
+      "bag_id": 222,
+      "symbols": [
+        "ETHUSDT",
+        "LINKUSDT",
+        "ATOMUSDT"
+      ],
+      "final_capital": 116.8294618314211,
+      "pnl": 16.8294618314211,
+      "wins": 76,
+      "total_trades": 145,
+      "win_rate": 0.5241379310344828,
+      "timestamp": "2026-02-21T08:16:50.690740"
+    },
+    {
+      "bag_id": 223,
+      "symbols": [
+        "UNIUSDT",
+        "ATOMUSDT",
+        "XRPUSDT"
+      ],
+      "final_capital": 93.81083478925866,
+      "pnl": -6.189165210741336,
+      "wins": 69,
+      "total_trades": 145,
+      "win_rate": 0.47586206896551725,
+      "timestamp": "2026-02-21T08:16:51.623328"
+    },
+    {
+      "bag_id": 224,
+      "symbols": [
+        "MATICUSDT",
+        "ETHUSDT",
+        "DOTUSDT"
+      ],
+      "final_capital": 108.08067399249083,
+      "pnl": 8.08067399249083,
+      "wins": 79,
+      "total_trades": 138,
+      "win_rate": 0.572463768115942,
+      "timestamp": "2026-02-21T08:16:52.566981"
+    },
+    {
+      "bag_id": 225,
+      "symbols": [
+        "BCHUSDT",
+        "DOGEUSDT",
+        "LINKUSDT"
+      ],
+      "final_capital": 88.45226166204117,
+      "pnl": -11.547738337958833,
+      "wins": 59,
+      "total_trades": 137,
+      "win_rate": 0.4306569343065693,
+      "timestamp": "2026-02-21T08:16:53.509849"
+    },
+    {
+      "bag_id": 226,
+      "symbols": [
+        "SOLUSDT",
+        "DOGEUSDT",
+        "UNIUSDT"
+      ],
+      "final_capital": 110.50119972414932,
+      "pnl": 10.501199724149316,
+      "wins": 78,
+      "total_trades": 159,
+      "win_rate": 0.49056603773584906,
+      "timestamp": "2026-02-21T08:16:54.427766"
+    },
+    {
+      "bag_id": 227,
+      "symbols": [
+        "ADAUSDT",
+        "UNIUSDT",
+        "AVAXUSDT"
+      ],
+      "final_capital": 100.15802146231748,
+      "pnl": 0.15802146231747827,
+      "wins": 74,
+      "total_trades": 148,
+      "win_rate": 0.5,
+      "timestamp": "2026-02-21T08:16:55.362901"
+    },
+    {
+      "bag_id": 228,
+      "symbols": [
+        "BCHUSDT",
+        "DOGEUSDT",
+        "ETHUSDT"
+      ],
+      "final_capital": 95.80651375246859,
+      "pnl": -4.1934862475314105,
+      "wins": 81,
+      "total_trades": 161,
+      "win_rate": 0.5031055900621118,
+      "timestamp": "2026-02-21T08:16:56.355957"
+    },
+    {
+      "bag_id": 229,
+      "symbols": [
+        "XRPUSDT",
+        "AVAXUSDT",
+        "BCHUSDT"
+      ],
+      "final_capital": 101.93918702774494,
+      "pnl": 1.9391870277449357,
+      "wins": 77,
+      "total_trades": 149,
+      "win_rate": 0.5167785234899329,
+      "timestamp": "2026-02-21T08:16:57.278328"
+    },
+    {
+      "bag_id": 230,
+      "symbols": [
+        "ATOMUSDT",
+        "ADAUSDT",
+        "DOTUSDT"
+      ],
+      "final_capital": 97.81827047411838,
+      "pnl": -2.1817295258816216,
+      "wins": 70,
+      "total_trades": 145,
+      "win_rate": 0.4827586206896552,
+      "timestamp": "2026-02-21T08:16:58.241502"
+    },
+    {
+      "bag_id": 231,
+      "symbols": [
+        "ADAUSDT",
+        "BNBUSDT",
+        "LTCUSDT"
+      ],
+      "final_capital": 90.74756580051299,
+      "pnl": -9.252434199487013,
+      "wins": 63,
+      "total_trades": 142,
+      "win_rate": 0.44366197183098594,
+      "timestamp": "2026-02-21T08:16:59.164044"
+    },
+    {
+      "bag_id": 232,
+      "symbols": [
+        "ATOMUSDT",
+        "DOGEUSDT",
+        "MATICUSDT"
+      ],
+      "final_capital": 104.85599784397931,
+      "pnl": 4.85599784397931,
+      "wins": 86,
+      "total_trades": 162,
+      "win_rate": 0.5308641975308642,
+      "timestamp": "2026-02-21T08:17:00.103279"
+    },
+    {
+      "bag_id": 233,
+      "symbols": [
+        "MATICUSDT",
+        "BTCUSDT",
+        "SOLUSDT"
+      ],
+      "final_capital": 98.90779627283615,
+      "pnl": -1.0922037271638487,
+      "wins": 81,
+      "total_trades": 166,
+      "win_rate": 0.4879518072289157,
+      "timestamp": "2026-02-21T08:17:01.043783"
+    },
+    {
+      "bag_id": 234,
+      "symbols": [
+        "UNIUSDT",
+        "BCHUSDT",
+        "LTCUSDT"
+      ],
+      "final_capital": 112.65259007019519,
+      "pnl": 12.652590070195188,
+      "wins": 83,
+      "total_trades": 154,
+      "win_rate": 0.538961038961039,
+      "timestamp": "2026-02-21T08:17:01.995860"
+    },
+    {
+      "bag_id": 235,
+      "symbols": [
+        "BTCUSDT",
+        "LTCUSDT",
+        "MATICUSDT"
+      ],
+      "final_capital": 113.15851603842627,
+      "pnl": 13.15851603842627,
+      "wins": 74,
+      "total_trades": 139,
+      "win_rate": 0.5323741007194245,
+      "timestamp": "2026-02-21T08:17:02.935885"
+    },
+    {
+      "bag_id": 236,
+      "symbols": [
+        "BCHUSDT",
+        "BNBUSDT",
+        "BTCUSDT"
+      ],
+      "final_capital": 91.04369668253734,
+      "pnl": -8.956303317462655,
+      "wins": 59,
+      "total_trades": 138,
+      "win_rate": 0.427536231884058,
+      "timestamp": "2026-02-21T08:17:03.879949"
+    },
+    {
+      "bag_id": 237,
+      "symbols": [
+        "UNIUSDT",
+        "AVAXUSDT",
+        "ETHUSDT"
+      ],
+      "final_capital": 99.56811108974317,
+      "pnl": -0.4318889102568306,
+      "wins": 88,
+      "total_trades": 173,
+      "win_rate": 0.5086705202312138,
+      "timestamp": "2026-02-21T08:17:04.885333"
+    },
+    {
+      "bag_id": 238,
+      "symbols": [
+        "BCHUSDT",
+        "AVAXUSDT",
+        "SOLUSDT"
+      ],
+      "final_capital": 93.47913225002418,
+      "pnl": -6.520867749975821,
+      "wins": 68,
+      "total_trades": 148,
+      "win_rate": 0.4594594594594595,
+      "timestamp": "2026-02-21T08:17:05.825441"
+    },
+    {
+      "bag_id": 239,
+      "symbols": [
+        "AVAXUSDT",
+        "XRPUSDT",
+        "BTCUSDT"
+      ],
+      "final_capital": 103.59478358540102,
+      "pnl": 3.594783585401018,
+      "wins": 76,
+      "total_trades": 146,
+      "win_rate": 0.5205479452054794,
+      "timestamp": "2026-02-21T08:17:06.798968"
+    },
+    {
+      "bag_id": 240,
+      "symbols": [
+        "ETHUSDT",
+        "BNBUSDT",
+        "DOTUSDT"
+      ],
+      "final_capital": 97.01348007971859,
+      "pnl": -2.9865199202814097,
+      "wins": 72,
+      "total_trades": 147,
+      "win_rate": 0.4897959183673469,
+      "timestamp": "2026-02-21T08:17:07.740716"
+    },
+    {
+      "bag_id": 241,
+      "symbols": [
+        "ADAUSDT",
+        "MATICUSDT",
+        "DOGEUSDT"
+      ],
+      "final_capital": 101.18854990282051,
+      "pnl": 1.1885499028205118,
+      "wins": 72,
+      "total_trades": 135,
+      "win_rate": 0.5333333333333333,
+      "timestamp": "2026-02-21T08:17:08.695704"
+    },
+    {
+      "bag_id": 242,
+      "symbols": [
+        "ATOMUSDT",
+        "BTCUSDT",
+        "ADAUSDT"
+      ],
+      "final_capital": 79.33674476801718,
+      "pnl": -20.663255231982816,
+      "wins": 71,
+      "total_trades": 164,
+      "win_rate": 0.4329268292682927,
+      "timestamp": "2026-02-21T08:17:09.634413"
+    },
+    {
+      "bag_id": 243,
+      "symbols": [
+        "ATOMUSDT",
+        "BTCUSDT",
+        "DOTUSDT"
+      ],
+      "final_capital": 119.2534350433078,
+      "pnl": 19.253435043307803,
+      "wins": 88,
+      "total_trades": 156,
+      "win_rate": 0.5641025641025641,
+      "timestamp": "2026-02-21T08:17:10.615595"
+    },
+    {
+      "bag_id": 244,
+      "symbols": [
+        "LTCUSDT",
+        "XRPUSDT",
+        "ETHUSDT"
+      ],
+      "final_capital": 105.67157986895776,
+      "pnl": 5.671579868957764,
+      "wins": 85,
+      "total_trades": 164,
+      "win_rate": 0.5182926829268293,
+      "timestamp": "2026-02-21T08:17:11.591167"
+    },
+    {
+      "bag_id": 245,
+      "symbols": [
+        "MATICUSDT",
+        "BTCUSDT",
+        "BNBUSDT"
+      ],
+      "final_capital": 102.90865011855017,
+      "pnl": 2.9086501185501703,
+      "wins": 79,
+      "total_trades": 144,
+      "win_rate": 0.5486111111111112,
+      "timestamp": "2026-02-21T08:17:12.548320"
+    },
+    {
+      "bag_id": 246,
+      "symbols": [
+        "DOGEUSDT",
+        "ADAUSDT",
+        "LTCUSDT"
+      ],
+      "final_capital": 85.81591164966981,
+      "pnl": -14.184088350330185,
+      "wins": 61,
+      "total_trades": 141,
+      "win_rate": 0.4326241134751773,
+      "timestamp": "2026-02-21T08:17:13.526670"
+    },
+    {
+      "bag_id": 247,
+      "symbols": [
+        "ADAUSDT",
+        "XRPUSDT",
+        "BCHUSDT"
+      ],
+      "final_capital": 90.12900134392115,
+      "pnl": -9.870998656078854,
+      "wins": 62,
+      "total_trades": 140,
+      "win_rate": 0.44285714285714284,
+      "timestamp": "2026-02-21T08:17:14.503165"
+    },
+    {
+      "bag_id": 248,
+      "symbols": [
+        "SOLUSDT",
+        "BTCUSDT",
+        "LTCUSDT"
+      ],
+      "final_capital": 91.91514359191054,
+      "pnl": -8.084856408089465,
+      "wins": 74,
+      "total_trades": 154,
+      "win_rate": 0.4805194805194805,
+      "timestamp": "2026-02-21T08:17:15.489069"
+    },
+    {
+      "bag_id": 249,
+      "symbols": [
+        "LINKUSDT",
+        "MATICUSDT",
+        "LTCUSDT"
+      ],
+      "final_capital": 108.26953180514208,
+      "pnl": 8.26953180514208,
+      "wins": 74,
+      "total_trades": 135,
+      "win_rate": 0.5481481481481482,
+      "timestamp": "2026-02-21T08:17:16.427564"
+    }
+  ],
+  "timestamp": "2026-02-21T08:17:16.430691"
+}
