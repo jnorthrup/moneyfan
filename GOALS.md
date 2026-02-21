@@ -49,6 +49,24 @@ Stochastic training is superior:
 
 No fixed anything. Every epoch samples fresh across all four dimensions.
 
+**Performance-Extremes Replay (Breadth + Density Balance)**
+- Track every bag’s normalized PNL / Sharpe / max-DD in a rolling histogram.
+- Replay probability weighted by extremity (|z-score| of performance).
+- **Good extremes** (top 5-10%): mild pandas perturbation → densify profitable patterns and learn “how to win bigger”.
+- **Bad extremes** (bottom 5-10%): stronger augmentation + higher stochastic variation → build survival skills and regime robustness.
+- Mix ratio in every epoch: 60% pure stochastic + 20% win-replay + 20% loss-replay (adjustable via webconsole).
+- Always apply fresh resampling across all four dimensions on replayed bags.
+- Track “familiar-ground generalization” metric: Δ on replayed bags vs fresh stochastic bags.
+
+**Sub-Bag Outliers: Extent & Frame Replays (Stochastic Optimizer Replays)**
+To guarantee the model masters the hardest edges of the market, we track outliers at a granular level:
+- **Extent Outlier Criterion**: Any sequence (extent) where the forward-pass loss or draw-down exceeds a rolling `mean + 2*sigma` (z-score > 2.0).
+- **Frame Outlier Criterion**: Within an extent, individual candles (frames) with prediction errors > 3-sigma are flagged as critical failures.
+- **Outlier Input Signal**: When an outlier is detected, the system explicitly flags it, isolates the frames, and presents an *outlier input signal* (a perturbation mask or attention spike) to force the network to focus on what it missed, effectively signaling "this is where the model fails."
+- **Stochastic Optimizer Replays**: When an extent crosses the outlier criterion, it triggers a dynamic loop of 1-5 extra stochastic optimizer steps on that exact same extent. In each replay step, we apply stochastic perturbations (noise injection, missing frame masking) to force the network to adapt its internal representations and generalize past its failure point.
+
+This explicitly prevents pet-training bias and guarantees the model improves both density (win size) and breadth (regime coverage) simultaneously.
+
 ### 2. Codecs (The 24 Experts)
 
 Each codec is an independent model/strategy trained on instrument-metrics and frozen for HRM input.  

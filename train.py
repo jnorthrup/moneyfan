@@ -63,6 +63,13 @@ class TrainingConfig:
     epochs: int = 3
     learning_rate: float = 1e-4
     cache_size: int = 1000
+    replay_good_weight: float = 0.20
+    replay_bad_weight: float = 0.20
+    perturbation_std_good: float = 0.15
+    perturbation_std_bad: float = 0.35
+    extent_outlier_z: float = 2.0
+    frame_outlier_z: float = 3.0
+    max_optimizer_replays: int = 3
 
 
 class DataCache:
@@ -192,6 +199,11 @@ class UnifiedTrainer:
         wins = 0
         total_trades = 0
         
+        # Track sequence losses for extent outlier detection
+        seq_losses = []
+        outlier_extents_count = 0
+        optimizer_replays_count = 0
+        
         for epoch in range(self.config.epochs):
             seq_len = np.random.randint(self.config.min_seq_len, self.config.max_seq_len)
             
@@ -206,6 +218,31 @@ class UnifiedTrainer:
                 try:
                     batch_mx = mx.array(batch)
                     loss = trainer.pretrain_step(batch_mx)
+                    loss_val = float(np.array(loss))
+                    seq_losses.append(loss_val)
+                    
+                    # Extent Outlier Detection
+                    if len(seq_losses) > 10:
+                        mean_loss = np.mean(seq_losses[-50:])
+                        std_loss = np.std(seq_losses[-50:]) + 1e-8
+                        z_loss = (loss_val - mean_loss) / std_loss
+                        
+                        # Apply Stochastic Optimizer Replays for Outlier Extents
+                        if z_loss > self.config.extent_outlier_z:
+                            outlier_extents_count += 1
+                            num_replays = np.random.randint(1, self.config.max_optimizer_replays + 1)
+                            
+                            for _replay in range(num_replays):
+                                optimizer_replays_count += 1
+                                # Presents an outlier input signal to improve upon (via noise/masking perturbation)
+                                noise_level = min(0.1 * z_loss, 0.5)
+                                outlyer_signal_noise = np.random.randn(*batch.shape) * noise_level
+                                # Dropout/missing frame simulation
+                                mask = (np.random.random(batch.shape) > 0.1).astype(np.float32)
+                                
+                                noisy_batch = (batch + outlyer_signal_noise) * mask
+                                noisy_batch_mx = mx.array(noisy_batch)
+                                trainer.pretrain_step(noisy_batch_mx)
                     
                     if np.random.random() > 0.5:
                         position = np.sign(np.random.randn())
@@ -236,7 +273,9 @@ class UnifiedTrainer:
                     'symbols': symbols,
                     'winning_agent': "None (Real execution pending)",
                     'hrm_score': 0.0,
-                    'predictor_loss': 0.0
+                    'predictor_loss': float(np.mean(seq_losses[-10:])) if seq_losses else 0.0,
+                    'outlier_extents': outlier_extents_count,
+                    'optimizer_replays': optimizer_replays_count
                 }))
         
         result = {
@@ -249,7 +288,9 @@ class UnifiedTrainer:
             'win_rate': wins / max(total_trades, 1),
             'winning_agent': "None (Real execution pending)",
             'hrm_score': 0.0,
-            'predictor_loss': 0.0,
+            'predictor_loss': float(np.mean(seq_losses)) if seq_losses else 0.0,
+            'outlier_extents': outlier_extents_count,
+            'optimizer_replays': optimizer_replays_count,
             'timestamp': datetime.now().isoformat()
         }
         
@@ -269,10 +310,39 @@ class UnifiedTrainer:
             if not self.running:
                 break
             
-            np.random.seed(bag_id)
-            bag_symbols = list(np.random.choice(all_symbols, size=min(self.config.bag_size, len(all_symbols)), replace=False))
+            # Stochastic extreme replay logic
+            do_replay = False
+            replay_std = 0.0
+            if len(self.results) > 5:
+                pnls = [r.get('pnl', 0.0) for r in self.results]
+                mean_pnl = np.nanmean(pnls)
+                std_pnl = np.nanstd(pnls) + 1e-8
+                
+                # Check previous bag's z-score
+                last_result = self.results[-1]
+                z_score = (last_result.get('pnl', 0.0) - mean_pnl) / std_pnl
+                last_result['z_score'] = z_score
+                
+                if z_score > 1.8 and np.random.random() < self.config.replay_good_weight:
+                    do_replay = True
+                    replay_std = self.config.perturbation_std_good
+                    bag_symbols = last_result['symbols'] # simplistic replay
+                    print(f"Replaying good bag {last_result['bag_id']} (z={z_score:.2f})")
+                elif z_score < -1.8 and np.random.random() < self.config.replay_bad_weight:
+                    do_replay = True
+                    replay_std = self.config.perturbation_std_bad
+                    bag_symbols = last_result['symbols']
+                    print(f"Replaying bad bag {last_result['bag_id']} (z={z_score:.2f})")
+
+            if not do_replay:
+                np.random.seed(bag_id)
+                bag_symbols = list(np.random.choice(all_symbols, size=min(self.config.bag_size, len(all_symbols)), replace=False))
             
             result = self.train_bag(bag_id, bag_symbols)
+            if do_replay:
+                result['is_replay'] = True
+                result['replay_std'] = replay_std
+            
             self.results.append(result)
             self.event_queue.put(('bag_complete', result))
             
