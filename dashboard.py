@@ -244,8 +244,8 @@ def main():
         
         if not df.empty:
             if 'breadth_score' not in df.columns:
-                # Add a mock breadth score for the visualization if it's not provided by the trainer
-                df['breadth_score'] = np.clip(0.5 + np.random.randn(len(df)) * 0.1 + (df.index / len(df)) * 0.4, 0, 1)
+                # Fallback to zero if the trainer does not compute breadth
+                df['breadth_score'] = 0.0
 
             fig_breadth = go.Figure()
             fig_breadth.add_trace(go.Scatter(
