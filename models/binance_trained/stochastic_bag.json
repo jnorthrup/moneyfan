@@ -1,0 +1,50 @@
+{
+  "bag_pairs": [
+    "ARBUSDT",
+    "BCHUSDT",
+    "LINKUSDT",
+    "JUPUSDT",
+    "RUNEUSDT",
+    "DOGEUSDT",
+    "ADAUSDT",
+    "ATOMUSDT",
+    "UNIUSDT",
+    "ETCUSDT",
+    "MATICUSDT",
+    "PYTHUSDT",
+    "PEPEUSDT",
+    "SEIUSDT",
+    "FILUSDT",
+    "WIFUSDT",
+    "ETHUSDT",
+    "LTCUSDT",
+    "OPUSDT",
+    "SOLUSDT",
+    "APTUSDT",
+    "BONKUSDT",
+    "XRPUSDT",
+    "TIAUSDT",
+    "AVAXUSDT",
+    "DOTUSDT",
+    "INJUSDT",
+    "BTCUSDT",
+    "BNBUSDT",
+    "SUIUSDT"
+  ],
+  "config": {
+    "binance_timeframe": "5m",
+    "binance_start_date": "2023-01-01",
+    "binance_end_date": "2023-01-15",
+    "bag_size": 30,
+    "min_seq_len": 64,
+    "max_seq_len": 256,
+    "seed": 42,
+    "epochs": 2,
+    "n_predictors": 3,
+    "predictor_types": [
+      "transformer_5m",
+      "xgboost_15m",
+      "lightgbm_1h"
+    ]
+  }
+}
