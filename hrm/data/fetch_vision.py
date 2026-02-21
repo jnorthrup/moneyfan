@@ -49,6 +49,8 @@ def download_and_ingest(symbol: str, timeframe: str, start_year: int, end_year: 
     """
     import tempfile
     import shutil
+    import platform
+    import sys
     
     out_path = Path(data_dir)
     out_path.mkdir(parents=True, exist_ok=True)
@@ -66,9 +68,16 @@ def download_and_ingest(symbol: str, timeframe: str, start_year: int, end_year: 
 
     current_year = datetime.now().year
     end_year = min(end_year, current_year)
+    
+    # Use macOS private cache if applicable, otherwise POSIX tmp
+    if platform.system() == "Darwin":
+        cache_base = Path.home() / "Library" / "Caches" / "moneyfan_vision"
+        cache_base.mkdir(parents=True, exist_ok=True)
+        tmpdir_context = tempfile.TemporaryDirectory(dir=cache_base)
+    else:
+        tmpdir_context = tempfile.TemporaryDirectory(prefix="moneyfan_vision_")
 
-    # Use a POSIX tmp cache directory for the atomic assembly
-    with tempfile.TemporaryDirectory(prefix="moneyfan_vision_") as tmpdir:
+    with tmpdir_context as tmpdir:
         tmp_path = Path(tmpdir)
         
         # If we already have a dataset, copy it to tmp for isolated operations
