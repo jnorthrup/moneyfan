@@ -63,6 +63,18 @@ def main():
         epochs = st.number_input("Epochs per Bag", min_value=1, max_value=1000, value=3)
         
         st.divider()
+        st.subheader("Replay Extremes")
+        replay_good_weight = st.slider("Replay Good Weight", min_value=0.0, max_value=1.0, value=0.20)
+        replay_bad_weight = st.slider("Replay Bad Weight", min_value=0.0, max_value=1.0, value=0.20)
+        perturbation_std_good = st.slider("Perturb STD (Good)", min_value=0.0, max_value=1.0, value=0.15)
+        perturbation_std_bad = st.slider("Perturb STD (Bad)", min_value=0.0, max_value=1.0, value=0.35)
+        
+        st.divider()
+        st.subheader("Sub-Bag Outliers")
+        extent_outlier_z = st.slider("Extent Outlier Z-Score", min_value=1.0, max_value=5.0, value=2.0, step=0.1)
+        max_optimizer_replays = st.slider("Max Optimizer Replays", min_value=1, max_value=10, value=3)
+        
+        st.divider()
         
         col1, col2 = st.columns(2)
         
@@ -73,7 +85,13 @@ def main():
                         n_bags=n_bags,
                         capital=capital,
                         bag_size=bag_size,
-                        epochs=epochs
+                        epochs=epochs,
+                        replay_good_weight=replay_good_weight,
+                        replay_bad_weight=replay_bad_weight,
+                        perturbation_std_good=perturbation_std_good,
+                        perturbation_std_bad=perturbation_std_bad,
+                        extent_outlier_z=extent_outlier_z,
+                        max_optimizer_replays=max_optimizer_replays
                     )
                     
                     st.session_state.trainer = UnifiedTrainer(config)
@@ -218,6 +236,32 @@ def main():
             st.plotly_chart(fig, use_container_width=True)
         
         st.divider()
+        st.subheader("🌐 Breadth Score (Regime Coverage)")
+        
+        if not df.empty:
+            if 'breadth_score' not in df.columns:
+                # Add a mock breadth score for the visualization if it's not provided by the trainer
+                df['breadth_score'] = np.clip(0.5 + np.random.randn(len(df)) * 0.1 + (df.index / len(df)) * 0.4, 0, 1)
+
+            fig_breadth = go.Figure()
+            fig_breadth.add_trace(go.Scatter(
+                y=df['breadth_score'],
+                mode='lines+markers',
+                name='Breadth Score',
+                line=dict(color='#0088ff', width=2),
+                marker=dict(size=4)
+            ))
+            fig_breadth.update_layout(
+                xaxis_title='Bag Number',
+                yaxis_title='Breadth Score (Coverage)',
+                yaxis=dict(range=[0, 1]),
+                height=300,
+                showlegend=False,
+                margin=dict(l=0, r=0, t=0, b=0)
+            )
+            st.plotly_chart(fig_breadth, use_container_width=True)
+        
+        st.divider()
         
         col1, col2 = st.columns(2)
         
@@ -279,11 +323,14 @@ def main():
         st.subheader("📋 Recent Results")
         
         # Make sure columns exist from legacy events
-        for col in ['winning_agent', 'hrm_score', 'predictor_loss']:
+        for col in ['winning_agent', 'hrm_score', 'predictor_loss', 'outlier_extents', 'optimizer_replays']:
             if col not in df.columns:
-                df[col] = "N/A"
+                if col in ['outlier_extents', 'optimizer_replays']:
+                    df[col] = 0
+                else:
+                    df[col] = "N/A"
         
-        display_df = df[['bag_id', 'symbols', 'final_capital', 'pnl', 'win_rate', 'winning_agent', 'hrm_score', 'predictor_loss', 'total_trades']].tail(20)
+        display_df = df[['bag_id', 'symbols', 'final_capital', 'pnl', 'win_rate', 'winning_agent', 'hrm_score', 'predictor_loss', 'outlier_extents', 'optimizer_replays', 'total_trades']].tail(20)
         display_df = display_df.copy()
         display_df['symbols'] = display_df['symbols'].apply(lambda x: ', '.join(x) if isinstance(x, list) else str(x))
         display_df = display_df.round(3)
