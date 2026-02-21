@@ -24,7 +24,12 @@ Democratizing prop-shop level alpha generation.
 
 ## Key Components & Architecture
 
-### 1. Stochastic Epoch Basket
+### The Draw-Thru Architecture
+It is important to emphasize that this system operates on a direct "draw-thru" architecture. Data flows linearly and efficiently:
+**`data -> {duck->cache,API} -> pandas`**
+This eliminates unnecessary middle-layer abstractions and relies on DuckDB natively streaming into Pandas DataFrames for rapid tensor conversion.
+
+### 1. Stochastic Epoch Episode
 
 **Why Stochastic Training (Not Conventional ML)**
 

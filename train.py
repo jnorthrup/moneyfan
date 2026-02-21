@@ -5,14 +5,14 @@ EpochBasket Training System
 
 Single pipeline: Source → DuckDB → Pandas → CandleCache → EpochBasketTrainer
 
-Each epoch basket is a stochastic multi-pair OHLCV sampling window:
-  - pair_width    : number of coin pairs per basket
-  - bar_sequences_per_basket : number of sliding OHLCV bar windows drawn per basket
+Each epoch episode is a stochastic multi-pair OHLCV sampling window:
+  - pair_width    : number of coin pairs per episode
+  - bar_sequences_per_episode : number of sliding OHLCV bar windows drawn per episode
   - min_bar_window / max_bar_window : stochastic bar window length (in candles)
   - candles_per_extent : raw candle depth per extent from the data pipeline
 
 Usage:
-    python train.py --baskets 500 --notional 100
+    python train.py --episodes 500 --notional 100
     streamlit run train.py -- --dashboard
 """
 
@@ -57,18 +57,18 @@ except ImportError as e:
 
 
 @dataclass
-class BasketTrainingConfig:
+class EpisodeTrainingConfig:
     """
-    Configuration for stochastic epoch basket training.
+    Configuration for stochastic epoch episode training.
 
     Crypto-technical parameter names:
-      n_epoch_baskets         : total number of stochastic multi-pair sampling windows
+      n_epoch_episodes         : total number of stochastic multi-pair sampling windows
       notional                : starting notional value (not equity)
-      pair_width              : number of coin pairs per basket
-      bar_sequences_per_basket: number of sliding OHLCV bar windows drawn per basket
+      pair_width              : number of coin pairs per episode
+      bar_sequences_per_episode: number of sliding OHLCV bar windows drawn per episode
       min_bar_window          : minimum stochastic bar window length (candles)
       max_bar_window          : maximum stochastic bar window length (candles)
-      epochs                  : passes over each basket
+      epochs                  : passes over each episode
       learning_rate           : optimizer step size
       cache_size              : LRU candle cache capacity (number of DataFrames)
       candles_per_extent      : raw candle depth per extent (-1 = no limit)
@@ -80,10 +80,10 @@ class BasketTrainingConfig:
       extent = T + n  (bar_window_len T bars + prediction_horizon n bars)
       candles_per_extent sets the raw candle pool depth from which extents are drawn.
     """
-    n_epoch_baskets: int = 500
+    n_epoch_episodes: int = 500
     notional: float = 100.0
     pair_width: int = 30
-    bar_sequences_per_basket: int = 100
+    bar_sequences_per_episode: int = 100
     min_bar_window: int = 64
     max_bar_window: int = 256
     epochs: int = 1
@@ -93,28 +93,6 @@ class BasketTrainingConfig:
     shock_z_threshold: float = 2.0
     bar_shock_z_threshold: float = 3.0
     max_adaptive_replays: int = 3
-
-    # Legacy aliases — kept for dashboard compatibility (viewserver reads these)
-    @property
-    def n_bags(self): return self.n_epoch_baskets
-    @property
-    def capital(self): return self.notional
-    @property
-    def bag_size(self): return self.pair_width
-    @property
-    def sequences_per_bag(self): return self.bar_sequences_per_basket
-    @property
-    def min_seq_len(self): return self.min_bar_window
-    @property
-    def max_seq_len(self): return self.max_bar_window
-    @property
-    def per_extent_length(self): return self.candles_per_extent
-    @property
-    def extent_outlier_z(self): return self.shock_z_threshold
-    @property
-    def frame_outlier_z(self): return self.bar_shock_z_threshold
-    @property
-    def max_optimizer_replays(self): return self.max_adaptive_replays
 
 
 class CandleCache:
@@ -253,14 +231,14 @@ class CandlePipeline:
         return codec_features
 
 
-class EpochBasketTrainer:
+class EpochEpisodeTrainer:
     """
-    Trains the HRM over stochastic epoch baskets.
+    Trains the HRM over stochastic epoch episodes.
 
-    Each basket is an independently sampled (pair_width × bar_window) OHLCV window.
+    Each episode is an independently sampled (pair_width × bar_window) OHLCV window.
     Regime shocks (loss z-score > shock_z_threshold) trigger adaptive replay loops.
     """
-    def __init__(self, config: BasketTrainingConfig):
+    def __init__(self, config: EpisodeTrainingConfig):
         self.config = config
         self.candle_cache = CandleCache(config.cache_size)
         self.candle_pipeline = CandlePipeline(self.candle_cache)
@@ -278,28 +256,28 @@ class EpochBasketTrainer:
         # ISO-8601 timestamp recorded at trainer construction
         self.session_start_time: str = datetime.now().isoformat()
 
-    def train_basket(self, basket_id: int, basket_pairs: List[str]) -> Dict:
+    def train_episode(self, episode_id: int, episode_pairs: List[str]) -> Dict:
         """
-        Train one epoch basket.
+        Train one epoch episode.
 
         Args:
-            basket_id   : sequential basket index
-            basket_pairs: list of coin pairs in this basket (e.g. ['BTCUSDT', 'ETHUSDT', ...])
+            episode_id   : sequential episode index
+            episode_pairs: list of coin pairs in this episode (e.g. ['BTCUSDT', 'ETHUSDT', ...])
 
         Returns:
             Result dict with realized_pnl, hit_rate, world_model_loss, regime_shock_count, etc.
         """
         if not HAS_MLX:
-            return {'bag_id': basket_id, 'error': 'MLX not available'}
+            return {'episode_id': episode_id, 'error': 'MLX not available'}
 
         model = MLXHierarchicalCodec(self.model_config)
         trainer = MLXCodecTrainer(self.model_config)
         trainer.model = model
 
-        df = self.candle_pipeline.load_candles(basket_pairs, None, None)
+        df = self.candle_pipeline.load_candles(episode_pairs, None, None)
 
         if df.empty:
-            return {'bag_id': basket_id, 'error': 'No data loaded'}
+            return {'episode_id': episode_id, 'error': 'No data loaded'}
 
         if not df.empty and self.config.candles_per_extent != -1:
             df = df.iloc[-self.config.candles_per_extent:]
@@ -325,20 +303,22 @@ class EpochBasketTrainer:
                 self.config.min_bar_window, self.config.max_bar_window
             )
 
-            for bar_seq_i in range(self.config.bar_sequences_per_basket):
+            hrm_memory = None
+
+            for bar_seq_i in range(self.config.bar_sequences_per_episode):
                 if bar_window_len > len(codec_features):
                     continue
 
                 start_idx = np.random.randint(0, len(codec_features) - bar_window_len)
-                batch = codec_features[start_idx:start_idx + bar_window_len]
-                batch = batch.reshape(1, bar_window_len, -1)
+                batch_np = codec_features[start_idx:start_idx + bar_window_len]
+                batch_np = batch_np.reshape(1, bar_window_len, -1)
 
                 # HRM world-model training step (thread-safe, skip if previously failed)
                 if not hasattr(self, '_mlx_disabled') or not self._mlx_disabled:
                     try:
-                        batch_mx = mx.array(batch)
-                        world_model_loss = trainer.pretrain_step(batch_mx)
-                        mx.eval(world_model_loss)  # Force evaluation
+                        batch_mx = mx.array(batch_np)
+                        world_model_loss, hrm_memory = trainer.pretrain_step(batch_mx, memory=hrm_memory)
+                        mx.eval(world_model_loss, *hrm_memory)  # Force evaluation and truncate graph
                         loss_val = float(world_model_loss.item())
                         bar_window_losses.append(loss_val)
 
@@ -360,18 +340,22 @@ class EpochBasketTrainer:
                                     # Perturbation magnitude scales with shock severity
                                     shock_perturbation_mag = min(0.1 * shock_z, 0.5)
                                     shock_perturbation_noise = (
-                                        np.random.randn(*batch.shape) * shock_perturbation_mag
+                                        np.random.randn(*batch_np.shape) * shock_perturbation_mag
                                     )
                                     # Random frame masking (simulates missing candle data)
                                     frame_mask = (
-                                        np.random.random(batch.shape) > 0.1
+                                        np.random.random(batch_np.shape) > 0.1
                                     ).astype(np.float32)
 
-                                    perturbed_bar_batch = (batch + shock_perturbation_noise) * frame_mask
+                                    perturbed_bar_batch = (batch_np + shock_perturbation_noise) * frame_mask
                                     perturbed_batch_mx = mx.array(perturbed_bar_batch)
-                                    trainer.pretrain_step(perturbed_batch_mx)
+                                    
+                                    # Replay World-Model optimization with threaded memory
+                                    replay_loss, hrm_memory = trainer.pretrain_step(perturbed_batch_mx, memory=hrm_memory)
+                                    mx.eval(replay_loss, *hrm_memory)
+
                     except Exception as e:
-                        print(f"MLX disabled on basket {basket_id}: {type(e).__name__}: {e}")
+                        print(f"MLX disabled on episode {episode_id}: {type(e).__name__}: {e}")
                         self._mlx_disabled = True
                         bar_window_losses.append(0.0)
                 else:
@@ -394,7 +378,7 @@ class EpochBasketTrainer:
                     notional *= (1 + ret)
                     notional_curve.append(notional)
 
-            # Throttle events to avoid Streamlit freeze on 500 baskets
+            # Throttle events to avoid Streamlit freeze on 500 episodes
             current_time = time.time()
             if (
                 not hasattr(self, '_last_event_time')
@@ -403,14 +387,14 @@ class EpochBasketTrainer:
             ):
                 self._last_event_time = current_time
 
-                self.event_queue.put(('epoch_complete', {
-                    'bag_id': basket_id,
+                self.event_queue.put(('episode_complete', {
+                    'episode_id': episode_id,
                     'epoch': epoch + 1,
                     'total_epochs': self.config.epochs,
                     'capital': notional,
-                    'pnl': notional - self.config.notional,
-                    'win_rate': profitable_trades / max(total_trade_signals, 1),
-                    'symbols': basket_pairs,
+                    'realized_pnl': notional - self.config.notional,
+                    'hit_rate': profitable_trades / max(total_trade_signals, 1),
+                    'symbols': episode_pairs,
                     'winning_agent': "None (Real execution pending)",
                     'hrm_score': 0.0,
                     'predictor_loss': float(np.mean(bar_window_losses[-10:])) if bar_window_losses else 0.0,
@@ -419,11 +403,11 @@ class EpochBasketTrainer:
                 }))
 
         result = {
-            'bag_id': basket_id,
-            'symbols': basket_pairs,
+            'episode_id': episode_id,
+            'symbols': episode_pairs,
             'final_capital': notional,
-            'pnl': notional - self.config.notional,
-            'win_rate': profitable_trades / max(total_trade_signals, 1),
+            'realized_pnl': notional - self.config.notional,
+            'hit_rate': profitable_trades / max(total_trade_signals, 1),
             'wins': profitable_trades,
             'total_trades': total_trade_signals,
             'winning_agent': "None (Real execution pending)",
@@ -437,12 +421,12 @@ class EpochBasketTrainer:
 
         return result
 
-    def run_basket_training(self, progress_callback=None):
+    def run_episode_training(self, progress_callback=None):
         """
-        Run the full stochastic epoch basket training loop.
+        Run the full stochastic epoch episode training loop.
 
         Implements Self-Adapting Pareto Replay:
-          - 30% chance to replay from Pareto-tail baskets (|z| > 1.5)
+          - 30% chance to replay from Pareto-tail episodes (|z| > 1.5)
           - Perturbation magnitude scales with tail extremity
           - alpha_extreme tail: densify profitable patterns
           - drawdown_extreme tail: build regime robustness
@@ -451,7 +435,7 @@ class EpochBasketTrainer:
         self.results = []
         # Record (and refresh) session start time when training actually begins
         self.session_start_time = datetime.now().isoformat()
-        print(f"[SESSION] Basket training started at {self.session_start_time}")
+        print(f"[SESSION] Episode training started at {self.session_start_time}")
 
         all_pairs = [
             'ADAUSDT', 'APTUSDT', 'ARBUSDT', 'ATOMUSDT', 'AVAXUSDT',
@@ -462,23 +446,23 @@ class EpochBasketTrainer:
             'SUIUSDT', 'TIAUSDT', 'UNIUSDT', 'WIFUSDT', 'XRPUSDT',
         ]
 
-        for basket_id in range(self.config.n_epoch_baskets):
+        for episode_id in range(self.config.n_epoch_episodes):
             if not self.running:
                 break
 
             # Self-Adapting Pareto Replay (Risk outside of normalcy)
             is_pareto_replay = False
             pareto_perturbation_mag = 0.0
-            basket_pairs: List[str] = []
+            episode_pairs: List[str] = []
 
             if len(self.results) > 10:
-                pnls = [r.get('pnl', 0.0) for r in self.results]
-                mean_pnl = np.nanmean(pnls)
-                std_pnl = np.nanstd(pnls) + 1e-8
+                realized_pnls = [r.get('realized_pnl', 0.0) for r in self.results]
+                mean_pnl = np.nanmean(realized_pnls)
+                std_pnl = np.nanstd(realized_pnls) + 1e-8
 
-                # Update z-scores for all past baskets to find current Pareto tails
+                # Update z-scores for all past episodes to find current Pareto tails
                 for r in self.results:
-                    r['z_score'] = (r.get('pnl', 0.0) - mean_pnl) / std_pnl
+                    r['z_score'] = (r.get('realized_pnl', 0.0) - mean_pnl) / std_pnl
 
                 # Pareto tails: |z| > 1.5 (outside normalcy)
                 pareto_extremes = [r for r in self.results if abs(r.get('z_score', 0)) > 1.5]
@@ -494,43 +478,43 @@ class EpochBasketTrainer:
                     z_score = selected['z_score']
                     # Self-adapting perturbation: stronger for wilder extremes
                     pareto_perturbation_mag = min(0.5, 0.1 * abs(z_score))
-                    basket_pairs = selected['symbols']
+                    episode_pairs = selected['symbols']
 
                     pareto_tail_label = "alpha_extreme" if z_score > 0 else "drawdown_extreme"
                     print(
-                        f"Pareto Replay [{pareto_tail_label}] basket {selected['bag_id']} "
+                        f"Pareto Replay [{pareto_tail_label}] episode {selected['episode_id']} "
                         f"(z={z_score:.2f}, perturb={pareto_perturbation_mag:.2f})"
                     )
 
             if not is_pareto_replay:
-                np.random.seed(basket_id)
-                basket_pairs = list(np.random.choice(
+                np.random.seed(episode_id)
+                episode_pairs = list(np.random.choice(
                     all_pairs,
                     size=min(self.config.pair_width, len(all_pairs)),
                     replace=False
                 ))
 
-            result = self.train_basket(basket_id, basket_pairs)
+            result = self.train_episode(episode_id, episode_pairs)
             if is_pareto_replay:
                 result['is_replay'] = True
                 result['replay_std'] = pareto_perturbation_mag
 
             self.results.append(result)
-            self.event_queue.put(('bag_complete', result))
+            self.event_queue.put(('episode_complete', result))
 
             if progress_callback:
-                progress_callback(basket_id + 1, self.config.n_epoch_baskets, result)
+                progress_callback(episode_id + 1, self.config.n_epoch_episodes, result)
 
-            if (basket_id + 1) % 10 == 0:
-                self._save_checkpoint(basket_id + 1)
+            if (episode_id + 1) % 10 == 0:
+                self._save_checkpoint(episode_id + 1)
 
         self._save_final_results()
         self.running = False
 
-    def _save_checkpoint(self, completed_baskets: int):
+    def _save_checkpoint(self, completed_episodes: int):
         checkpoint = {
-            'completed_bags': completed_baskets,
-            'total_bags': self.config.n_epoch_baskets,
+            'completed_episodes': completed_episodes,
+            'total_episodes': self.config.n_epoch_episodes,
             'session_start_time': self.session_start_time,
             'checkpoint_time': datetime.now().isoformat(),
             'results': self.results,
@@ -541,11 +525,11 @@ class EpochBasketTrainer:
 
     def _save_final_results(self):
         summary = {
-            'total_baskets': len(self.results),
+            'total_episodes': len(self.results),
             'session_start_time': self.session_start_time,
             'session_end_time': datetime.now().isoformat(),
-            'avg_pnl': np.mean([r['pnl'] for r in self.results if 'pnl' in r]),
-            'avg_win_rate': np.mean([r['win_rate'] for r in self.results if 'win_rate' in r]),
+            'avg_realized_pnl': np.mean([r['realized_pnl'] for r in self.results if 'realized_pnl' in r]),
+            'avg_hit_rate': np.mean([r['hit_rate'] for r in self.results if 'hit_rate' in r]),
             'total_notional': sum([r['final_capital'] for r in self.results if 'final_capital' in r]),
             'results': self.results
         }
@@ -554,37 +538,9 @@ class EpochBasketTrainer:
             json.dump(summary, f, indent=2)
 
         print(f"\nTraining complete!")
-        print(f"Total baskets: {summary['total_bags']}")
-        print(f"Avg PnL: ${summary['avg_pnl']:.2f}")
-        print(f"Avg Hit Rate: {summary['avg_win_rate']:.1%}")
-
-
-# ---------------------------------------------------------------------------
-# Dashboard shim — keeps the viewserver (dashboard.py) import-compatible.
-# The viewserver imports UnifiedTrainer and TrainingConfig by name.
-# ---------------------------------------------------------------------------
-
-class UnifiedTrainer(EpochBasketTrainer):
-    """
-    Viewserver-compatibility shim.
-    The Streamlit dashboard imports this name directly; do not remove.
-    All logic lives in EpochBasketTrainer.
-    """
-    def run_training(self, progress_callback=None):
-        return self.run_basket_training(progress_callback)
-
-    def train_bag(self, bag_id: int, symbols: List[str]) -> Dict:
-        return self.train_basket(bag_id, symbols)
-
-
-@dataclass
-class TrainingConfig(BasketTrainingConfig):
-    """
-    Viewserver-compatibility shim for dashboard.py imports.
-    Accepts legacy field names and maps them to BasketTrainingConfig.
-    """
-    pass
-
+        print(f"Total episodes: {summary['total_episodes']}")
+        print(f"Avg Realized PnL: ${summary['avg_realized_pnl']:.2f}")
+        print(f"Avg Hit Rate: {summary['avg_hit_rate']:.1%}")
 
 def run_dashboard():
     if not HAS_STREAMLIT:
@@ -601,22 +557,22 @@ def run_dashboard():
 
     with st.sidebar:
         st.header("Configuration")
-        n_bags = st.number_input("Number of Bags", min_value=1, max_value=1000, value=500)
-        capital = st.number_input("Starting Capital ($)", min_value=10, value=100)
-        bag_size = st.number_input("Bag Size", min_value=5, max_value=50, value=30)
+        n_episodes = st.number_input("Epoch Episodes", min_value=1, max_value=1000, value=500)
+        notional_val = st.number_input("Starting Notional ($)", min_value=10, value=100)
+        pair_width_val = st.number_input("Pair Width", min_value=5, max_value=50, value=30)
 
         if st.button("Start Training", type="primary"):
-            config = TrainingConfig(
-                n_epoch_baskets=n_bags,
-                notional=capital,
-                pair_width=bag_size
+            config = EpisodeTrainingConfig(
+                n_epoch_episodes=n_episodes,
+                notional=notional_val,
+                pair_width=pair_width_val
             )
 
-            st.session_state.trainer = UnifiedTrainer(config)
+            st.session_state.trainer = EpochEpisodeTrainer(config)
             st.session_state.results = []
 
             thread = threading.Thread(
-                target=st.session_state.trainer.run_training,
+                target=st.session_state.trainer.run_episode_training,
                 daemon=True
             )
             thread.start()
@@ -625,23 +581,23 @@ def run_dashboard():
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        st.metric("Bags Trained", f"{len(st.session_state.results)} / {n_bags}")
+        st.metric("Episodes Trained", f"{len(st.session_state.results)} / {n_episodes}")
 
     with col2:
         if st.session_state.results:
-            avg_pnl = np.mean([r['pnl'] for r in st.session_state.results if 'pnl' in r])
-            st.metric("Avg PnL", f"${avg_pnl:.2f}")
+            avg_pnl = np.mean([r.get('realized_pnl', 0.0) for r in st.session_state.results if 'realized_pnl' in r])
+            st.metric("Avg Realized PnL", f"${avg_pnl:.2f}")
 
     with col3:
         if st.session_state.results:
-            avg_wr = np.mean([r['win_rate'] for r in st.session_state.results if 'win_rate' in r])
-            st.metric("Avg Win Rate", f"{avg_wr:.1%}")
+            avg_wr = np.mean([r.get('hit_rate', 0.0) for r in st.session_state.results if 'hit_rate' in r])
+            st.metric("Avg Hit Rate", f"{avg_wr:.1%}")
 
     if st.session_state.trainer:
         while True:
             try:
                 event_type, data = st.session_state.trainer.event_queue.get_nowait()
-                if event_type == 'bag_complete':
+                if event_type == 'episode_complete':
                     st.session_state.results.append(data)
             except queue.Empty:
                 break
@@ -655,7 +611,7 @@ def run_dashboard():
 
         if not df.empty:
             st.dataframe(
-                df[['bag_id', 'pnl', 'win_rate', 'total_trades']].round(3),
+                df[['episode_id', 'realized_pnl', 'hit_rate', 'total_trades']].round(3),
                 use_container_width=True
             )
 
@@ -663,25 +619,25 @@ def run_dashboard():
 
             with col1:
                 st.line_chart(
-                    pd.DataFrame(st.session_state.results)['pnl'].cumsum(),
+                    pd.DataFrame(st.session_state.results)['realized_pnl'].cumsum(),
                     height=300
                 )
 
             with col2:
                 st.bar_chart(
-                    pd.DataFrame(st.session_state.results)['win_rate'],
+                    pd.DataFrame(st.session_state.results)['hit_rate'],
                     height=300
                 )
 
 
 def main():
-    parser = argparse.ArgumentParser(description='EpochBasket Training System')
-    parser.add_argument('--baskets', '--bags', type=int, default=500,
-                        help='Number of epoch baskets to train')
-    parser.add_argument('--notional', '--capital', type=float, default=100.0,
+    parser = argparse.ArgumentParser(description='EpochEpisode Training System')
+    parser.add_argument('--episodes', type=int, default=500,
+                        help='Number of epoch episodes to train')
+    parser.add_argument('--notional', type=float, default=100.0,
                         help='Starting notional value')
-    parser.add_argument('--pair-width', '--bag-size', type=int, default=30,
-                        help='Coin pairs per basket')
+    parser.add_argument('--pair-width', type=int, default=30,
+                        help='Coin pairs per episode')
     parser.add_argument('--dashboard', action='store_true', help='Run Streamlit dashboard')
 
     args = parser.parse_args()
@@ -689,22 +645,22 @@ def main():
     if args.dashboard:
         run_dashboard()
     else:
-        print(f"Starting training: {args.baskets} epoch baskets, ${args.notional} notional")
+        print(f"Starting training: {args.episodes} epoch episodes, ${args.notional} notional")
 
-        config = BasketTrainingConfig(
-            n_epoch_baskets=args.baskets,
+        config = EpisodeTrainingConfig(
+            n_epoch_episodes=args.episodes,
             notional=args.notional,
             pair_width=args.pair_width
         )
 
-        trainer = EpochBasketTrainer(config)
+        trainer = EpochEpisodeTrainer(config)
 
         def progress(current, total, result):
             pct = (current / total) * 100
-            pnl = result.get('pnl', 0)
-            print(f"Basket {current}/{total} ({pct:.1f}%) - PnL: ${pnl:.2f}")
+            realized_pnl = result.get('realized_pnl', 0)
+            print(f"Episode {current}/{total} ({pct:.1f}%) - Realized PnL: ${realized_pnl:.2f}")
 
-        trainer.run_basket_training(progress_callback=progress)
+        trainer.run_episode_training(progress_callback=progress)
 
 
 if __name__ == "__main__":
