@@ -194,7 +194,11 @@ def main():
             st.subheader("📈 Cumulative PnL")
             
             df = pd.DataFrame(st.session_state.results)
-            df['cumulative_pnl'] = df['pnl'].cumsum()
+            # Defensive check if all bags so far failed/errored out
+            if not df.empty and 'pnl' not in df.columns:
+                df['pnl'] = 0.0
+            
+            df['cumulative_pnl'] = df['pnl'].fillna(0.0).cumsum() if not df.empty else pd.Series([0.0])
             
             fig = go.Figure()
             fig.add_trace(go.Scatter(
@@ -218,8 +222,14 @@ def main():
             st.subheader("🎯 Win Rate Distribution")
             
             fig = go.Figure()
+            
+            if not df.empty and 'win_rate' not in df.columns:
+                df['win_rate'] = 0.0
+                
+            win_rates = df['win_rate'].dropna() if not df.empty else [0.0]
+            
             fig.add_trace(go.Histogram(
-                x=df['win_rate'],
+                x=win_rates,
                 nbinsx=20,
                 marker_color='#00ff88',
                 opacity=0.7
@@ -294,6 +304,9 @@ def main():
             st.subheader("🎲 Capital Growth")
             
             fig = go.Figure()
+            if not df.empty and 'final_capital' not in df.columns:
+                df['final_capital'] = float(st.session_state.config.get('capital', 100))
+                
             fig.add_trace(go.Scatter(
                 y=df['final_capital'],
                 mode='lines',
