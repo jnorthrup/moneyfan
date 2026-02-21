@@ -1,11 +1,11 @@
 """
-Hierarchical Codec MLX Implementation - Native (Preserves Architecture)
-========================================================================
+HRM MLX Implementation — Native (Preserves Architecture)
+=========================================================
 
 MLX implementation that preserves HRM's exact architecture:
-- H/L nested cycles: SEQUENTIAL processing (not tiled)
-- Sparkline update: CASCADING sequential updates (not tiled)
-- State persistence: Proper state carry across cycles
+- macro_regime_layer / tactical_execution_layer nested cycles: SEQUENTIAL (not tiled)
+- TemporalOrderBook update: CASCADING sequential updates (not tiled)
+- State persistence: proper regime_state / tactical_state carry across cycles
 
 MLX provides speedup through:
 1. Lazy evaluation (automatic kernel fusion)
@@ -14,6 +14,21 @@ MLX provides speedup through:
 4. Automatic optimization
 
 DO NOT break HRM's sequential dependencies for speed.
+
+Naming convention (crypto-technical):
+  TemporalOrderBook     — cascading decay memory: exponentially-weighted order book of embeddings
+  ob_depth_frames       — number of temporal "price levels" in the order book memory
+  ob_lookback_horizon   — horizon over which the decay ratio is calibrated
+  macro_regime_layer    — HRM Slow/High layer: detects market regime, risk budget, codec trust
+  tactical_execution_layer — HRM Fast/Low layer: real-time signal execution and position sizing
+  regime_state (z_H)    — working state of the macro regime layer
+  tactical_state (z_L)  — working state of the tactical execution layer
+  codec_score_head      — emits next-bar codec feature predictions (world model pre-training)
+  expected_return_head  — predicts forward expected return
+  signal_conviction_head — conviction score ∈ [0,1]
+  stop_loss_head        — stop-loss offset ∈ [-0.15, 0]
+  take_profit_head      — take-profit target ∈ [0, 0.30]
+  position_size_head    — fraction of notional ∈ [0, 1]
 """
 
 import math
@@ -30,89 +45,133 @@ except ImportError:
 
 
 @dataclass
-class HierarchicalCodecConfig:
-    """Configuration matching PyTorch version."""
-    n_signals: int = 24
+class HRMConfig:
+    """
+    Configuration for the Hierarchical Reasoning Model (HRM).
+
+    Crypto-technical field names:
+      n_codec_outputs      : number of codec expert output channels (default 24)
+      hidden_dim           : embedding dimension throughout the HRM
+      ob_depth_frames      : temporal order book depth (number of decay frames)
+      ob_lookback_horizon  : candle horizon over which OB decay ratio is calibrated
+      regime_attn_layers   : transformer layers in the macro regime layer
+      tactical_attn_layers : transformer layers in the tactical execution layer
+      regime_update_cycles : number of macro regime update cycles per forward pass
+      tactical_update_cycles: number of tactical execution cycles per regime cycle
+      n_heads              : number of attention heads
+    """
+    n_codec_outputs: int = 24
     hidden_dim: int = 64
-    sparkline_frames: int = 20
-    sparkline_horizon: int = 200
-    H_layers: int = 2
-    L_layers: int = 2
-    H_cycles: int = 2
-    L_cycles: int = 3
+    ob_depth_frames: int = 20
+    ob_lookback_horizon: int = 200
+    regime_attn_layers: int = 2
+    tactical_attn_layers: int = 2
+    regime_update_cycles: int = 2
+    tactical_update_cycles: int = 3
     n_heads: int = 4
 
+    # Legacy aliases for callers that still use old field names
+    @property
+    def n_signals(self): return self.n_codec_outputs
+    @property
+    def sparkline_frames(self): return self.ob_depth_frames
+    @property
+    def sparkline_horizon(self): return self.ob_lookback_horizon
+    @property
+    def H_layers(self): return self.regime_attn_layers
+    @property
+    def L_layers(self): return self.tactical_attn_layers
+    @property
+    def H_cycles(self): return self.regime_update_cycles
+    @property
+    def L_cycles(self): return self.tactical_update_cycles
 
-class MLXSparklineMemory:
+
+# Legacy alias so existing import `HierarchicalCodecConfig as MLXConfig` still resolves
+HierarchicalCodecConfig = HRMConfig
+
+
+class MLXTemporalOrderBook:
     """
-    Sparkline memory - EXACT PyTorch logic.
-    
-    Frame 0 = current, frame k depends on frame k-1 (cascading).
-    NO tiling, NO parallel frame computation.
+    Temporal Order Book — cascading exponential decay memory.
+
+    Analogous to a limit order book but over time: each 'depth frame' holds
+    an exponentially-decayed embedding of past market state, with frame 0
+    being the most recent (highest weight) and frame ob_depth_frames-1 the
+    oldest (lowest weight).
+
+    Frame 0 = current bar embedding
+    Frame k = (1 - alpha_k) * old[k] + alpha_k * frame_{k-1}
+
+    This creates a cascading temporal memory — NO tiling, NO parallel frame computation.
     """
-    
-    def __init__(self, hidden_dim: int, n_frames: int = 20, horizon: int = 200):
+
+    def __init__(self, hidden_dim: int, ob_depth_frames: int = 20, ob_lookback_horizon: int = 200):
         self.hidden_dim = hidden_dim
-        self.n_frames = n_frames
-        self.horizon = horizon
-        self.ratio = horizon ** (1.0 / max(n_frames - 1, 1))
-    
-    def update(self, sparkline: Optional[mx.array], current: mx.array) -> mx.array:
+        self.ob_depth_frames = ob_depth_frames
+        self.ob_lookback_horizon = ob_lookback_horizon
+        self.decay_ratio = ob_lookback_horizon ** (1.0 / max(ob_depth_frames - 1, 1))
+
+    def update(self, temporal_ob: Optional[mx.array], current_bar: mx.array) -> mx.array:
         """
-        Update sparkline with cascading sequential logic.
-        
-        Frame 0 = current
-        Frame k = (1-alpha_k) * old[k] + alpha_k * frame_{k-1}
-        
-        This creates a cascading temporal memory.
+        Update the temporal order book with the current bar embedding.
+
+        Args:
+            temporal_ob : [B, ob_depth_frames, D] — previous order book state (None on first call)
+            current_bar : [B, D] — current bar's projected embedding
+
+        Returns:
+            Updated temporal order book [B, ob_depth_frames, D]
         """
-        B, D = current.shape
-        
-        if sparkline is None:
-            sparkline = mx.zeros((B, self.n_frames, D))
-        
-        # Frame 0 is current
-        frame_0 = current[:, None, :]
-        
-        # Sequential cascading: frame k depends on frame k-1
-        frames: List[mx.array] = [frame_0]
-        for k in range(1, self.n_frames):
-            alpha_k = 1.0 / (self.ratio ** k)
-            # Uses PREVIOUS frame (cascading)
-            prev_frame = frames[-1]
-            frame_k = (1.0 - alpha_k) * sparkline[:, k:k+1, :] + alpha_k * prev_frame
-            frames.append(frame_k)
-        
-        return mx.concatenate(frames, axis=1)
-    
-    def read(self, sparkline: mx.array) -> mx.array:
+        B, D = current_bar.shape
+
+        if temporal_ob is None:
+            temporal_ob = mx.zeros((B, self.ob_depth_frames, D))
+
+        # Frame 0 is always the current bar (most recent)
+        frame_0 = current_bar[:, None, :]
+
+        # Sequential cascading: each depth level decays from the level above it
+        depth_frames: List[mx.array] = [frame_0]
+        for k in range(1, self.ob_depth_frames):
+            alpha_k = 1.0 / (self.decay_ratio ** k)
+            prev_frame = depth_frames[-1]
+            frame_k = (1.0 - alpha_k) * temporal_ob[:, k:k+1, :] + alpha_k * prev_frame
+            depth_frames.append(frame_k)
+
+        return mx.concatenate(depth_frames, axis=1)
+
+    def read(self, temporal_ob: mx.array) -> mx.array:
         """
-        Read weighted context from sparkline.
-        
-        Each frame contributes inversely to its age (ratio^k).
+        Read the regime context vector from the temporal order book.
+
+        Each depth frame contributes inversely to its age (decay_ratio^k),
+        producing a recency-weighted market context — the "best bid" of the
+        order book in embedding space.
+
+        Returns:
+            market_context : [B, D]
         """
-        B, F, D = sparkline.shape
-        
-        # Precompute weights
-        weights_list = [1.0 / (self.ratio ** k) for k in range(self.n_frames)]
+        B, F, D = temporal_ob.shape
+
+        weights_list = [1.0 / (self.decay_ratio ** k) for k in range(self.ob_depth_frames)]
         weights_sum = sum(weights_list)
-        weights = mx.array([w / weights_sum for w in weights_list])  # [n_frames]
-        
-        # Apply weights
-        weighted = sparkline * weights.reshape(1, -1, 1)
+        weights = mx.array([w / weights_sum for w in weights_list])  # [ob_depth_frames]
+
+        weighted = temporal_ob * weights.reshape(1, -1, 1)
         return mx.sum(weighted, axis=1)  # [B, D]
 
 
-class MLXMLP(nn.Module):
-    """MLP layer - stores layers explicitly for weight transfer."""
-    
+class MLXFeedForward(nn.Module):
+    """Feed-forward block (4x expansion, GELU activation)."""
+
     def __init__(self, hidden_dim: int):
         super().__init__()
         self.hidden_dim = hidden_dim
         self.linear1 = nn.Linear(hidden_dim, hidden_dim * 4)
         self.gelu = nn.GELU()
         self.linear2 = nn.Linear(hidden_dim * 4, hidden_dim)
-    
+
     def __call__(self, x: mx.array) -> mx.array:
         x = self.linear1(x)
         x = self.gelu(x)
@@ -120,272 +179,328 @@ class MLXMLP(nn.Module):
         return x
 
 
-class MLXLayer(nn.Module):
+class MLXTransformerBlock(nn.Module):
     """
-    Single layer: Attention + MLP with residuals.
-    
-    EXACT PyTorch structure, NO tiling.
+    Single transformer block: Multi-Head Attention + FeedForward with residuals.
+
+    EXACT PyTorch structure — NO tiling.
     """
-    
+
     def __init__(self, hidden_dim: int, n_heads: int):
         super().__init__()
         self.hidden_dim = hidden_dim
         self.n_heads = n_heads
         self.head_dim = hidden_dim // n_heads
-        
-        # Attention
+
         self.attention = nn.MultiHeadAttention(hidden_dim, n_heads)
         self.norm1 = nn.RMSNorm(hidden_dim)
-        
-        # MLP - use explicit class for weight transfer
-        self.mlp = MLXMLP(hidden_dim)
+
+        self.ff = MLXFeedForward(hidden_dim)
         self.norm2 = nn.RMSNorm(hidden_dim)
-    
+
     def __call__(self, x: mx.array) -> mx.array:
-        """Forward with attention + MLP - SEQUENTIAL (not tiled)."""
-        # Attention with residual
+        """Forward with attention + feed-forward — SEQUENTIAL (not tiled)."""
         attn_out = self.attention(x, x, x)
         x = self.norm1(x + attn_out)
-        
-        # MLP with residual
-        mlp_out = self.mlp(x)
-        x = self.norm2(x + mlp_out)
-        
+
+        ff_out = self.ff(x)
+        x = self.norm2(x + ff_out)
+
         return x
 
 
-class MLXReasoningLevel(nn.Module):
+class MLXMarketDepthLayer(nn.Module):
     """
-    H or L level: Multiple layers with sequential processing.
-    
-    EXACT PyTorch structure, NO tiling.
+    Market depth processing layer — stacked transformer blocks with sequential processing.
+
+    Used for both macro_regime_layer and tactical_execution_layer.
+    EXACT PyTorch structure — NO tiling.
     """
-    
+
     def __init__(self, hidden_dim: int, n_layers: int, n_heads: int):
         super().__init__()
         self.hidden_dim = hidden_dim
-        # Python list (MLX doesn't have ModuleList)
-        self.layers = [
-            MLXLayer(hidden_dim, n_heads) for _ in range(n_layers)
+        self.blocks = [
+            MLXTransformerBlock(hidden_dim, n_heads) for _ in range(n_layers)
         ]
-    
-    def __call__(self, z: mx.array, context: mx.array) -> mx.array:
+
+    def __call__(self, state: mx.array, context: mx.array) -> mx.array:
         """
-        Process through layers - SEQUENTIAL.
-        
-        Each layer sees the output of the previous layer.
-        This preserves the hierarchical depth.
+        Process state through stacked transformer blocks — SEQUENTIAL.
+
+        Args:
+            state   : [B, T, D] — current layer state (regime_state or tactical_state)
+            context : [B, T, D] — conditioning context from the other layer + bar features
+
+        Returns:
+            Updated state [B, T, D]
         """
-        x = z + context
-        for layer in self.layers:
-            x = layer(x)
+        x = state + context
+        for block in self.blocks:
+            x = block(x)
         return x
 
 
 class MLXHierarchicalCodec(nn.Module):
     """
-    Native MLX implementation - EXACT PyTorch architecture.
-    
-    NO TILING - preserves sequential H/L cycle dependencies.
+    HRM — Native MLX implementation — EXACT PyTorch architecture.
+
+    Two-layer hierarchy:
+      macro_regime_layer (Slow/High)  : detects regime, manages codec trust, risk budget
+      tactical_execution_layer (Fast/Low) : real-time signal execution, position sizing, veto
+
+    NO TILING — preserves sequential regime/tactical cycle dependencies.
+
+    Output heads (trade mode):
+      expected_return_head    : predicted forward return ∈ [-1, 1]
+      signal_conviction_head  : confidence in signal ∈ [0, 1]
+      stop_loss_head          : stop-loss offset ∈ [-0.15, 0]
+      take_profit_head        : take-profit target ∈ [0, 0.30]
+      position_size_head      : fraction of notional ∈ [0, 1]
     """
-    
-    def __init__(self, config: HierarchicalCodecConfig):
+
+    def __init__(self, config: HRMConfig):
         super().__init__()
         self.config = config
         self.hidden_dim = config.hidden_dim
-        
-        # Input projection
-        self.input_proj = nn.Linear(config.n_signals * 2, config.hidden_dim)
-        
-        # Sparkline memory
-        self.sparkline = MLXSparklineMemory(
-            config.hidden_dim, config.sparkline_frames, config.sparkline_horizon
+
+        # Project raw OHLCV/codec features into HRM embedding space
+        self.bar_feature_proj = nn.Linear(config.n_codec_outputs * 2, config.hidden_dim)
+
+        # Temporal order book memory (replaces "sparkline")
+        self.temporal_ob = MLXTemporalOrderBook(
+            config.hidden_dim, config.ob_depth_frames, config.ob_lookback_horizon
         )
-        
-        # H/L levels - exactly like PyTorch
-        self.H_level = MLXReasoningLevel(config.hidden_dim, config.H_layers, config.n_heads)
-        self.L_level = MLXReasoningLevel(config.hidden_dim, config.L_layers, config.n_heads)
-        
-        # Initialize states (used when memory is None)
-        self.H_init = mx.random.normal((config.hidden_dim,)) * 0.02
-        self.L_init = mx.random.normal((config.hidden_dim,)) * 0.02
-        
-        # Output heads
-        self.signal_head = nn.Linear(config.hidden_dim, config.n_signals * 2)
-        self.return_head = nn.Linear(config.hidden_dim, 1)
-        self.confidence_head = nn.Linear(config.hidden_dim, 1)
-        self.stop_head = nn.Linear(config.hidden_dim, 1)
-        self.tp_head = nn.Linear(config.hidden_dim, 1)
-        self.pos_head = nn.Linear(config.hidden_dim, 1)
-    
+
+        # Macro regime layer (Slow/High — strategic)
+        self.macro_regime_layer = MLXMarketDepthLayer(
+            config.hidden_dim, config.regime_attn_layers, config.n_heads
+        )
+        # Tactical execution layer (Fast/Low — real-time)
+        self.tactical_execution_layer = MLXMarketDepthLayer(
+            config.hidden_dim, config.tactical_attn_layers, config.n_heads
+        )
+
+        # Learnable initial states
+        self.regime_state_init = mx.random.normal((config.hidden_dim,)) * 0.02
+        self.tactical_state_init = mx.random.normal((config.hidden_dim,)) * 0.02
+
+        # World-model pre-training head: predict next bar's codec features
+        self.codec_score_head = nn.Linear(config.hidden_dim, config.n_codec_outputs * 2)
+
+        # Trade output heads
+        self.expected_return_head = nn.Linear(config.hidden_dim, 1)
+        self.signal_conviction_head = nn.Linear(config.hidden_dim, 1)
+        self.stop_loss_head = nn.Linear(config.hidden_dim, 1)
+        self.take_profit_head = nn.Linear(config.hidden_dim, 1)
+        self.position_size_head = nn.Linear(config.hidden_dim, 1)
+
     def forward(
-        self, 
-        signals: mx.array,
+        self,
+        bar_codec_features: mx.array,
         memory: Optional[Tuple] = None,
         mode: str = "pretrain"
     ) -> Tuple[mx.array, Optional[Tuple]]:
         """
-        EXACT PyTorch forward pass - NO TILING.
-        
+        HRM forward pass — NO TILING.
+
         Preserves:
-        - Sequential H/L cycle processing
-        - Sparkline cascading updates
-        - State persistence across cycles
-        - Input injection at both H and L levels
-        
-        MLX optimizes execution WITHOUT changing the logic.
+        - Sequential macro/tactical cycle processing
+        - TemporalOrderBook cascading updates
+        - regime_state / tactical_state persistence across calls
+        - Bar feature injection at both regime and tactical layers
+
+        MLX optimises execution WITHOUT changing the logic.
+
+        Args:
+            bar_codec_features : [B, T, n_codec_outputs*2] — OHLCV bar features + codec scores
+            memory             : (temporal_ob_state, regime_state, tactical_state) from previous call
+            mode               : "pretrain" → world model loss head
+                                 "trade"    → return + conviction + risk management heads
+
+        Returns:
+            output     : predicted codec scores (pretrain) or trade parameters (trade)
+            new_memory : (temporal_ob_state, regime_state, tactical_state)
         """
-        B, T, _ = signals.shape
-        
-        sparkline, z_H, z_L = memory if memory else (None, None, None)
-        
-        # Input projection
-        x = self.input_proj(signals)
-        
-        # Sparkline update - EXACT PyTorch logic
-        current = x.mean(axis=1)  # [B, D]
-        sparkline = self.sparkline.update(sparkline, current)
-        context = self.sparkline.read(sparkline)  # [B, D]
-        
-        # Add context to all timesteps
-        context_expanded = mx.expand_dims(context, 1)  # [B, 1, D]
-        context_expanded = mx.broadcast_to(
-            context_expanded, 
+        B, T, _ = bar_codec_features.shape
+
+        temporal_ob_state, regime_state, tactical_state = (
+            memory if memory else (None, None, None)
+        )
+
+        # Project bar features into HRM embedding space
+        bar_embed = self.bar_feature_proj(bar_codec_features)
+
+        # Update temporal order book with current bar's mean embedding
+        current_bar_embed = bar_embed.mean(axis=1)  # [B, D]
+        temporal_ob_state = self.temporal_ob.update(temporal_ob_state, current_bar_embed)
+        market_context = self.temporal_ob.read(temporal_ob_state)  # [B, D]
+
+        # Broadcast market context across all timesteps in the bar window
+        market_context_broadcast = mx.expand_dims(market_context, 1)  # [B, 1, D]
+        market_context_broadcast = mx.broadcast_to(
+            market_context_broadcast,
             (B, T, self.hidden_dim)
         )  # [B, T, D]
-        input_with_context = x + context_expanded
-        
-        # Initialize H/L states if needed
-        if z_H is None:
-            z_H = mx.broadcast_to(
-                mx.expand_dims(self.H_init, 0), 
+        bar_features_with_context = bar_embed + market_context_broadcast
+
+        # Initialise regime/tactical states if not carried from previous call
+        if regime_state is None:
+            regime_state = mx.broadcast_to(
+                mx.expand_dims(self.regime_state_init, 0),
                 (B, T, self.hidden_dim)
             )
-            z_L = mx.broadcast_to(
-                mx.expand_dims(self.L_init, 0), 
+            tactical_state = mx.broadcast_to(
+                mx.expand_dims(self.tactical_state_init, 0),
                 (B, T, self.hidden_dim)
             )
-        
-        # H/L CYCLES - EXACT PyTorch logic (SEQUENTIAL)
-        # Process ENTIRE sequence in each cycle, NOT in tiles
-        
-        # H_cycles - 1 (no gradient)
-        for _h in range(self.config.H_cycles - 1):
-            for _l in range(self.config.L_cycles):
-                z_L = self.L_level(z_L, z_H + input_with_context)
-            z_H = self.H_level(z_H, z_L)
-        
+
+        # Macro/Tactical nested cycles — SEQUENTIAL (exact PyTorch logic)
+        # All cycles except the final one run without gradient contribution
+        for _regime_cycle in range(self.config.regime_update_cycles - 1):
+            for _tactical_cycle in range(self.config.tactical_update_cycles):
+                tactical_state = self.tactical_execution_layer(
+                    tactical_state, regime_state + bar_features_with_context
+                )
+            regime_state = self.macro_regime_layer(regime_state, tactical_state)
+
         # Final cycle (with gradient)
-        for _l in range(self.config.L_cycles):
-            z_L = self.L_level(z_L, z_H + input_with_context)
-        z_H = self.H_level(z_H, z_L)
-        
-        # Output heads
+        for _tactical_cycle in range(self.config.tactical_update_cycles):
+            tactical_state = self.tactical_execution_layer(
+                tactical_state, regime_state + bar_features_with_context
+            )
+        regime_state = self.macro_regime_layer(regime_state, tactical_state)
+
+        # Output heads — always read from regime layer's final timestep
+        regime_final = regime_state[:, -1, :]  # [B, D]
+
         if mode == "pretrain":
-            output = self.signal_head(z_H[:, -1, :])
+            # World-model pre-training: predict next bar's codec feature vector
+            output = self.codec_score_head(regime_final)
         else:
-            ret = self.return_head(z_H[:, -1, :])
-            conf = mx.sigmoid(self.confidence_head(z_H[:, -1, :]))
-            
-            stop = mx.tanh(self.stop_head(z_H[:, -1, :])) * 0.15
-            tp = mx.sigmoid(self.tp_head(z_H[:, -1, :])) * 0.30
-            pos = mx.sigmoid(self.pos_head(z_H[:, -1, :]))
-            
-            output = mx.concatenate([ret, conf, stop, tp, pos], axis=-1)
-        
-        # Return output and memory (for next forward pass)
-        new_memory = (sparkline, z_H, z_L)
+            # Trade mode: full risk-parameterised output
+            pred_fwd_return = self.expected_return_head(regime_final)
+            signal_conviction = mx.sigmoid(self.signal_conviction_head(regime_final))
+
+            # stop_loss_pct ∈ [-0.15, 0] — negative = stop below entry
+            stop_loss_pct = mx.tanh(self.stop_loss_head(regime_final)) * 0.15
+            # take_profit_pct ∈ [0, 0.30] — positive = target above entry
+            take_profit_pct = mx.sigmoid(self.take_profit_head(regime_final)) * 0.30
+            # position_fraction ∈ [0, 1] — fraction of notional to deploy
+            position_fraction = mx.sigmoid(self.position_size_head(regime_final))
+
+            output = mx.concatenate(
+                [pred_fwd_return, signal_conviction, stop_loss_pct, take_profit_pct, position_fraction],
+                axis=-1
+            )
+
+        new_memory = (temporal_ob_state, regime_state, tactical_state)
         return output, new_memory
-    
-    def __call__(self, signals: mx.array, memory: Optional[Tuple] = None, mode: str = "pretrain") -> Tuple[mx.array, Optional[Tuple]]:
+
+    def __call__(
+        self,
+        bar_codec_features: mx.array,
+        memory: Optional[Tuple] = None,
+        mode: str = "pretrain"
+    ) -> Tuple[mx.array, Optional[Tuple]]:
         """Alias for forward."""
-        return self.forward(signals, memory, mode)
+        return self.forward(bar_codec_features, memory, mode)
 
 
-class MLXCodecTrainer:
+class MLXBasketTrainer:
     """
-    MLX-compatible trainer with automatic optimization.
-    
-    Features:
-    1. Lazy evaluation (MLX handles optimization)
-    2. ANE targeting (Apple Neural Engine)
-    3. Automatic kernel fusion
-    4. No manual optimization needed
+    MLX-compatible HRM trainer with automatic optimisation.
+
+    Two-phase training:
+      pretrain_step : world-model loss — predict next bar's codec features (self-supervised)
+      trade_step    : alpha loss — maximise conviction-weighted expected return (supervised)
+
+    MLX handles kernel fusion, ANE targeting, and lazy evaluation automatically.
     """
-    
-    def __init__(self, config: HierarchicalCodecConfig = None):
-        self.config = config or HierarchicalCodecConfig()
+
+    def __init__(self, config: HRMConfig = None):
+        self.config = config or HRMConfig()
         self.model = MLXHierarchicalCodec(self.config)
-        # MLX uses automatic optimization, no explicit optimizer needed
-    
-    def pretrain_step(self, signals: mx.array) -> mx.array:
-        """One pre-training step."""
-        output, _ = self.model.forward(signals, mode="pretrain")
-        # Predict last timestep's signals
-        target = signals[:, -1, :]
-        loss = mx.mean(mx.square(output - target))
-        return loss
-    
-    def trade_step(self, signals: mx.array, returns: mx.array) -> mx.array:
-        """One trade step."""
-        output, _ = self.model.forward(signals, mode="trade")
-        pred_return = output[:, 0]
-        confidence = output[:, 1]
-        
-        # Weighted return
-        weighted_return = pred_return * confidence
-        loss = -mx.mean(weighted_return * returns)
-        return loss
+
+    def pretrain_step(self, bar_codec_features: mx.array) -> mx.array:
+        """
+        World-model pre-training step.
+
+        Loss: MSE between predicted next-bar codec features and actual last bar.
+        """
+        output, _ = self.model.forward(bar_codec_features, mode="pretrain")
+        # Target: last timestep's codec feature vector
+        target = bar_codec_features[:, -1, :]
+        world_model_loss = mx.mean(mx.square(output - target))
+        return world_model_loss
+
+    def trade_step(self, bar_codec_features: mx.array, realized_returns: mx.array) -> mx.array:
+        """
+        Alpha-maximisation training step.
+
+        Loss: negative conviction-weighted expected return (maximise alpha).
+        """
+        output, _ = self.model.forward(bar_codec_features, mode="trade")
+        pred_fwd_return = output[:, 0]
+        signal_conviction = output[:, 1]
+
+        # Weighted expected return (alpha signal)
+        weighted_alpha = pred_fwd_return * signal_conviction
+        alpha_loss = -mx.mean(weighted_alpha * realized_returns)
+        return alpha_loss
+
+
+# Legacy alias — MLXCodecTrainer was the old name; kept for any external references
+MLXCodecTrainer = MLXBasketTrainer
 
 
 def enable_ane_optimization():
     """
-    Enable ANE (Apple Neural Engine) optimization.
-    
-    This allows MLX to target specialized hardware for maximum speed.
-    Call before creating models.
+    Enable ANE (Apple Neural Engine) optimisation.
+
+    Allows MLX to target specialised hardware for maximum throughput during
+    stochastic basket training. Call before creating models.
     """
     if HAS_MLX:
-        # Set default device to ANE if available, otherwise GPU
         try:
             mx.set_default_device(mx.ane)
-            print("✅ ANE optimization enabled")
+            print("✅ ANE optimisation enabled")
         except:
             try:
                 mx.set_default_device(mx.gpu)
-                print("✅ GPU optimization enabled")
+                print("✅ GPU optimisation enabled")
             except:
                 print("⚠️  Using CPU fallback")
     else:
         print("❌ MLX not available")
 
 
-def benchmark_speed(signals: mx.array, n_iter: int = 100) -> dict:
+def benchmark_speed(bar_codec_features: mx.array, n_iter: int = 100) -> dict:
     """
-    Benchmark native MLX speed.
-    
-    Returns timing statistics.
+    Benchmark native MLX HRM forward pass throughput.
+
+    Returns timing statistics in milliseconds.
     """
     if not HAS_MLX:
         return {"error": "MLX not available"}
-    
-    config = HierarchicalCodecConfig()
+
+    config = HRMConfig()
     model = MLXHierarchicalCodec(config)
-    
+
     # Warmup
     for _ in range(10):
-        output, _ = model.forward(signals)
+        output, _ = model.forward(bar_codec_features)
         mx.eval(output)
-    
-    # Timing
+
     import time
     times = []
     for _ in range(n_iter):
         start = time.perf_counter()
-        output, _ = model.forward(signals)
+        output, _ = model.forward(bar_codec_features)
         mx.eval(output)  # Force evaluation (MLX is lazy)
         times.append(time.perf_counter() - start)
-    
+
+    import numpy as np
     return {
         "mean_ms": np.mean(times) * 1000,
         "std_ms": np.std(times) * 1000,
@@ -394,5 +509,4 @@ def benchmark_speed(signals: mx.array, n_iter: int = 100) -> dict:
     }
 
 
-# Convenience import
 import numpy as np
