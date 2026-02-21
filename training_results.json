@@ -1,8 +1,16 @@
 {
-  "trades": 100,
-  "win_rate": 64.0,
-  "total_pnl": 4883.757868080901,
-  "profit_factor": 3.413064115423596,
-  "avg_win": 107.9318783780956,
-  "avg_loss": -56.21895411436713
+  "total_bags": 2,
+  "avg_pnl": NaN,
+  "avg_win_rate": NaN,
+  "total_capital": 0,
+  "results": [
+    {
+      "bag_id": 0,
+      "error": "MLX not available"
+    },
+    {
+      "bag_id": 1,
+      "error": "MLX not available"
+    }
+  ]
 }

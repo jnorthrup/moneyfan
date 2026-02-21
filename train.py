@@ -34,11 +34,8 @@ try:
 except ImportError:
     HAS_STREAMLIT = False
 
-try:
-    from hrm.duck_store import DuckStore
-    HAS_DUCK = True
-except ImportError:
-    HAS_DUCK = False
+# Removed DuckStore import
+HAS_DUCK = False
 
 try:
     import mlx.core as mx
@@ -99,7 +96,7 @@ class DataCache:
 class DataPipeline:
     def __init__(self, cache: DataCache):
         self.cache = cache
-        self.duck_store = DuckStore() if HAS_DUCK else None
+        self.data_dir = Path(project_root) / "hrm" / "data" / "parquet"
     
     def load_candles(self, symbols: List[str], start: str, end: str) -> pd.DataFrame:
         cache_key = f"candles:{','.join(sorted(symbols))}:{start}:{end}"
@@ -108,28 +105,42 @@ class DataPipeline:
         if cached is not None:
             return cached
         
-        if self.duck_store:
-            try:
-                from datetime import datetime
-                start_dt = datetime.strptime(start, '%Y-%m-%d') if start else None
-                end_dt = datetime.strptime(end, '%Y-%m-%d') if end else None
+        try:
+            from datetime import datetime
+            start_dt = datetime.strptime(start, '%Y-%m-%d') if start else None
+            end_dt = datetime.strptime(end, '%Y-%m-%d') if end else None
+            
+            dfs = []
+            for sym in symbols:
+                slug = sym.replace("-", "_").replace("/", "_")
+                path = self.data_dir / f"{slug}.parquet"
                 
-                dfs = []
-                for sym in symbols:
-                    df_sym = self.duck_store.load(sym, start_dt, end_dt)
+                if path.exists():
+                    filters = []
+                    if start_dt:
+                        filters.append(('time', '>=', pd.Timestamp(start_dt)))
+                    if end_dt:
+                        filters.append(('time', '<=', pd.Timestamp(end_dt)))
+                    
+                    df_sym = pd.read_parquet(
+                        path, 
+                        engine='pyarrow', 
+                        filters=filters if filters else None
+                    )
+                    
                     if not df_sym.empty:
                         df_sym['symbol'] = sym
                         dfs.append(df_sym)
-                
-                if dfs:
-                    df = pd.concat(dfs)
-                    self.cache.put(cache_key, df)
-                    return df
-            except Exception as e:
-                print(f"DuckDB query failed: {e}")
+            
+            if dfs:
+                df = pd.concat(dfs)
+                self.cache.put(cache_key, df)
+                return df
+        except Exception as e:
+            print(f"Parquet load failed for {symbols}: {e}")
         
         # Fail fast if data is missing, no mock data fallback allowed
-        print(f"No data available in DuckDB for {symbols} at {start} - {end}")
+        print(f"No data available in Parquet for {symbols} at {start} - {end}")
         df = pd.DataFrame()
         self.cache.put(cache_key, df)
         return df
