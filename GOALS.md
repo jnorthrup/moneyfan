@@ -6,6 +6,7 @@
 ## Vision
 
 moneyfan is an open-source **HRM** (Hierarchical Reasoning Model — sapientinc/HRM) for trading. It combines:
+
 - 24 diverse SOTA codec experts as specialised signal generators
 - A meta-allocator (HRM) that learns dynamic `allocation_confidence` and notional allocation across experts based on regime
 - Stochastic training for robustness against regime shifts and new assets
@@ -25,8 +26,9 @@ Democratizing prop-shop level alpha generation.
 ## Key Components & Architecture
 
 ### The Draw-Thru Architecture
+
 It is important to emphasize that this system operates on a direct "draw-thru" architecture. Data flows linearly and efficiently:
-**`data -> {duck->cache,API} -> pandas`**
+**`data.binance.vision -> {duck->cache,API} -> pandas`**
 This eliminates unnecessary middle-layer abstractions and relies on DuckDB natively streaming into Pandas DataFrames for rapid tensor conversion.
 
 ### 1. Stochastic Epoch Episode
@@ -34,11 +36,13 @@ This eliminates unnecessary middle-layer abstractions and relies on DuckDB nativ
 **Why Stochastic Training (Not Conventional ML)**
 
 Conventional ML training fails in markets:
+
 - Fixed train/test splits → overfit to specific regime
 - Deterministic batches → memorize patterns
 - Single asset → no cross-asset learning
 
 Stochastic training is superior:
+
 - Random epoch basket selection per epoch → regime robustness
 - `pair_width=30` random pairs + 75% missing data → generalization
 - Resampled continuously → no memorization
@@ -55,14 +59,17 @@ Stochastic training is superior:
 No fixed anything. Every epoch samples fresh across all four dimensions.
 
 **Extent Definition:**
+
 ```
 extent = T + n
 ```
+
 - **T** = bar window (the context the HRM sees)
 - **n** = prediction horizon (bars forward the HRM predicts/acts)
 - `candles_per_extent` sets the raw candle pool depth from which extents are drawn
 
 **Performance-Extremes Replay (Breadth + Density Balance)**
+
 - Track every basket's normalized PnL / Sharpe / max-DD in a rolling histogram.
 - Replay probability weighted by extremity (|z-score| of performance).
 - **Alpha-extreme** (top 5-10%): mild perturbation → densify profitable patterns.
@@ -73,6 +80,7 @@ extent = T + n
 
 **Regime Shock Replays (Sub-Basket Outliers)**
 To guarantee the model masters the hardest edges of the market:
+
 - **Shock Z-Threshold (`shock_z_threshold`)**: Any extent where world_model_loss z-score > 2.0.
 - **Bar-Level Shock (`bar_shock_z_threshold`)**: Individual bars within an extent with prediction errors > 3-sigma.
 - **Shock Input Signal**: When a shock is detected, the system flags it, isolates the bars, and presents a perturbation mask to force the network to focus on what it missed.
@@ -115,24 +123,29 @@ Each expert output: `[signal_conviction ∈ [0,1], direction ∈ [-1/0/1], regim
 **macro_regime_layer & tactical_execution_layer share a TemporalOrderBook for maximum benefit:**
 
 **Shared TemporalOrderBook Encoder** (the world-model heart):
+
 - Predicts next-bar codec features + all indicator kernels (multi-task heads)
 - Both macro_regime_layer and tactical_execution_layer read from this same encoder
 - Gradients flow through shared weights → mutual generalization boost
 
 **macro_regime_layer (Strategic — high level)**:
+
 - Regime detection, risk budgeting, codec trust matrix
 - Outputs `allocation_confidence` conditioning context to tactical layer
 
 **tactical_execution_layer (Tactical — low level)**:
+
 - Real-time signal execution, position sizing, veto enforcement
 - Feeds immediate performance feedback back to shared encoder + regime layer
 
 **Bidirectional Benefit Loop**:
+
 - macro_regime_layer gives tactical strategic guardrails
 - tactical_execution_layer gives regime granular market truth
 - Shared world-model loss makes both converge faster and generalize to new coins instantly
 
 Training recipe:
+
 ```
 # shared_encoder + macro_regime_layer + tactical_execution_layer
 world_model_loss = codec_score_head_loss + expected_return_head_loss
@@ -159,12 +172,14 @@ world_model_loss.backward()  # updates EVERYTHING together
 ```
 
 **Layer 0 — Source (Ingest)**
+
 - Exchange APIs: Binance, Kraken, Coinbase
 - OHLCV candles: 5m, 15m, 1h timeframes
 - LOB snapshots (when available)
 - Real-time WebSocket feeds for live trading
 
 **Layer 1 — DuckDB (Persist)**
+
 - Columnar storage, fast aggregations
 - Provenance tracking (source, timestamp, quality)
 - SQL queries for stochastic basket sampling
@@ -180,6 +195,7 @@ extent = T + n  →  train forward when extent filled
 ```
 
 **Layer 3 — EpochBasketTrainer (Learn)**
+
 - MLX-native codec training
 - Stochastic basket: `pair_width=30` random pairs per epoch
 - Signal generation: 24 expert codec outputs per bar
@@ -188,6 +204,7 @@ extent = T + n  →  train forward when extent filled
 **No A/B Testing. No PyTorch Bridge. One Path.**
 
 ### 5. Execution Layer
+
 - Coinbase primary
 - Paper trading first, then live with small notional
 - Multi-exchange adapters planned
@@ -214,6 +231,7 @@ moneyfan/
 ```
 
 **Entry Points:**
+
 - `python train.py --baskets 500` → Train stochastic epoch baskets
 - `python run.py --mode paper` → Paper trade
 - `streamlit run dashboard.py` → Viewserver (visualization)
@@ -234,6 +252,7 @@ moneyfan/
 ## Roadmap & Milestones
 
 ### Phase 1: Foundation ✅ COMPLETE
+
 - [x] 24 codec expert panel
 - [x] Stochastic epoch basket implementation
 - [x] MLX optimisation (no PyTorch in hot path)
@@ -244,18 +263,21 @@ moneyfan/
 - [x] **Crypto-technical naming standard applied pervasively**
 
 ### Phase 2: Validation (Current)
+
 - [ ] Train on real market data (4.3M candles available)
 - [ ] Ablation: measure generalization speed
 - [ ] 30-day paper run with new HRM
 - [ ] Sharpe ≥1.8 validation
 
 ### Phase 3: Production Hardening
+
 - [ ] Risk engine v2 (circuit breakers, dynamic sizing)
 - [ ] Multi-broker support
 - [ ] Real-time Streamlit viewserver dashboard
 - [ ] Community strategy contributions
 
 ### Phase 4: Scaling Alpha
+
 - [ ] Portfolio of multiple HRM instances
 - [ ] Cross-asset (stocks, futures?)
 - [ ] Advanced RL for HRM
@@ -264,6 +286,7 @@ moneyfan/
 ## Success Definition
 
 The project succeeds when:
+
 1. We have reproducible >1.8 Sharpe in out-of-sample paper/live trading.
 2. Code is clean, tested, documented, and extensible.
 3. Community can fork, improve codec experts, and contribute verified alpha.
