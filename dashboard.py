@@ -40,6 +40,8 @@ def init_session_state():
         st.session_state.training_active = False
     if 'current_epoch_info' not in st.session_state:
         st.session_state.current_epoch_info = None
+    if 'config' not in st.session_state:
+        st.session_state.config = {}
 
 
 def main():
@@ -57,22 +59,16 @@ def main():
     with st.sidebar:
         st.header("⚙️ Configuration")
         
-        n_bags = st.number_input("Number of Bags", min_value=1, max_value=1000, value=500)
-        capital = st.number_input("Starting Capital ($)", min_value=10, value=100)
-        bag_size = st.number_input("Bag Size (symbols)", min_value=5, max_value=50, value=30)
-        epochs = st.number_input("Epochs per Bag", min_value=1, max_value=1000, value=3)
-        
-        st.divider()
-        st.subheader("Replay Extremes")
-        replay_good_weight = st.slider("Replay Good Weight", min_value=0.0, max_value=1.0, value=0.20)
-        replay_bad_weight = st.slider("Replay Bad Weight", min_value=0.0, max_value=1.0, value=0.20)
-        perturbation_std_good = st.slider("Perturb STD (Good)", min_value=0.0, max_value=1.0, value=0.15)
-        perturbation_std_bad = st.slider("Perturb STD (Bad)", min_value=0.0, max_value=1.0, value=0.35)
+        n_bags = st.number_input("Number of Bags", min_value=1, value=1, key="n_bags_input")
+        capital = st.number_input("Starting Capital ($)", min_value=10, value=100, key="capital_input")
+        bag_size = st.number_input("Bag Size (symbols)", min_value=5, value=30, key="bag_size_input")
+        epochs = st.number_input("Epochs per Bag", min_value=1, value=1, key="epochs_input")
+        per_extent_length = st.number_input("Extent Length (candles)", min_value=-1, value=1000, help="-1 for no limit", key="per_extent_length_input")
         
         st.divider()
         st.subheader("Sub-Bag Outliers")
-        extent_outlier_z = st.slider("Extent Outlier Z-Score", min_value=1.0, max_value=5.0, value=2.0, step=0.1)
-        max_optimizer_replays = st.slider("Max Optimizer Replays", min_value=1, max_value=10, value=3)
+        extent_outlier_z = st.slider("Extent Outlier Z-Score", min_value=1.0, max_value=5.0, value=2.0, step=0.1, key="extent_outlier_z_input")
+        max_optimizer_replays = st.slider("Max Optimizer Replays", min_value=1, max_value=10, value=3, key="max_optimizer_replays_input")
         
         st.divider()
         
@@ -86,15 +82,13 @@ def main():
                         capital=capital,
                         bag_size=bag_size,
                         epochs=epochs,
-                        replay_good_weight=replay_good_weight,
-                        replay_bad_weight=replay_bad_weight,
-                        perturbation_std_good=perturbation_std_good,
-                        perturbation_std_bad=perturbation_std_bad,
+                        per_extent_length=per_extent_length,
                         extent_outlier_z=extent_outlier_z,
                         max_optimizer_replays=max_optimizer_replays
                     )
                     
                     st.session_state.trainer = UnifiedTrainer(config)
+                    st.session_state.config = config
                     st.session_state.results = []
                     st.session_state.training_active = True
                     
@@ -438,7 +432,7 @@ def main():
                     
                     # 2.5D Pandas Hierarchy Visualizer (Dumbing down the Parquet structure)
                     with st.expander("📂 2.5D Data Hierarchy (Understand the Parquet Inputs)", expanded=True):
-                        st.markdown(f"**Current Bag Configuration**: `{len(selected_bag['symbols'])} Symbols` ➔ `{st.session_state.config.get('sequences_per_bag', 10)} Sequences` ➔ `Timeframe Steps`")
+                        st.markdown(f"**Current Bag Configuration**: `{len(selected_bag['symbols'])} Symbols` ➔ `{getattr(st.session_state.config, 'sequences_per_bag', 10)} Sequences` ➔ `Timeframe Steps`")
                         
                         # Build a compact structural representation of the exact MultiIndex hierarchy the model sees
                         display_syms = selected_bag['symbols'][:4]
