@@ -394,17 +394,12 @@ class MLXHierarchicalCodec(nn.Module):
                 axis=-1
             )
 
-        new_memory = (temporal_ob_state, regime_state, tactical_state)
+        new_memory = (
+            mx.stop_gradient(temporal_ob_state), 
+            mx.stop_gradient(regime_state), 
+            mx.stop_gradient(tactical_state)
+        )
         return output, new_memory
-
-    def __call__(
-        self,
-        bar_codec_features: mx.array,
-        memory: Optional[Tuple] = None,
-        mode: str = "pretrain"
-    ) -> Tuple[mx.array, Optional[Tuple]]:
-        """Alias for forward."""
-        return self.forward(bar_codec_features, memory, mode)
 
 
 class MLXBasketTrainer:
@@ -415,39 +410,53 @@ class MLXBasketTrainer:
       pretrain_step : world-model loss — predict next bar's codec features (self-supervised)
       trade_step    : alpha loss — maximise conviction-weighted expected return (supervised)
 
-    MLX handles kernel fusion, ANE targeting, and lazy evaluation automatically.
+    Optimizations:
+      @mx.compile enables kernel fusion and prevents Python interpreter overhead.
+      BPTT horizon is bounded to the sequence window via mx.stop_gradient in the model's forward.
     """
 
     def __init__(self, config: HRMConfig = None):
         self.config = config or HRMConfig()
         self.model = MLXHierarchicalCodec(self.config)
+        
+        # Compile pure inner functions to avoid binding 'self' continually
+        
+        @mx.compile
+        def compiled_pretrain(bar_codec_features: mx.array, memory: Optional[Tuple] = None) -> Tuple[mx.array, Tuple]:
+            output, next_memory = self.model.forward(bar_codec_features, memory=memory, mode="pretrain")
+            target = bar_codec_features[:, -1, :]
+            world_model_loss = mx.mean(mx.square(output - target))
+            return world_model_loss, next_memory
+            
+        @mx.compile
+        def compiled_trade(bar_codec_features: mx.array, realized_returns: mx.array, memory: Optional[Tuple] = None) -> Tuple[mx.array, Tuple]:
+            output, next_memory = self.model.forward(bar_codec_features, memory=memory, mode="trade")
+            pred_fwd_return = output[:, 0]
+            signal_conviction = output[:, 1]
+            weighted_alpha = pred_fwd_return * signal_conviction
+            alpha_loss = -mx.mean(weighted_alpha * realized_returns)
+            return alpha_loss, next_memory
+            
+        self._compiled_pretrain = compiled_pretrain
+        self._compiled_trade = compiled_trade
 
-    def pretrain_step(self, bar_codec_features: mx.array) -> mx.array:
+    def pretrain_step(self, bar_codec_features: mx.array, memory: Optional[Tuple] = None) -> Tuple[mx.array, Tuple]:
         """
-        World-model pre-training step.
+        World-model pre-training step (compiled).
 
         Loss: MSE between predicted next-bar codec features and actual last bar.
+        Returns: loss scalar, next memory state
         """
-        output, _ = self.model.forward(bar_codec_features, mode="pretrain")
-        # Target: last timestep's codec feature vector
-        target = bar_codec_features[:, -1, :]
-        world_model_loss = mx.mean(mx.square(output - target))
-        return world_model_loss
+        return self._compiled_pretrain(bar_codec_features, memory=memory)
 
-    def trade_step(self, bar_codec_features: mx.array, realized_returns: mx.array) -> mx.array:
+    def trade_step(self, bar_codec_features: mx.array, realized_returns: mx.array, memory: Optional[Tuple] = None) -> Tuple[mx.array, Tuple]:
         """
-        Alpha-maximisation training step.
+        Alpha-maximisation training step (compiled).
 
         Loss: negative conviction-weighted expected return (maximise alpha).
+        Returns: loss scalar, next memory state
         """
-        output, _ = self.model.forward(bar_codec_features, mode="trade")
-        pred_fwd_return = output[:, 0]
-        signal_conviction = output[:, 1]
-
-        # Weighted expected return (alpha signal)
-        weighted_alpha = pred_fwd_return * signal_conviction
-        alpha_loss = -mx.mean(weighted_alpha * realized_returns)
-        return alpha_loss
+        return self._compiled_trade(bar_codec_features, realized_returns, memory=memory)
 
 
 # Legacy alias — MLXCodecTrainer was the old name; kept for any external references
