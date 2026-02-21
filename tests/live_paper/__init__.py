@@ -1,1 +1,0 @@
-"""Paper trading regression tests"""
