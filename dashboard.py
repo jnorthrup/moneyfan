@@ -92,6 +92,37 @@ def _load_drawthru_snapshot():
             LIMIT 12
             """
         ).df()
+
+        preview_symbol_row = con.execute(
+            f"""
+            SELECT symbol, MAX(timestamp) AS last_ts
+            FROM {table_name}
+            {where_clause}
+            GROUP BY symbol
+            ORDER BY last_ts DESC, symbol ASC
+            LIMIT 1
+            """
+        ).fetchone()
+
+        preview_rows = []
+        if preview_symbol_row:
+            preview_symbol = preview_symbol_row[0]
+            preview_df = con.execute(
+                f"""
+                SELECT timestamp, open, high, low, close, volume
+                FROM {table_name}
+                {where_clause}
+                {"AND" if where_clause else "WHERE"} symbol = ?
+                ORDER BY timestamp DESC
+                LIMIT 120
+                """,
+                [preview_symbol],
+            ).df()
+            if not preview_df.empty:
+                preview_df = preview_df.sort_values("timestamp")
+                preview_rows = preview_df.to_dict(orient="records")
+        else:
+            preview_symbol = None
         con.close()
 
         return {
@@ -103,6 +134,8 @@ def _load_drawthru_snapshot():
             "min_ts": None if min_ts is None else str(min_ts),
             "max_ts": None if max_ts is None else str(max_ts),
             "top_symbols": top_symbols_df.to_dict(orient="records"),
+            "preview_symbol": preview_symbol,
+            "preview_rows": preview_rows,
         }
     except Exception as e:
         return {
@@ -282,6 +315,32 @@ def main():
                     hide_index=True,
                     height=260,
                 )
+
+        preview_rows = pd.DataFrame(drawthru.get("preview_rows", []))
+        preview_symbol = drawthru.get("preview_symbol")
+        if not preview_rows.empty and {"timestamp", "open", "high", "low", "close"}.issubset(preview_rows.columns):
+            st.markdown(f"#### 📈 Live DuckDB Candle Preview ({preview_symbol})")
+            preview_rows["timestamp"] = pd.to_datetime(preview_rows["timestamp"])
+            fig_candle = go.Figure(
+                data=[
+                    go.Candlestick(
+                        x=preview_rows["timestamp"],
+                        open=preview_rows["open"],
+                        high=preview_rows["high"],
+                        low=preview_rows["low"],
+                        close=preview_rows["close"],
+                        name=preview_symbol or "preview",
+                    )
+                ]
+            )
+            fig_candle.update_layout(
+                height=320,
+                margin=dict(l=0, r=0, t=20, b=0),
+                xaxis_title=None,
+                yaxis_title=None,
+                xaxis_rangeslider_visible=False,
+            )
+            st.plotly_chart(fig_candle, use_container_width=True)
         st.divider()
     elif drawthru.get("status") in {"missing", "error"}:
         st.warning(

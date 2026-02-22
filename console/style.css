@@ -508,6 +508,30 @@ nav {
     font-size: 10px;
 }
 
+.drawthru-preview-wrap {
+    margin-top: 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    padding-top: 10px;
+}
+
+.drawthru-preview-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    color: var(--text-secondary);
+    font-size: 11px;
+    text-transform: uppercase;
+}
+
+.drawthru-preview-canvas {
+    height: 140px;
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.16);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    padding: 6px;
+}
+
 .scrolling-list {
     list-style: none;
     max-height: 150px;

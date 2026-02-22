@@ -7,6 +7,7 @@ const API_POLL_INTERVAL = 1000;
 
 // Chart.js Configuration
 let equityChartInstance = null;
+let drawthruPreviewChartInstance = null;
 
 try {
     if (typeof Chart !== 'undefined') {
@@ -65,6 +66,56 @@ function initChart() {
         });
     } catch (e) {
         console.warn("Failed to init chart", e);
+    }
+}
+
+function initDrawthruPreviewChart() {
+    try {
+        const canvas = document.getElementById('drawthruPreviewChart');
+        if (!canvas || typeof Chart === 'undefined') return;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        const gradient = ctx.createLinearGradient(0, 0, 0, 140);
+        gradient.addColorStop(0, 'rgba(63, 185, 80, 0.35)');
+        gradient.addColorStop(1, 'rgba(63, 185, 80, 0.0)');
+
+        drawthruPreviewChartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Close',
+                    data: [],
+                    borderColor: '#3fb950',
+                    backgroundColor: gradient,
+                    borderWidth: 1.5,
+                    tension: 0.15,
+                    fill: true,
+                    pointRadius: 0,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: { duration: 0 },
+                scales: {
+                    x: { display: false, grid: { display: false } },
+                    y: { grid: { color: 'rgba(255,255,255,0.05)' } },
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            title: (items) => (items?.[0]?.label || '').replace('T', ' '),
+                            label: (item) => `Close: ${Number(item.raw).toFixed(4)}`,
+                        }
+                    }
+                }
+            }
+        });
+    } catch (e) {
+        console.warn("Failed to init drawthru preview chart", e);
     }
 }
 let lastSessionStartTime = null;
@@ -243,6 +294,7 @@ function updateDrawthruUI(data) {
     const latestEl = document.getElementById('drawthruLatest');
     const tableEl = document.getElementById('drawthruTable');
     const topList = document.getElementById('drawthruTopSymbols');
+    const previewSymbolEl = document.getElementById('drawthruPreviewSymbol');
     if (!statusEl || !rowsEl || !symbolsEl || !latestEl || !tableEl || !topList) return;
 
     const status = data && data.status ? data.status : 'offline';
@@ -257,6 +309,12 @@ function updateDrawthruUI(data) {
         symbolsEl.innerText = '0';
         latestEl.innerText = '--';
         tableEl.innerText = '--';
+        if (previewSymbolEl) previewSymbolEl.innerText = '--';
+        if (drawthruPreviewChartInstance) {
+            drawthruPreviewChartInstance.data.labels = [];
+            drawthruPreviewChartInstance.data.datasets[0].data = [];
+            drawthruPreviewChartInstance.update();
+        }
         topList.innerHTML = `<li class="empty-state">${data.error || data.db_path || 'DuckDB offline'}</li>`;
         return;
     }
@@ -265,6 +323,7 @@ function updateDrawthruUI(data) {
     symbolsEl.innerText = String(data.symbol_count || 0);
     latestEl.innerText = (data.max_ts || '--').replace('T', ' ').slice(0, 19);
     tableEl.innerText = data.table || '--';
+    if (previewSymbolEl) previewSymbolEl.innerText = data.preview_symbol || '--';
 
     const top = Array.isArray(data.top_symbols) ? data.top_symbols : [];
     topList.innerHTML = '';
@@ -278,6 +337,13 @@ function updateDrawthruUI(data) {
         li.innerText = `${row.symbol} • ${Number(row.row_count || 0).toLocaleString()} rows • ${lastTs}`;
         topList.appendChild(li);
     });
+
+    if (drawthruPreviewChartInstance && Array.isArray(data.preview_bars) && data.preview_bars.length > 0) {
+        const bars = data.preview_bars;
+        drawthruPreviewChartInstance.data.labels = bars.map(b => (b.timestamp || '').slice(11, 19));
+        drawthruPreviewChartInstance.data.datasets[0].data = bars.map(b => Number(b.close || 0));
+        drawthruPreviewChartInstance.update();
+    }
 }
 
 function renderTransfers(transfers) {
@@ -458,6 +524,7 @@ document.querySelectorAll('.nav-item').forEach(item => {
 
 // Init
 initChart();
+initDrawthruPreviewChart();
 setInterval(() => {
     pollState();
     pollCache();
