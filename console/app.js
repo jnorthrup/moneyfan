@@ -99,6 +99,18 @@ async function pollCache() {
     }
 }
 
+async function pollDrawthru() {
+    try {
+        const res = await fetch('/api/drawthru');
+        if (res.ok) {
+            const data = await res.json();
+            updateDrawthruUI(data);
+        }
+    } catch (err) {
+        console.error("Failed to fetch drawthru API");
+    }
+}
+
 function formatDollar(val) {
     if (val === undefined || val === null) return "$0.00";
     return "$" + val.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
@@ -222,6 +234,50 @@ function updateCacheUI(data) {
     } else {
         listEl.innerHTML = '<li class="empty-state">No cache activity</li>';
     }
+}
+
+function updateDrawthruUI(data) {
+    const statusEl = document.getElementById('drawthruStatus');
+    const rowsEl = document.getElementById('drawthruRows');
+    const symbolsEl = document.getElementById('drawthruSymbols');
+    const latestEl = document.getElementById('drawthruLatest');
+    const tableEl = document.getElementById('drawthruTable');
+    const topList = document.getElementById('drawthruTopSymbols');
+    if (!statusEl || !rowsEl || !symbolsEl || !latestEl || !tableEl || !topList) return;
+
+    const status = data && data.status ? data.status : 'offline';
+    statusEl.innerText = status.toUpperCase();
+    statusEl.className = 'badge';
+    if (status === 'ok') {
+        statusEl.classList.add('online');
+    }
+
+    if (status !== 'ok') {
+        rowsEl.innerText = '0';
+        symbolsEl.innerText = '0';
+        latestEl.innerText = '--';
+        tableEl.innerText = '--';
+        topList.innerHTML = `<li class="empty-state">${data.error || data.db_path || 'DuckDB offline'}</li>`;
+        return;
+    }
+
+    rowsEl.innerText = Number(data.row_count || 0).toLocaleString();
+    symbolsEl.innerText = String(data.symbol_count || 0);
+    latestEl.innerText = (data.max_ts || '--').replace('T', ' ').slice(0, 19);
+    tableEl.innerText = data.table || '--';
+
+    const top = Array.isArray(data.top_symbols) ? data.top_symbols : [];
+    topList.innerHTML = '';
+    if (!top.length) {
+        topList.innerHTML = '<li class="empty-state">No imported symbols yet</li>';
+        return;
+    }
+    top.forEach(row => {
+        const li = document.createElement('li');
+        const lastTs = (row.last_ts || '--').replace('T', ' ').slice(0, 16);
+        li.innerText = `${row.symbol} • ${Number(row.row_count || 0).toLocaleString()} rows • ${lastTs}`;
+        topList.appendChild(li);
+    });
 }
 
 function renderTransfers(transfers) {
@@ -405,6 +461,7 @@ initChart();
 setInterval(() => {
     pollState();
     pollCache();
+    pollDrawthru();
 }, API_POLL_INTERVAL);
 
 function updateCodecsUI(data) {

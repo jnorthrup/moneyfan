@@ -32,6 +32,94 @@ from train import EpisodeTrainingConfig, EpochEpisodeTrainer
 
 CHECKPOINT_FILE = Path("training_checkpoint.json")
 RESULTS_FILE    = Path("training_results.json")
+DRAWTHRU_DUCKDB_FILE = Path("data/binance/hrm_data.duckdb")
+
+
+def _load_drawthru_snapshot():
+    """
+    Read a small DuckDB snapshot for immediate dashboard content before training results exist.
+
+    Prefers `data/binance/hrm_data.duckdb.binance_sequences_import` which is populated from
+    local parquet imports. Falls back to `market_data` if available.
+    """
+    try:
+        import duckdb
+    except Exception as e:
+        return {"status": "unavailable", "error": f"duckdb import failed: {e}"}
+
+    if not DRAWTHRU_DUCKDB_FILE.exists():
+        return {"status": "missing", "db_path": str(DRAWTHRU_DUCKDB_FILE)}
+
+    try:
+        con = duckdb.connect(str(DRAWTHRU_DUCKDB_FILE), read_only=True)
+        tables = {row[0] for row in con.execute("SHOW TABLES").fetchall()}
+        if "binance_sequences_import" in tables:
+            table_name = "binance_sequences_import"
+            where_clause = ""
+        elif "market_data" in tables:
+            table_name = "market_data"
+            where_clause = "WHERE lower(coalesce(exchange, '')) = 'binance'"
+        else:
+            con.close()
+            return {
+                "status": "empty",
+                "db_path": str(DRAWTHRU_DUCKDB_FILE),
+                "tables": sorted(tables),
+            }
+
+        row_count, symbol_count, min_ts, max_ts = con.execute(
+            f"""
+            SELECT
+              COUNT(*) AS row_count,
+              COUNT(DISTINCT symbol) AS symbol_count,
+              MIN(timestamp) AS min_ts,
+              MAX(timestamp) AS max_ts
+            FROM {table_name}
+            {where_clause}
+            """
+        ).fetchone()
+
+        top_symbols_df = con.execute(
+            f"""
+            SELECT
+              symbol,
+              COUNT(*) AS row_count,
+              MAX(timestamp) AS last_ts
+            FROM {table_name}
+            {where_clause}
+            GROUP BY symbol
+            ORDER BY row_count DESC, symbol ASC
+            LIMIT 12
+            """
+        ).df()
+        con.close()
+
+        return {
+            "status": "ok",
+            "db_path": str(DRAWTHRU_DUCKDB_FILE),
+            "table": table_name,
+            "row_count": int(row_count or 0),
+            "symbol_count": int(symbol_count or 0),
+            "min_ts": None if min_ts is None else str(min_ts),
+            "max_ts": None if max_ts is None else str(max_ts),
+            "top_symbols": top_symbols_df.to_dict(orient="records"),
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "db_path": str(DRAWTHRU_DUCKDB_FILE),
+            "error": str(e),
+        }
+
+
+def load_drawthru_snapshot():
+    # Avoid hammering DuckDB each Streamlit rerun.
+    if hasattr(st, "cache_data"):
+        @st.cache_data(ttl=5, show_spinner=False)
+        def _cached():
+            return _load_drawthru_snapshot()
+        return _cached()
+    return _load_drawthru_snapshot()
 
 
 def load_cli_checkpoint():
@@ -159,7 +247,48 @@ def main():
             f"{completed_cli}/{total_cli} episodes completed "
             f"(`python train.py` → `training_checkpoint.json`)"
         )
-    
+
+    # ── Drawthru / DuckDB health snapshot ────────────────────────────────────
+    drawthru = load_drawthru_snapshot()
+    if drawthru.get("status") == "ok":
+        st.subheader("🧭 Drawthru Data Health (DuckDB)")
+        dcol1, dcol2, dcol3, dcol4 = st.columns(4)
+        with dcol1:
+            st.metric("DuckDB Rows", f"{drawthru.get('row_count', 0):,}")
+        with dcol2:
+            st.metric("Symbols", f"{drawthru.get('symbol_count', 0)}")
+        with dcol3:
+            st.metric("Latest Timestamp", drawthru.get("max_ts", "--"))
+        with dcol4:
+            st.metric("Table", drawthru.get("table", "--"))
+
+        top_symbols = pd.DataFrame(drawthru.get("top_symbols", []))
+        if not top_symbols.empty:
+            dleft, dright = st.columns([2, 1])
+            with dleft:
+                fig_draw = px.bar(
+                    top_symbols.sort_values("row_count", ascending=False),
+                    x="symbol",
+                    y="row_count",
+                    title="Imported Rows by Symbol (Top 12)",
+                )
+                fig_draw.update_layout(height=260, margin=dict(l=0, r=0, t=40, b=0))
+                st.plotly_chart(fig_draw, use_container_width=True)
+            with dright:
+                st.caption(f"Source: `{drawthru.get('db_path', '')}`")
+                st.dataframe(
+                    top_symbols[["symbol", "row_count", "last_ts"]],
+                    use_container_width=True,
+                    hide_index=True,
+                    height=260,
+                )
+        st.divider()
+    elif drawthru.get("status") in {"missing", "error"}:
+        st.warning(
+            f"Drawthru DuckDB unavailable: {drawthru.get('error', drawthru.get('db_path', 'missing'))}"
+        )
+        st.divider()
+
     st.divider()
     
     col1, col2, col3, col4 = st.columns(4)
