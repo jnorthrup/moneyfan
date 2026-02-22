@@ -87,6 +87,42 @@ def load_drawthru_snapshot():
             LIMIT 8
             """
         ).fetchall()
+
+        preview_row = con.execute(
+            f"""
+            SELECT symbol, MAX(timestamp) AS last_ts
+            FROM {table_name}
+            {where}
+            GROUP BY symbol
+            ORDER BY last_ts DESC, symbol ASC
+            LIMIT 1
+            """
+        ).fetchone()
+        preview_symbol = preview_row[0] if preview_row else None
+        preview_bars = []
+        if preview_symbol:
+            preview_q = con.execute(
+                f"""
+                SELECT timestamp, open, high, low, close, volume
+                FROM {table_name}
+                {where}
+                {"AND" if where else "WHERE"} symbol = ?
+                ORDER BY timestamp DESC
+                LIMIT 80
+                """,
+                [preview_symbol],
+            ).fetchall()
+            preview_bars = [
+                {
+                    "timestamp": None if ts is None else str(ts),
+                    "open": None if o is None else float(o),
+                    "high": None if h is None else float(h),
+                    "low": None if l is None else float(l),
+                    "close": None if c is None else float(c),
+                    "volume": None if v is None else float(v),
+                }
+                for ts, o, h, l, c, v in reversed(preview_q)
+            ]
         con.close()
 
         return {
@@ -101,6 +137,8 @@ def load_drawthru_snapshot():
                 {"symbol": s, "row_count": int(c), "last_ts": None if ts is None else str(ts)}
                 for s, c, ts in top
             ],
+            "preview_symbol": preview_symbol,
+            "preview_bars": preview_bars,
         }
     except Exception as e:
         return {"status": "error", "db_path": str(DRAWTHRU_DUCKDB_FILE), "error": str(e)}
