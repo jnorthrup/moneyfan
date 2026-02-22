@@ -15,7 +15,7 @@ except ImportError:
     HAS_MLX = False
 
 
-class Codec23(BaseCodec):
+class Codec21(BaseCodec):
     def __init__(self, config: Dict[str, Any] = None):
         config = config or {}
         config['name'] = 'transformer_attention'

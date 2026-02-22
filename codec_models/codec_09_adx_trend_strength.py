@@ -1,6 +1,6 @@
 """
-Codec 11: Sector Rotation
-Rotates between sectors based on relative strength.
+Codec 17: ADX Trend Strength
+Directional movement + ADX power filter.
 """
 
 import numpy as np
@@ -15,40 +15,47 @@ except ImportError:
     HAS_MLX = False
 
 
-class Codec11(BaseCodec):
+class Codec09(BaseCodec):
     def __init__(self, config: Dict[str, Any] = None):
         config = config or {}
-        config['name'] = 'sector_rotation'
+        config['name'] = 'adx_trend_strength'
         super().__init__(config)
+        
+        self.adx_threshold = config.get('adx_threshold', 25)
         
         if HAS_MLX:
             self.model = nn.Sequential(
-                nn.Linear(64, 128),
+                nn.Linear(64, 64),
                 nn.ReLU(),
-                nn.Linear(128, 3)
+                nn.Linear(64, 3)
             )
     
     def forward(self, market_data: Dict[str, Any], features: np.ndarray) -> Tuple[float, float]:
-        sector_momentum = market_data.get('sector_momentum', 0)
-        relative_strength = market_data.get('relative_strength', 0)
-        market_regime = market_data.get('market_regime', 0)
+        adx = market_data.get('adx_14', 0)
+        plus_di = market_data.get('plus_di', 0)
+        minus_di = market_data.get('minus_di', 0)
         
         direction = 0.0
-        if relative_strength > 0.1:
-            direction = sector_momentum * 0.6 + relative_strength * 0.4
-        elif relative_strength < -0.1:
-            direction = -sector_momentum * 0.4 + relative_strength * 0.6
+        confidence = 0.2
         
-        if market_regime == -1:
-            direction *= 0.5
+        if adx > self.adx_threshold:
+            di_diff = plus_di - minus_di
+            direction = np.sign(di_diff) * min(abs(di_diff) / 20, 1.0)
+            confidence = min(adx / 50 + 0.3, 1.0)
+        else:
+            confidence = 0.2
+            direction = 0.0
         
-        confidence = min(abs(relative_strength) + abs(sector_momentum) * 0.5 + 0.2, 1.0)
+        momentum = market_data.get('momentum', 0)
+        if np.sign(direction) == np.sign(momentum) and adx > 30:
+            confidence = min(confidence * 1.3, 1.0)
         
         if HAS_MLX and self.model is not None and len(features) >= 64:
             try:
                 mx_features = mx.array(features[:64].reshape(1, -1).astype(np.float32))
                 output = self.model(mx_features)
-                direction = direction * 0.5 + float(np.tanh(output[0, 1])) * 0.5
+                if adx > self.adx_threshold:
+                    direction = direction * 0.6 + float(np.tanh(output[0, 1])) * 0.4
             except:
                 pass
         

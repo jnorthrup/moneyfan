@@ -1,6 +1,6 @@
 """
-Codec 12: Composite Alpha
-Combines multiple alpha sources into unified signal.
+Codec 21: Random Forest Classifier
+Ensemble of tree-based feature signals.
 """
 
 import numpy as np
@@ -15,11 +15,14 @@ except ImportError:
     HAS_MLX = False
 
 
-class Codec12(BaseCodec):
+class Codec18(BaseCodec):
     def __init__(self, config: Dict[str, Any] = None):
         config = config or {}
-        config['name'] = 'composite_alpha'
+        config['name'] = 'random_forest_classifier'
         super().__init__(config)
+        
+        self.n_trees = config.get('n_trees', 10)
+        self.tree_weights = np.random.dirichlet(np.ones(self.n_trees))
         
         if HAS_MLX:
             self.model = nn.Sequential(
@@ -33,30 +36,34 @@ class Codec12(BaseCodec):
     def forward(self, market_data: Dict[str, Any], features: np.ndarray) -> Tuple[float, float]:
         signals = []
         
-        momentum = market_data.get('momentum', 0)
-        if abs(momentum) > 0.01:
-            signals.append(momentum)
-        
         rsi = market_data.get('rsi_14', 50)
-        rsi_signal = (50 - rsi) / 50
-        if abs(rsi_signal) > 0.2:
-            signals.append(rsi_signal * 0.5)
+        signals.append((rsi - 50) / 50)
+        
+        macd_hist = market_data.get('macd_hist', 0)
+        signals.append(np.sign(macd_hist) * min(abs(macd_hist) * 5, 1.0))
         
         ob_imbalance = market_data.get('ob_imbalance', 0)
-        if abs(ob_imbalance) > 0.1:
-            signals.append(ob_imbalance * 0.3)
+        signals.append(ob_imbalance)
         
-        macd = market_data.get('macd', 0)
-        macd_signal = market_data.get('macd_signal', 0)
-        macd_hist = macd - macd_signal
-        if abs(macd_hist) > 0:
-            signals.append(np.sign(macd_hist) * min(abs(macd_hist) * 10, 0.5))
+        momentum = market_data.get('momentum', 0)
+        signals.append(np.sign(momentum) * min(abs(momentum) * 10, 1.0))
         
-        if not signals:
-            return self.validate_signal(0.2, 0.0)
+        sma_5 = market_data.get('sma_5', 0)
+        sma_15 = market_data.get('sma_15', 0)
+        if sma_15 > 0:
+            signals.append(np.sign(sma_5 - sma_15))
         
-        direction = np.mean(signals)
-        confidence = min(np.std(signals) * 2 + abs(direction) + 0.3, 1.0)
+        bb_upper = market_data.get('bb_upper', 0)
+        bb_lower = market_data.get('bb_lower', 0)
+        price = market_data.get('price', 0)
+        if bb_upper > bb_lower:
+            bb_pos = (price - bb_lower) / (bb_upper - bb_lower)
+            signals.append((bb_pos - 0.5) * 2)
+        
+        weighted_votes = np.array(signals) * self.tree_weights[:len(signals)]
+        direction = np.sum(weighted_votes)
+        
+        confidence = min(np.std(signals) * 2 + abs(direction) * 0.5 + 0.3, 1.0)
         
         if HAS_MLX and self.model is not None and len(features) >= 64:
             try:
@@ -65,7 +72,7 @@ class Codec12(BaseCodec):
                 ml_dir = float(np.tanh(output[0, 1]))
                 ml_conf = float(mx.sigmoid(output[0, 0]))
                 direction = direction * 0.4 + ml_dir * 0.6
-                confidence = confidence * 0.5 + ml_conf * 0.5
+                confidence = confidence * 0.4 + ml_conf * 0.6
             except:
                 pass
         

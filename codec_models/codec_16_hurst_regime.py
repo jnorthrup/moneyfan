@@ -15,7 +15,7 @@ except ImportError:
     HAS_MLX = False
 
 
-class Codec20(BaseCodec):
+class Codec16(BaseCodec):
     def __init__(self, config: Dict[str, Any] = None):
         config = config or {}
         config['name'] = 'hurst_regime'

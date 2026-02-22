@@ -1,6 +1,6 @@
 """
-Codec 10: Liquidity Making
-Provides liquidity and profits from spread.
+Codec 08: Order Flow
+Analyzes bid/ask dynamics and trade flow.
 """
 
 import numpy as np
@@ -15,51 +15,50 @@ except ImportError:
     HAS_MLX = False
 
 
-class Codec10(BaseCodec):
+class Codec13(BaseCodec):
     def __init__(self, config: Dict[str, Any] = None):
         config = config or {}
-        config['name'] = 'liquidity_making'
+        config['name'] = 'order_flow'
         super().__init__(config)
-        
-        self.min_spread = config.get('min_spread', 0.001)
         
         if HAS_MLX:
             self.model = nn.Sequential(
-                nn.Linear(64, 64),
-                nn.Tanh(),
+                nn.Linear(64, 128),
+                nn.ReLU(),
+                nn.Linear(128, 64),
                 nn.Linear(64, 3)
             )
     
     def forward(self, market_data: Dict[str, Any], features: np.ndarray) -> Tuple[float, float]:
-        spread = market_data.get('spread_pct', 0)
-        volatility = market_data.get('vol_5m', 0)
         ob_imbalance = market_data.get('ob_imbalance', 0)
-        price = market_data.get('price', 0)
-        vwap = market_data.get('vwap', price)
+        taker_buy = market_data.get('taker_buy_base', 0)
+        volume = market_data.get('volume', 1)
+        spread = market_data.get('spread_pct', 0)
         
-        if spread < self.min_spread:
-            return self.validate_signal(0.1, 0.0)
+        flow_signal = ob_imbalance
         
-        direction = -ob_imbalance * 0.5
+        if volume > 0:
+            buy_ratio = taker_buy / volume
+            flow_signal = flow_signal * 0.5 + (buy_ratio - 0.5) * 0.5
         
-        if vwap > 0:
-            vwap_dev = (price - vwap) / vwap
-            direction -= np.sign(vwap_dev) * min(abs(vwap_dev) * 5, 0.5)
+        spread_penalty = 0.0
+        if spread > 0.002:
+            spread_penalty = -0.2
         
-        vol_penalty = min(volatility * 10, 0.5) if volatility > 0.02 else 0
-        confidence = min(spread * 100 - vol_penalty, 1.0)
+        direction = flow_signal + spread_penalty
+        confidence = min(abs(ob_imbalance) + 0.3, 1.0)
         
-        regime = market_data.get('regime_label', 1)
-        if regime == 1:
-            confidence *= 1.3
-        else:
-            confidence *= 0.6
+        depth_bid = market_data.get('depth_5_bid', 0)
+        depth_ask = market_data.get('depth_5_ask', 0)
+        if depth_bid + depth_ask > 0:
+            depth_imbalance = (depth_bid - depth_ask) / (depth_bid + depth_ask)
+            direction += depth_imbalance * 0.3
         
         if HAS_MLX and self.model is not None and len(features) >= 64:
             try:
                 mx_features = mx.array(features[:64].reshape(1, -1).astype(np.float32))
                 output = self.model(mx_features)
-                direction = direction * 0.6 + float(np.tanh(output[0, 1])) * 0.4
+                direction = direction * 0.4 + float(np.tanh(output[0, 1])) * 0.6
             except:
                 pass
         

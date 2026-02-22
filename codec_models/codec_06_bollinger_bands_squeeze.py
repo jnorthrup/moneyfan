@@ -1,6 +1,6 @@
 """
-Codec 18: VWAP Mean Reversion
-Volume-weighted anchor reversion strategy.
+Codec 14: Bollinger Bands
+Bollinger Band mean reversion and breakout.
 """
 
 import numpy as np
@@ -15,46 +15,51 @@ except ImportError:
     HAS_MLX = False
 
 
-class Codec18(BaseCodec):
+class Codec06(BaseCodec):
     def __init__(self, config: Dict[str, Any] = None):
         config = config or {}
-        config['name'] = 'vwap_mean_reversion'
+        config['name'] = 'bollinger_bands'
         super().__init__(config)
         
-        self.deviation_threshold = config.get('deviation_threshold', 0.01)
+        self.bb_threshold = config.get('bb_threshold', 1.0)
         
         if HAS_MLX:
             self.model = nn.Sequential(
                 nn.Linear(64, 64),
-                nn.Tanh(),
+                nn.ReLU(),
                 nn.Linear(64, 3)
             )
     
     def forward(self, market_data: Dict[str, Any], features: np.ndarray) -> Tuple[float, float]:
         price = market_data.get('price', 0)
-        vwap = market_data.get('vwap', price)
-        volume = market_data.get('volume', 0)
-        avg_volume = market_data.get('avg_volume', volume)
+        bb_upper = market_data.get('bb_upper', price)
+        bb_lower = market_data.get('bb_lower', price)
+        bb_mid = market_data.get('bb_mid', price)
         
         direction = 0.0
         confidence = 0.2
         
-        if vwap > 0:
-            deviation = (price - vwap) / vwap
+        if bb_upper > bb_lower:
+            bb_width = bb_upper - bb_lower
+            bb_position = (price - bb_lower) / bb_width if bb_width > 0 else 0.5
             
-            if abs(deviation) > self.deviation_threshold:
-                direction = -np.sign(deviation) * min(abs(deviation) * 20, 1.0)
-                confidence = min(abs(deviation) * 30 + 0.3, 1.0)
-            
-            vol_ratio = volume / avg_volume if avg_volume > 0 else 1.0
-            if vol_ratio > 1.5:
-                confidence = min(confidence * 1.2, 1.0)
+            if bb_position < 0:
+                direction = 0.8
+                confidence = min(abs(bb_position) + 0.4, 1.0)
+            elif bb_position > 1:
+                direction = -0.8
+                confidence = min(bb_position - 1 + 0.4, 1.0)
+            elif bb_position < 0.2:
+                direction = 0.5
+                confidence = 0.5
+            elif bb_position > 0.8:
+                direction = -0.5
+                confidence = 0.5
         
-        regime = market_data.get('regime_label', 1)
-        if regime == 1:
-            confidence *= 1.2
-        else:
-            confidence *= 0.7
+        sma_20 = market_data.get('sma_15', price)
+        bandwidth = (bb_upper - bb_lower) / sma_20 if sma_20 > 0 else 0
+        if bandwidth < 0.02:
+            confidence *= 0.5
         
         if HAS_MLX and self.model is not None and len(features) >= 64:
             try:

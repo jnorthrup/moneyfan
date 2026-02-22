@@ -1,6 +1,6 @@
 """
-Codec 13: RSI Reversal
-RSI-based mean reversion strategy.
+Codec 16: Stochastic KD
+%K/%D crossover with overbought/oversold filter.
 """
 
 import numpy as np
@@ -15,14 +15,14 @@ except ImportError:
     HAS_MLX = False
 
 
-class Codec13(BaseCodec):
+class Codec07(BaseCodec):
     def __init__(self, config: Dict[str, Any] = None):
         config = config or {}
-        config['name'] = 'rsi_reversal'
+        config['name'] = 'stochastic_kd'
         super().__init__(config)
         
-        self.oversold = config.get('oversold', 30)
-        self.overbought = config.get('overbought', 70)
+        self.oversold = config.get('oversold', 20)
+        self.overbought = config.get('overbought', 80)
         
         if HAS_MLX:
             self.model = nn.Sequential(
@@ -32,31 +32,31 @@ class Codec13(BaseCodec):
             )
     
     def forward(self, market_data: Dict[str, Any], features: np.ndarray) -> Tuple[float, float]:
-        rsi = market_data.get('rsi_14', 50)
+        stoch_k = market_data.get('stoch_k', 50)
+        stoch_d = market_data.get('stoch_d', 50)
         
         direction = 0.0
         confidence = 0.2
         
-        if rsi < self.oversold:
-            direction = (self.oversold - rsi) / self.oversold
-            confidence = min(1.0 - rsi / self.oversold + 0.3, 1.0)
-        elif rsi > self.overbought:
-            direction = -(rsi - self.overbought) / (100 - self.overbought)
-            confidence = min((rsi - self.overbought) / (100 - self.overbought) + 0.3, 1.0)
+        cross_signal = stoch_k - stoch_d
         
-        stoch = market_data.get('stochastic', 50)
-        if stoch < 20 and rsi < self.oversold:
-            direction *= 1.3
-            confidence = min(confidence * 1.2, 1.0)
-        elif stoch > 80 and rsi > self.overbought:
-            direction *= 1.3
-            confidence = min(confidence * 1.2, 1.0)
+        if stoch_k < self.oversold and stoch_d < self.oversold:
+            if cross_signal > 0:
+                direction = min(cross_signal / 10 + 0.5, 1.0)
+                confidence = 0.7 + (self.oversold - stoch_k) / 100
+        elif stoch_k > self.overbought and stoch_d > self.overbought:
+            if cross_signal < 0:
+                direction = max(cross_signal / 10 - 0.5, -1.0)
+                confidence = 0.7 + (stoch_k - self.overbought) / 100
+        else:
+            direction = np.sign(cross_signal) * min(abs(cross_signal) / 10, 0.5)
+            confidence = 0.4
         
         if HAS_MLX and self.model is not None and len(features) >= 64:
             try:
                 mx_features = mx.array(features[:64].reshape(1, -1).astype(np.float32))
                 output = self.model(mx_features)
-                direction = direction * 0.6 + float(np.tanh(output[0, 1])) * 0.4
+                direction = direction * 0.5 + float(np.tanh(output[0, 1])) * 0.5
             except:
                 pass
         

@@ -1,6 +1,6 @@
 """
-Codec 05: Pairs Trading
-Statistical arbitrage between correlated assets.
+Codec 15: MACD Crossover
+Signal-line and histogram divergence detection.
 """
 
 import numpy as np
@@ -18,10 +18,8 @@ except ImportError:
 class Codec05(BaseCodec):
     def __init__(self, config: Dict[str, Any] = None):
         config = config or {}
-        config['name'] = 'pairs_trading'
+        config['name'] = 'macd_crossover'
         super().__init__(config)
-        
-        self.z_entry = config.get('z_entry', 2.0)
         
         if HAS_MLX:
             self.model = nn.Sequential(
@@ -31,20 +29,23 @@ class Codec05(BaseCodec):
             )
     
     def forward(self, market_data: Dict[str, Any], features: np.ndarray) -> Tuple[float, float]:
-        spread = market_data.get('spread_pct', 0)
-        correlation = market_data.get('correlation', 0)
+        macd = market_data.get('macd', 0)
+        macd_signal = market_data.get('macd_signal', 0)
+        macd_hist = market_data.get('macd_hist', macd - macd_signal)
         
-        signal = 0.0
-        if abs(correlation) > 0.7:
-            z_spread = spread / 0.001 if spread != 0 else 0
-            if abs(z_spread) > self.z_entry:
-                signal = -np.sign(z_spread) * min(abs(z_spread) / 4, 1.0)
+        direction = 0.0
+        confidence = 0.2
         
-        ob_imbalance = market_data.get('ob_imbalance', 0)
-        imbalance_boost = ob_imbalance * 0.3 if abs(ob_imbalance) > 0.2 else 0
+        if macd_hist > 0:
+            direction = min(macd_hist * 20, 1.0)
+            confidence = min(abs(macd_hist) * 10 + 0.3, 1.0)
+        elif macd_hist < 0:
+            direction = max(macd_hist * 20, -1.0)
+            confidence = min(abs(macd_hist) * 10 + 0.3, 1.0)
         
-        direction = signal + imbalance_boost
-        confidence = abs(correlation) * 0.5 + abs(signal) * 0.5
+        momentum = market_data.get('momentum', 0)
+        if np.sign(direction) == np.sign(momentum):
+            confidence *= 1.2
         
         if HAS_MLX and self.model is not None and len(features) >= 64:
             try:

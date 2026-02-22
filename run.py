@@ -36,7 +36,7 @@ try:
 except ImportError:
     HAS_MLX = False
 
-from train import DataPipeline, DataCache
+from train import CandlePipeline, CandleCache
 
 
 @dataclass
@@ -61,8 +61,8 @@ class TradingConfig:
 class TradingEngine:
     def __init__(self, config: TradingConfig):
         self.config = config
-        self.cache = DataCache()
-        self.pipeline = DataPipeline(self.cache)
+        self.cache = CandleCache()
+        self.pipeline = CandlePipeline(self.cache)
         
         self.model = None
         self.model_config = None
@@ -104,14 +104,8 @@ class TradingEngine:
         sys.exit(0)
     
     def generate_signals(self, symbol: str) -> Dict:
-        end_date = datetime.now()
-        start_date = end_date - pd.Timedelta(days=7)
-        
-        df = self.pipeline.load_candles(
-            [symbol],
-            start_date.strftime('%Y-%m-%d'),
-            end_date.strftime('%Y-%m-%d')
-        )
+        # Load all available data (fallback to historical if live not available)
+        df = self.pipeline.load_candles([symbol], None, None)
         
         if df.empty or len(df) < 64:
             return {
@@ -128,17 +122,33 @@ class TradingEngine:
         
         try:
             batch_mx = mx.array(batch)
-            output, _ = self.model(batch_mx, mode='pretrain')
+            # Use trade mode for inference
+            output, _ = self.model(batch_mx, mode='trade')
+            # Output: [pred_fwd_return, signal_conviction, stop_loss_pct, take_profit_pct, position_fraction]
+
+            # Since output is [B, 5], and we passed [1, T, D], MLX model returns [B, 5] (last step)
+            # Wait, MLXHierarchicalCodec forward returns `regime_final` processed by heads.
+            # regime_final = regime_state[:, -1, :]
+            # So output shape is [1, 5]
             
-            pred = float(output[0, 0])
-            confidence = float(np.abs(pred))
-            signal = np.sign(pred) if confidence > 0.3 else 0
+            output_np = np.array(output)
+            pred_fwd_return = float(output_np[0, 0])
+            signal_conviction = float(output_np[0, 1])
+            stop_loss = float(output_np[0, 2])
+            take_profit = float(output_np[0, 3])
+            pos_fraction = float(output_np[0, 4])
+
+            signal = np.sign(pred_fwd_return) if signal_conviction > 0.5 else 0
             
             return {
                 'symbol': symbol,
                 'signal': signal,
-                'confidence': confidence,
-                'prediction': pred
+                'confidence': signal_conviction,
+                'prediction': pred_fwd_return,
+                'stop_loss': abs(stop_loss),
+                'take_profit': abs(take_profit),
+                'size_fraction': pos_fraction,
+                'price': float(df.iloc[-1]['close'])
             }
         except Exception as e:
             return {
@@ -152,6 +162,7 @@ class TradingEngine:
         symbol = signal['symbol']
         direction = signal['signal']
         confidence = signal['confidence']
+        current_price = signal.get('price', self._get_current_price(symbol))
         
         if direction == 0 or confidence < 0.3:
             return None
@@ -166,15 +177,25 @@ class TradingEngine:
         if len(self.positions) >= self.config.max_positions:
             return None
         
-        position_size = self.config.capital * self.config.risk_per_trade / self.config.stop_loss
+        # Use model outputs for sizing if available, else default
+        sl = signal.get('stop_loss', self.config.stop_loss)
+        tp = signal.get('take_profit', self.config.take_profit)
+        size_fraction = signal.get('size_fraction', 0.1)
         
+        # position_size = self.config.capital * size_fraction # This might be too aggressive
+        # Let's stick to risk-based
+        if sl > 0:
+            position_size = self.config.capital * self.config.risk_per_trade / sl
+        else:
+            position_size = self.config.capital * self.config.risk_per_trade / 0.05
+
         position = {
             'symbol': symbol,
             'direction': direction,
             'size': position_size,
-            'entry_price': self._get_current_price(symbol),
-            'stop_loss': self.config.stop_loss,
-            'take_profit': self.config.take_profit,
+            'entry_price': current_price,
+            'stop_loss': sl if sl > 0.001 else 0.05,
+            'take_profit': tp if tp > 0.001 else 0.10,
             'confidence': confidence,
             'timestamp': datetime.now().isoformat()
         }
@@ -183,14 +204,18 @@ class TradingEngine:
         
         if self.config.mode == 'paper':
             print(f"📝 PAPER: {direction:+.0f} {symbol} @ ${position['entry_price']:.2f} "
-                  f"(size: ${position_size:.2f}, conf: {confidence:.2f})")
+                  f"(size: ${position_size:.2f}, conf: {confidence:.2f}, sl: {position['stop_loss']:.3f}, tp: {position['take_profit']:.3f})")
         else:
             print(f"🔴 LIVE: {direction:+.0f} {symbol} @ ${position['entry_price']:.2f}")
         
         return position
     
     def _get_current_price(self, symbol: str) -> float:
-        return np.random.uniform(100, 1000)
+        # Fetch latest price from pipeline
+        df = self.pipeline.load_candles([symbol], None, None)
+        if not df.empty:
+            return float(df.iloc[-1]['close'])
+        return 0.0
     
     def _close_position(self, symbol: str):
         if symbol not in self.positions:

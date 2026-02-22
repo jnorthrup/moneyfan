@@ -89,7 +89,7 @@ class BaseExpert(ABC):
         pass
 
     @abstractmethod
-    def online_adapter(
+    def test_time_adapter(
         self,
         batch_data: Dict[str, Any],
         learning_rate: float = 1e-3
@@ -105,6 +105,10 @@ class BaseExpert(ABC):
             learning_rate : low LR for stable online updates (1e-3 typical)
         """
         pass
+
+    # Alias for backward compatibility
+    def online_adapter(self, batch_data: Dict[str, Any], learning_rate: float = 1e-3) -> None:
+        return self.test_time_adapter(batch_data, learning_rate)
 
     def update_ob_memory(self, direction: float, indicator_vec: np.ndarray) -> None:
         """
@@ -124,6 +128,10 @@ class BaseExpert(ABC):
 
         self.ob_memory[self.ob_memory_idx] = indicator_vec
         self.ob_memory_idx = (self.ob_memory_idx + 1) % 512
+
+    # Alias for backward compatibility
+    def update_memory(self, direction: float, indicator_vec: np.ndarray) -> None:
+        return self.update_ob_memory(direction, indicator_vec)
 
     def get_ob_summary(self) -> Dict[str, float]:
         """
@@ -220,17 +228,40 @@ class ExpertFactory:
             config = {}
 
         config['codec_id'] = expert_id
-        config['name'] = f"codec_{expert_id:02d}"
 
-        codec_module = f"codecs.codec_{expert_id:02d}_generic"
+        # Look for the module in codec_models package
+        import pkgutil
+        import importlib
+        import codec_models
 
-        try:
-            module = __import__(codec_module, fromlist=[f'Codec_{expert_id:02d}'])
-            codec_class = getattr(module, f'Codec_{expert_id:02d}')
-            return codec_class(config)
-        except (ImportError, AttributeError):
-            from .codec_generic import GenericCodec
-            return GenericCodec(config)
+        prefix = f"codec_{expert_id:02d}_"
+        target_module_name = None
+
+        # Find module starting with codec_{id}_
+        for _, name, _ in pkgutil.iter_modules(codec_models.__path__):
+            if name.startswith(prefix):
+                target_module_name = name
+                break
+
+        if target_module_name:
+            try:
+                module = importlib.import_module(f"codec_models.{target_module_name}")
+                # Try to find class Codec{expert_id:02d}
+                class_name = f"Codec{expert_id:02d}"
+                if hasattr(module, class_name):
+                    codec_class = getattr(module, class_name)
+                    # Update config name from module name if needed
+                    config['name'] = target_module_name.replace(prefix, '')
+                    return codec_class(config)
+                else:
+                    print(f"[ExpertFactory] Warning: Class {class_name} not found in {target_module_name}. Using Generic.")
+            except ImportError as e:
+                print(f"[ExpertFactory] Error importing {target_module_name}: {e}")
+
+        # Fallback
+        from .codec_generic import GenericCodec
+        config['name'] = f"generic_fallback_{expert_id:02d}"
+        return GenericCodec(config)
 
 
 # Legacy alias

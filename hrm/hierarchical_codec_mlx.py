@@ -33,7 +33,7 @@ Naming convention (crypto-technical):
 
 import math
 from dataclasses import dataclass
-from typing import Optional, Tuple, List
+from typing import Optional, Tuple, List, Any
 
 try:
     import mlx.core as mx
@@ -42,6 +42,12 @@ try:
 except ImportError:
     HAS_MLX = False
     print("MLX not available")
+    # Define dummy mx for type hints
+    class mx:
+        array = Any
+    class nn:
+        Module = object
+        Linear = object
 
 
 @dataclass

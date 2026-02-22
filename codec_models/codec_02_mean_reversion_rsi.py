@@ -1,6 +1,6 @@
 """
-Codec 06: Grid Trading
-Profits from oscillating markets with grid levels.
+Codec 13: RSI Reversal
+RSI-based mean reversion strategy.
 """
 
 import numpy as np
@@ -15,44 +15,42 @@ except ImportError:
     HAS_MLX = False
 
 
-class Codec06(BaseCodec):
+class Codec02(BaseCodec):
     def __init__(self, config: Dict[str, Any] = None):
         config = config or {}
-        config['name'] = 'grid_trading'
+        config['name'] = 'rsi_reversal'
         super().__init__(config)
         
-        self.grid_spacing = config.get('grid_spacing', 0.01)
+        self.oversold = config.get('oversold', 30)
+        self.overbought = config.get('overbought', 70)
         
         if HAS_MLX:
             self.model = nn.Sequential(
                 nn.Linear(64, 64),
-                nn.Tanh(),
+                nn.ReLU(),
                 nn.Linear(64, 3)
             )
     
     def forward(self, market_data: Dict[str, Any], features: np.ndarray) -> Tuple[float, float]:
-        price = market_data.get('price', 0)
-        sma = market_data.get('sma_15', price)
-        atr = market_data.get('atr_14', price * 0.01)
+        rsi = market_data.get('rsi_14', 50)
         
-        grid_signal = 0.0
-        if sma > 0:
-            deviation = (price - sma) / sma
-            grid_signal = -np.sign(deviation) * min(abs(deviation) / self.grid_spacing, 1.0)
+        direction = 0.0
+        confidence = 0.2
         
-        volatility_factor = 1.0
-        if atr > 0 and sma > 0:
-            vol_ratio = atr / sma
-            volatility_factor = min(vol_ratio / 0.05, 1.5)
+        if rsi < self.oversold:
+            direction = (self.oversold - rsi) / self.oversold
+            confidence = min(1.0 - rsi / self.oversold + 0.3, 1.0)
+        elif rsi > self.overbought:
+            direction = -(rsi - self.overbought) / (100 - self.overbought)
+            confidence = min((rsi - self.overbought) / (100 - self.overbought) + 0.3, 1.0)
         
-        direction = grid_signal * volatility_factor
-        confidence = min(abs(grid_signal) + 0.2, 1.0)
-        
-        regime = market_data.get('regime_label', 1)
-        if regime == 1:  # Sideways
-            confidence *= 1.2
-        else:
-            confidence *= 0.7
+        stoch = market_data.get('stochastic', 50)
+        if stoch < 20 and rsi < self.oversold:
+            direction *= 1.3
+            confidence = min(confidence * 1.2, 1.0)
+        elif stoch > 80 and rsi > self.overbought:
+            direction *= 1.3
+            confidence = min(confidence * 1.2, 1.0)
         
         if HAS_MLX and self.model is not None and len(features) >= 64:
             try:

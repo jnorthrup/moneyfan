@@ -33,6 +33,8 @@ import pandas as pd
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
+from codec_models.base_codec import ExpertFactory
+
 try:
     import streamlit as st
     HAS_STREAMLIT = True
@@ -42,12 +44,24 @@ except ImportError:
 # Removed DuckStore import
 HAS_DUCK = False
 
+# Safe import of Config
+try:
+    from hrm.hierarchical_codec_mlx import HierarchicalCodecConfig as MLXConfig
+except ImportError:
+    @dataclass
+    class MLXConfig:
+        n_codec_outputs: int = 24
+        hidden_dim: int = 64
+        ob_depth_frames: int = 20
+        ob_lookback_horizon: int = 200
+        @property
+        def n_signals(self): return self.n_codec_outputs
+
 try:
     import mlx.core as mx
     from hrm.hierarchical_codec_mlx import (
         MLXHierarchicalCodec,
-        MLXCodecTrainer,
-        HierarchicalCodecConfig as MLXConfig
+        MLXCodecTrainer
     )
     HAS_MLX = True
     print("[DEBUG] MLX imported successfully")
@@ -135,6 +149,65 @@ class CandlePipeline:
     def __init__(self, cache: CandleCache):
         self.cache = cache
         self.data_dir = Path(project_root) / "data" / "binance"
+        # Instantiate experts (1-24)
+        print("[DEBUG] Initializing 24 Codec Experts...")
+        self.experts = [ExpertFactory.create_expert(i) for i in range(1, 25)]
+
+    def compute_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Add technical indicators to DataFrame (per symbol)."""
+        df = df.copy()
+        close = df['close'].values
+        high = df['high'].values
+        low = df['low'].values
+
+        # Helper for EMA
+        def ema(series, span):
+            return pd.Series(series).ewm(span=span, adjust=False).mean().values
+
+        # RSI 14
+        delta = np.diff(close, prepend=close[0])
+        gain = np.where(delta > 0, delta, 0)
+        loss = np.where(delta < 0, -delta, 0)
+        avg_gain = ema(gain, 14)
+        avg_loss = ema(loss, 14)
+        rs = avg_gain / (avg_loss + 1e-8)
+        df['rsi_14'] = 100 - (100 / (1 + rs))
+
+        # ATR 14
+        tr1 = high - low
+        tr2 = np.abs(high - np.roll(close, 1))
+        tr3 = np.abs(low - np.roll(close, 1))
+        tr = np.maximum(tr1, np.maximum(tr2, tr3))
+        tr[0] = tr1[0]
+        df['atr_14'] = ema(tr, 14)
+
+        # Momentum (ROC 10)
+        df['momentum'] = (close - np.roll(close, 10)) / (np.roll(close, 10) + 1e-8)
+
+        # MACD (12, 26, 9)
+        ema12 = ema(close, 12)
+        ema26 = ema(close, 26)
+        macd = ema12 - ema26
+        signal = ema(macd, 9)
+        df['macd'] = macd
+        df['macd_signal'] = signal
+        df['macd_hist'] = macd - signal
+
+        # Bollinger Bands (20, 2)
+        sma20 = pd.Series(close).rolling(window=20).mean().values
+        std20 = pd.Series(close).rolling(window=20).std().values
+        df['bb_upper'] = sma20 + 2 * std20
+        df['bb_lower'] = sma20 - 2 * std20
+
+        # Stochastic %K %D
+        low14 = pd.Series(low).rolling(window=14).min().values
+        high14 = pd.Series(high).rolling(window=14).max().values
+        df['stoch_k'] = 100 * ((close - low14) / (high14 - low14 + 1e-8))
+        df['stoch_d'] = pd.Series(df['stoch_k']).rolling(window=3).mean().values
+
+        # Fill NaNs
+        df = df.fillna(0)
+        return df
 
     def load_candles(self, symbols: List[str], start: str, end: str) -> pd.DataFrame:
         cache_key = f"candles:{','.join(sorted(symbols))}:{start}:{end}"
@@ -196,40 +269,58 @@ class CandlePipeline:
 
     def compute_signals(self, df: pd.DataFrame, n_codec_outputs: int = 24) -> np.ndarray:
         """
-        Compute codec input features from raw OHLCV candles.
+        Compute codec input features from raw OHLCV candles using 24 Codec Experts.
 
         Returns an array of shape [T, n_codec_outputs * 2]:
-          - First n_codec_outputs columns : normalised price/vol features
-          - Last n_codec_outputs columns  : per-bar close returns tiled across codecs
+          - First n_codec_outputs columns : expert conviction [0, 1]
+          - Last n_codec_outputs columns  : expert direction [-1, 1]
         """
-        df = df.sort_values(['symbol', 'timestamp'])
-        T = len(df)
+        # 1. Compute indicators per symbol (respecting boundaries)
+        dfs = []
+        for sym, sub_df in df.groupby('symbol'):
+             dfs.append(self.compute_indicators(sub_df))
+
+        df_ind = pd.concat(dfs).sort_values(['symbol', 'timestamp']) if dfs else df
+
+        records = df_ind.to_dict('records')
+        T = len(records)
+
         codec_features = np.zeros((T, n_codec_outputs * 2), dtype=np.float32)
 
-        c = df['close'].values.astype(np.float32)
-        h = df['high'].values.astype(np.float32)
-        l = df['low'].values.astype(np.float32)
+        # Reset expert memory for new episode batch
+        for expert in self.experts:
+            expert.ob_memory = np.zeros((512, 64), dtype=np.float32)
+            expert.ob_memory_idx = 0
 
-        c = np.nan_to_num(c, nan=1.0)
-        h = np.nan_to_num(h, nan=c)
-        l = np.nan_to_num(l, nan=c)
+        # Construct feature matrix [T, 64] for vectorized access
+        # Columns: [close, rsi, atr, momentum, macd, macd_hist, bb_upper, bb_lower, stoch_k, stoch_d, ...zeros...]
+        feat_matrix = np.zeros((T, 64), dtype=np.float32)
+        feat_matrix[:, 0] = df_ind['close'].values
+        feat_matrix[:, 1] = df_ind['rsi_14'].values / 100.0
+        feat_matrix[:, 2] = df_ind['atr_14'].values / (df_ind['close'].values + 1e-8)
+        feat_matrix[:, 3] = df_ind['momentum'].values
+        feat_matrix[:, 4] = df_ind['macd'].values
+        feat_matrix[:, 5] = df_ind['macd_hist'].values
+        feat_matrix[:, 6] = df_ind['bb_upper'].values / (df_ind['close'].values + 1e-8)
+        feat_matrix[:, 7] = df_ind['bb_lower'].values / (df_ind['close'].values + 1e-8)
+        feat_matrix[:, 8] = df_ind['stoch_k'].values / 100.0
+        feat_matrix[:, 9] = df_ind['stoch_d'].values / 100.0
 
-        # Feature 0: normalised close price
-        codec_features[:, 0] = np.clip((c - np.mean(c)) / (np.std(c) + 1e-8), -1, 1)
-        # Feature 1: high-low range normalised by close (intrabar volatility)
-        codec_features[:, 1] = (h - l) / (c + 1e-8)
+        print(f"[DEBUG] Running 24 experts on {T} bars...")
 
-        # For true draw-thru architecture, we either use raw features or explicitly derived metrics
-        # Removing previous mock `np.random.randn()` loops since user explicitly rejected mocks.
-        # This will leave features 2-n_codec_outputs as zeros if not computed, which is mathematically safer
-        # (Zero-filled inputs to LayerNorm/Linear will just pass zero gradients and zero activations for those dimensions).
+        # Iterate (could be optimised, but sticking to per-tick integrity)
+        for t in range(T):
+            row = records[t]
+            feats = feat_matrix[t]
+
+            for i, expert in enumerate(self.experts):
+                # i corresponds to codec_id i+1
+                conf, direction = expert.forward(row, feats)
+                expert.update_memory(direction, feats)
+
+                codec_features[t, i] = conf
+                codec_features[t, n_codec_outputs + i] = direction
         
-        # Tiled close-bar returns across all codec output channels
-        close_bar_returns = np.diff(c, prepend=c[0]) / (c + 1e-8)
-        codec_features[:, n_codec_outputs:] = np.tile(
-            close_bar_returns.reshape(-1, 1), (1, n_codec_outputs)
-        )
-
         return codec_features
 
 
@@ -250,7 +341,7 @@ class EpochEpisodeTrainer:
             hidden_dim=64,
             ob_depth_frames=20,
             ob_lookback_horizon=200
-        ) if HAS_MLX else None
+        )
 
         self.results: List[Dict] = []
         self.event_queue = queue.Queue()
@@ -269,13 +360,13 @@ class EpochEpisodeTrainer:
         Returns:
             Result dict with realized_pnl, hit_rate, world_model_loss, regime_shock_count, etc.
         """
-        if not HAS_MLX:
-            return {'episode_id': episode_id, 'error': 'MLX not available'}
-
-        model = MLXHierarchicalCodec(self.model_config)
-        trainer = MLXCodecTrainer(self.model_config)
-        trainer.model = model
-
+        if HAS_MLX:
+            model = MLXHierarchicalCodec(self.model_config)
+            trainer = MLXCodecTrainer(self.model_config)
+            trainer.model = model
+        else:
+            model = None
+            trainer = None
         df = self.candle_pipeline.load_candles(episode_pairs, None, None)
 
         if df.empty:
@@ -283,6 +374,10 @@ class EpochEpisodeTrainer:
 
         if not df.empty and self.config.candles_per_extent != -1:
             df = df.iloc[-self.config.candles_per_extent:]
+
+        # Ensure alignment
+        df = df.sort_values(['symbol', 'timestamp'])
+        close_prices = df['close'].values.astype(np.float32)
 
         codec_features = self.candle_pipeline.compute_signals(df, self.model_config.n_signals)
 
@@ -296,9 +391,6 @@ class EpochEpisodeTrainer:
         notional_curve = [notional]
         regime_shock_count = 0
         adaptive_replay_count = 0
-
-        # Close-bar returns from feature channel 0 (normalised close)
-        close_bar_returns = codec_features[:, 0]
 
         for epoch in range(self.config.epochs):
             bar_window_len = np.random.randint(
@@ -382,13 +474,19 @@ class EpochEpisodeTrainer:
                         position_size = position_direction * position_fraction * signal_conviction
 
                         # Calculate actual realized return over this predicted span
-                        end_idx = min(start_idx + bar_window_len - 1, len(close_bar_returns) - 1)
-                        candle_return = close_bar_returns[end_idx] - close_bar_returns[start_idx]
+                        end_idx = min(start_idx + bar_window_len - 1, len(close_prices) - 1)
+                        # Percentage return
+                        price_start = close_prices[start_idx]
+                        price_end = close_prices[end_idx]
+                        if price_start > 0:
+                            candle_return = (price_end - price_start) / price_start
+                        else:
+                            candle_return = 0.0
 
                         # Apply execution results (simulate position hold against raw candle move)
                         # We use candle_return direction properly aligned against position_direction
                         # E.g. If long (pos) and candle goes up (pos) = positive ret
-                        ret = position_size * candle_return * 0.01
+                        ret = position_size * candle_return
                         realized_pnl += ret * notional
 
                         if ret > 0:
@@ -400,11 +498,16 @@ class EpochEpisodeTrainer:
                 else:
                     # Fallback random execution if MLX crashes/disabled
                     if np.random.random() > 0.5:
-                        end_idx = min(start_idx + bar_window_len - 1, len(close_bar_returns) - 1)
-                        candle_return = close_bar_returns[end_idx] - close_bar_returns[start_idx]
+                        end_idx = min(start_idx + bar_window_len - 1, len(close_prices) - 1)
+                        price_start = close_prices[start_idx]
+                        price_end = close_prices[end_idx]
+                        if price_start > 0:
+                            candle_return = (price_end - price_start) / price_start
+                        else:
+                            candle_return = 0.0
 
                         position = np.sign(np.random.randn())
-                        ret = position * abs(candle_return) * 0.01
+                        ret = position * abs(candle_return)
                         realized_pnl += ret * notional
 
                         if ret > 0:

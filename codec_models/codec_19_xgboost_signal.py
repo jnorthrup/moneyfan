@@ -15,7 +15,7 @@ except ImportError:
     HAS_MLX = False
 
 
-class Codec22(BaseCodec):
+class Codec19(BaseCodec):
     def __init__(self, config: Dict[str, Any] = None):
         config = config or {}
         config['name'] = 'xgboost_signal'
