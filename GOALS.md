@@ -27,9 +27,62 @@ Democratizing prop-shop level alpha generation.
 
 ### The Draw-Thru Architecture
 
-It is important to emphasize that this system operates on a direct "draw-thru" architecture. Data flows linearly and efficiently:
-**`data.binance.vision -> {duck->cache,API} -> pandas`**
-This eliminates unnecessary middle-layer abstractions and relies on DuckDB natively streaming into Pandas DataFrames for rapid tensor conversion.
+Data flows linearly and efficiently:
+
+```
+data.binance.vision → {duckdb → cache} → pandas
+    → InstrumentPanel (lazy vectorized indicators)
+    → {codec_1 … codec_24}  (read pre-computed scalars)
+    → HRM IO
+```
+
+**`InstrumentPanel`** (`instrument_panel.py`) sits between pandas and the codec bar loop.
+It pre-computes ALL indicator families in a single vectorized pandas pass before any bar-level loop:
+
+```
+per-pair OHLCV DataFrame
+    → InstrumentPanel.compute()                      # O(T), vectorized pandas
+        → @cached_property returns_momentum          # pct/log returns, momentum_3..60
+        → @cached_property ema_macd                  # EMA 5/10/12/20/26/50, MACD
+        → @cached_property rsi                       # RSI(14) Wilder's smoothing
+        → @cached_property bollinger                 # BB(20,2): upper/lower/%B/width
+        → @cached_property atr                       # True Range + ATR(14)
+        → @cached_property stochastic                # %K(14), %D(3)
+        → @cached_property adx                       # ADX(14) + DI+/DI-
+        → @cached_property vwap                      # rolling VWAP(20) + deviation
+        → @cached_property zscore                    # z-scores at 10/20/60 bars
+        → @cached_property volatility                # realised vol 5/10/20/60
+        → @cached_property donchian                  # Donchian channel(20)
+        → @cached_property volume_flow               # OBV proxy, bar delta, CVD
+        → @cached_property kalman                    # Kalman price + velocity
+        → @cached_property hurst                     # Hurst exponent (lazy — R/S)
+        + ...
+    → enriched_records = df_enriched.to_dict('records')
+    → codec.forward(row, features)                   # only reads pre-computed scalars
+```
+
+Each family is a `@cached_property` — computed once on first access, cached, never re-run.
+The codec bar loop is now O(1) dict lookups per bar; **the panel is ~2% of total compute**.
+
+### Why Shared Weights Generalise Across All Pairs
+
+The HRM sees **no absolute prices** — only normalized indicator signals:
+
+- RSI ∈ [0, 100] is the same statistical object on DOGE/USDT as on BTC/USDT
+- MACD histogram and Bollinger %B are dimensionless/scale-invariant
+- All codec outputs: `conviction ∈ [0,1]`, `direction ∈ [-1,+1]`
+
+Stochastic training with random pairs forces the HRM to learn the **pattern** ("RSI diverging from oversold with expanding MACD histogram → upward momentum"), not the pair. The shared weights converge toward rules that hold universally across crypto assets — and generalise immediately to unseen pairs without retraining.
+
+### Instruments as HRM Predictor Targets (GOALS.md §3)
+
+Each codec now calls `self.record_instruments(rsi_14=…, macd_hist=…, atr_norm=…)` before returning its signal. `compute_signals` harvests all 44 named instrument readings per bar and appends them to the HRM feature matrix as additional prediction columns.
+
+The shared TemporalOrderBook encoder thus learns to **predict the next-bar value of every raw indicator** as a multi-task objective — this is the "all indicator kernels" multi-task head described in §3.
+
+### Cross-Pair Codec Upgrade Path (TODO)
+
+Codecs 05 (pairs_trading), 09 (correlation_trading), and 11 (sector_rotation) currently use intra-pair EMA-channel spread as a pairs proxy. The proper upgrade: pass a **`bag_df`** (all pairs in the episode stacked by `(symbol, timestamp)`) to these codecs so they can compute real cross-pair spread, correlation, and sector momentum. The draw-thru architecture supports this — `compute_signals` already receives the full multi-symbol bag DataFrame.
 
 ### 1. Stochastic Epoch Episode
 
