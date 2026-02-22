@@ -90,6 +90,13 @@ class EpisodeTrainingConfig:
     max_bar_window: int = 256
     epochs: int = 1
     learning_rate: float = 1e-4
+    optimizer_name: str = "adamw"
+    weight_decay: float = 1e-2
+    optimizer_beta1: float = 0.9
+    optimizer_beta2: float = 0.999
+    optimizer_momentum: float = 0.95
+    optimizer_nesterov: bool = True
+    muon_ns_steps: int = 5
     cache_size: int = 1000
     candles_per_extent: int = 1000
     shock_z_threshold: float = 2.0
@@ -351,6 +358,14 @@ class EpochEpisodeTrainer:
             ob_hyperbolic_tau=config.ob_hyperbolic_tau,
             use_mechanical_veto=config.use_mechanical_veto,
             replay_coalescing=config.replay_coalescing,
+            optimizer_name=config.optimizer_name,
+            learning_rate=config.learning_rate,
+            weight_decay=config.weight_decay,
+            optimizer_beta1=config.optimizer_beta1,
+            optimizer_beta2=config.optimizer_beta2,
+            optimizer_momentum=config.optimizer_momentum,
+            optimizer_nesterov=config.optimizer_nesterov,
+            muon_ns_steps=config.muon_ns_steps,
         ) if HAS_MLX else None
 
         # Persistent HRM model and trainer - initialized once, trained continuously
@@ -588,7 +603,6 @@ class EpochEpisodeTrainer:
                     try:
                         batch_mx = mx.array(batch_np)
                         world_model_loss, hrm_memory = trainer.pretrain_step(batch_mx, memory=hrm_memory)
-                        mx.eval(world_model_loss, *hrm_memory)  # Force evaluation and truncate graph
                         pretrain_eval_count += 1
                         loss_val = float(world_model_loss.item())
                         bar_window_losses.append(loss_val)
@@ -627,7 +641,7 @@ class EpochEpisodeTrainer:
                                         for perturbed_bar_batch in chunk:
                                             perturbed_batch_mx = mx.array(perturbed_bar_batch)
                                             replay_loss, hrm_memory = trainer.pretrain_step(
-                                                perturbed_batch_mx, memory=hrm_memory
+                                                perturbed_batch_mx, memory=hrm_memory, auto_eval=False
                                             )
                                             replay_losses.append(replay_loss)
 
@@ -636,7 +650,7 @@ class EpochEpisodeTrainer:
                                             if len(replay_losses) == 1
                                             else mx.mean(mx.stack(replay_losses))
                                         )
-                                        mx.eval(total_replay_loss, *hrm_memory)
+                                        trainer.flush_updates(total_replay_loss, memory=hrm_memory)
                                         replay_eval_count += 1
                                         replay_coalesced_batches += 1
                                         replay_coalesced_steps += len(chunk)
@@ -646,7 +660,6 @@ class EpochEpisodeTrainer:
                                         replay_loss, hrm_memory = trainer.pretrain_step(
                                             perturbed_batch_mx, memory=hrm_memory
                                         )
-                                        mx.eval(replay_loss, *hrm_memory)
                                         replay_eval_count += 1
 
                     except Exception as e:
@@ -768,6 +781,7 @@ class EpochEpisodeTrainer:
                     'replay_eval_count': replay_eval_count,
                     'replay_coalesced_batches': replay_coalesced_batches,
                     'replay_coalesced_steps': replay_coalesced_steps,
+                    'optimizer_name': self.config.optimizer_name,
                 }))
 
         # Final per-codec leaderboard
@@ -799,6 +813,7 @@ class EpochEpisodeTrainer:
             'replay_coalesced_batches': replay_coalesced_batches,
             'replay_coalesced_steps': replay_coalesced_steps,
             'replay_coalescing_enabled': self.config.replay_coalescing,
+            'optimizer_name': self.config.optimizer_name,
             'equity_curve': notional_curve,
             'timestamp': datetime.now().isoformat(),
             # Cache codec_features for Pareto replay - HRM-only retraining
@@ -955,12 +970,18 @@ def run_dashboard():
         n_episodes = st.number_input("Epoch Episodes", min_value=1, max_value=1000, value=500)
         notional_val = st.number_input("Starting Notional ($)", min_value=10, value=100)
         pair_width_val = st.number_input("Pair Width", min_value=5, max_value=50, value=30)
+        optimizer_name = st.selectbox("Optimizer", options=["adamw", "lion", "muon", "adam"], index=0)
+        learning_rate = st.number_input("Learning Rate", min_value=1e-7, max_value=1e-1, value=1e-4, format="%.6f")
+        weight_decay = st.number_input("Weight Decay", min_value=0.0, max_value=1.0, value=0.01, format="%.4f")
 
         if st.button("Start Training", type="primary"):
             config = EpisodeTrainingConfig(
                 n_epoch_episodes=n_episodes,
                 notional=notional_val,
-                pair_width=pair_width_val
+                pair_width=pair_width_val,
+                optimizer_name=str(optimizer_name),
+                learning_rate=float(learning_rate),
+                weight_decay=float(weight_decay),
             )
 
             st.session_state.trainer = EpochEpisodeTrainer(config)
@@ -1033,6 +1054,13 @@ def main():
                         help='Starting notional value')
     parser.add_argument('--pair-width', type=int, default=30,
                         help='Coin pairs per episode')
+    parser.add_argument('--optimizer', type=str, default='adamw',
+                        choices=['adam', 'adamw', 'lion', 'muon'],
+                        help='MLX optimizer for HRM training')
+    parser.add_argument('--learning-rate', type=float, default=1e-4,
+                        help='MLX optimizer learning rate')
+    parser.add_argument('--weight-decay', type=float, default=1e-2,
+                        help='MLX optimizer weight decay')
     parser.add_argument('--dashboard', action='store_true', help='Run Streamlit dashboard')
 
     args = parser.parse_args()
@@ -1045,7 +1073,10 @@ def main():
         config = EpisodeTrainingConfig(
             n_epoch_episodes=args.episodes,
             notional=args.notional,
-            pair_width=args.pair_width
+            pair_width=args.pair_width,
+            optimizer_name=args.optimizer,
+            learning_rate=args.learning_rate,
+            weight_decay=args.weight_decay,
         )
 
         trainer = EpochEpisodeTrainer(config)

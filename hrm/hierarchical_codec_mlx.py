@@ -33,14 +33,16 @@ Naming convention (crypto-technical):
 
 import math
 from dataclasses import dataclass
-from typing import Optional, Tuple, List
+from typing import Any, Optional, Tuple, List
 
 try:
     import mlx.core as mx
     import mlx.nn as nn
+    import mlx.optimizers as optim
     HAS_MLX = True
 except ImportError:
     HAS_MLX = False
+    optim = None
     print("MLX not available")
 
 
@@ -75,6 +77,14 @@ class HRMConfig:
     n_heads: int = 4
     use_mechanical_veto: bool = False
     replay_coalescing: bool = False
+    optimizer_name: str = "adamw"
+    learning_rate: float = 1e-4
+    weight_decay: float = 1e-2
+    optimizer_beta1: float = 0.9
+    optimizer_beta2: float = 0.999
+    optimizer_momentum: float = 0.95
+    optimizer_nesterov: bool = True
+    muon_ns_steps: int = 5
 
     # Legacy aliases for callers that still use old field names
     @property
@@ -513,13 +523,16 @@ class MLXBasketTrainer:
       trade_step    : alpha loss — maximise conviction-weighted expected return (supervised)
 
     Optimizations:
-      @mx.compile enables kernel fusion and prevents Python interpreter overhead.
+      MLX lazy evaluation + fused graph execution.
+      Optimizer updates can be coalesced via auto_eval=False + flush_updates().
       BPTT horizon is bounded to the sequence window via mx.stop_gradient in the model's forward.
     """
 
     def __init__(self, config: HRMConfig = None):
         self.config = config or HRMConfig()
         self.model = MLXHierarchicalCodec(self.config)
+        self.optimizer_name = (self.config.optimizer_name or "adamw").strip().lower()
+        self.optimizer = self._build_optimizer()
         
         # Compile pure inner functions to avoid binding 'self' continually
         
@@ -532,16 +545,14 @@ class MLXBasketTrainer:
                 output[:, 4],
             )
 
-        @mx.compile
-        def compiled_pretrain(bar_codec_features: mx.array, memory: Optional[Tuple] = None) -> Tuple[mx.array, Tuple]:
-            output, next_memory = self.model.forward(bar_codec_features, memory=memory, mode="pretrain")
+        def pretrain_loss_fn(model: "MLXHierarchicalCodec", bar_codec_features: mx.array, memory: Optional[Tuple] = None) -> Tuple[mx.array, Tuple]:
+            output, next_memory = model.forward(bar_codec_features, memory=memory, mode="pretrain")
             target = bar_codec_features[:, -1, :]
             world_model_loss = mx.mean(mx.square(output - target))
             return world_model_loss, next_memory
-            
-        @mx.compile
-        def compiled_trade(bar_codec_features: mx.array, realized_returns: mx.array, memory: Optional[Tuple] = None) -> Tuple[mx.array, Tuple]:
-            output, next_memory = self.model.forward(bar_codec_features, memory=memory, mode="trade")
+
+        def trade_loss_fn(model: "MLXHierarchicalCodec", bar_codec_features: mx.array, realized_returns: mx.array, memory: Optional[Tuple] = None) -> Tuple[mx.array, Tuple]:
+            output, next_memory = model.forward(bar_codec_features, memory=memory, mode="trade")
             pred_fwd_return, signal_conviction, stop_loss_pct, take_profit_pct, position_fraction = _split_trade_outputs(output)
 
             # PyTorch parity: compute realized PnL with SL/TP clamping and position sizing.
@@ -566,27 +577,107 @@ class MLXBasketTrainer:
             final_pnl = final_pnl * active_mask
             alpha_loss = -mx.mean(final_pnl)
             return alpha_loss, next_memory
-            
-        self._compiled_pretrain = compiled_pretrain
-        self._compiled_trade = compiled_trade
 
-    def pretrain_step(self, bar_codec_features: mx.array, memory: Optional[Tuple] = None) -> Tuple[mx.array, Tuple]:
+        self._pretrain_loss_and_grad = mx.value_and_grad(pretrain_loss_fn)
+        self._trade_loss_and_grad = mx.value_and_grad(trade_loss_fn)
+
+    def _build_optimizer(self) -> Any:
+        if not HAS_MLX or optim is None:
+            return None
+
+        lr = float(self.config.learning_rate)
+        wd = float(self.config.weight_decay)
+        b1 = float(self.config.optimizer_beta1)
+        b2 = float(self.config.optimizer_beta2)
+
+        name = self.optimizer_name
+        if name == "adam":
+            return optim.Adam(learning_rate=lr, betas=[b1, b2])
+        if name == "adamw":
+            return optim.AdamW(learning_rate=lr, betas=[b1, b2], weight_decay=wd)
+        if name == "lion":
+            # Lion typically prefers lower lr and higher wd than AdamW; leave explicit tuning to config.
+            return optim.Lion(
+                learning_rate=lr,
+                betas=[b1, min(b2, 0.999)],
+                weight_decay=wd,
+            )
+        if name == "muon":
+            # Muon is strongest on matrix-like hidden weights. Route 0D/1D params
+            # (biases, scalar heads, norms) to AdamW as a stable fallback.
+            muon_opt = optim.Muon(
+                learning_rate=lr,
+                momentum=float(self.config.optimizer_momentum),
+                weight_decay=wd,
+                nesterov=bool(self.config.optimizer_nesterov),
+                ns_steps=int(self.config.muon_ns_steps),
+            )
+            fallback = optim.AdamW(learning_rate=lr, betas=[b1, b2], weight_decay=wd)
+            return optim.MultiOptimizer(
+                [muon_opt, fallback],
+                filters=[lambda _path, weight: getattr(weight, "ndim", 0) >= 2],
+            )
+
+        raise ValueError(
+            f"Unsupported optimizer_name={self.config.optimizer_name!r}. "
+            "Expected one of: adam, adamw, lion, muon"
+        )
+
+    def _eval_training_state(self, *values: mx.array, memory: Optional[Tuple] = None):
+        eval_args: List[Any] = [*values]
+        if memory is not None:
+            eval_args.extend(list(memory))
+        if self.optimizer is not None:
+            eval_args.append(self.model.parameters())
+            eval_args.append(self.optimizer.state)
+        mx.eval(*eval_args)
+
+    def pretrain_step(
+        self,
+        bar_codec_features: mx.array,
+        memory: Optional[Tuple] = None,
+        auto_eval: bool = True,
+    ) -> Tuple[mx.array, Tuple]:
         """
-        World-model pre-training step (compiled).
+        World-model pre-training step with optimizer update.
 
         Loss: MSE between predicted next-bar codec features and actual last bar.
         Returns: loss scalar, next memory state
         """
-        return self._compiled_pretrain(bar_codec_features, memory=memory)
+        (world_model_loss, next_memory), grads = self._pretrain_loss_and_grad(
+            self.model, bar_codec_features, memory
+        )
+        if self.optimizer is not None:
+            self.optimizer.update(self.model, grads)
+        if auto_eval:
+            self._eval_training_state(world_model_loss, memory=next_memory)
+        return world_model_loss, next_memory
 
-    def trade_step(self, bar_codec_features: mx.array, realized_returns: mx.array, memory: Optional[Tuple] = None) -> Tuple[mx.array, Tuple]:
+    def trade_step(
+        self,
+        bar_codec_features: mx.array,
+        realized_returns: mx.array,
+        memory: Optional[Tuple] = None,
+        auto_eval: bool = True,
+    ) -> Tuple[mx.array, Tuple]:
         """
-        Alpha-maximisation training step (compiled).
+        Alpha-maximisation training step with optimizer update.
 
         Loss: negative conviction-weighted expected return (maximise alpha).
         Returns: loss scalar, next memory state
         """
-        return self._compiled_trade(bar_codec_features, realized_returns, memory=memory)
+        (alpha_loss, next_memory), grads = self._trade_loss_and_grad(
+            self.model, bar_codec_features, realized_returns, memory
+        )
+        if self.optimizer is not None:
+            self.optimizer.update(self.model, grads)
+        if auto_eval:
+            self._eval_training_state(alpha_loss, memory=next_memory)
+        return alpha_loss, next_memory
+
+    def flush_updates(self, *values: mx.array, memory: Optional[Tuple] = None):
+        """Force materialization of any queued optimizer/model updates."""
+        self._eval_training_state(*values, memory=memory)
 
 
 # Legacy alias — MLXCodecTrainer was the old name; kept for any external references
