@@ -50,10 +50,11 @@ try:
         HierarchicalCodecConfig as MLXConfig
     )
     HAS_MLX = True
-    print("[DEBUG] MLX imported successfully")
-except ImportError as e:
+except ImportError:
     HAS_MLX = False
-    print(f"[DEBUG] MLX NOT imported: {e}")
+
+from codec_models import load_all_codecs
+
 
 
 @dataclass
@@ -135,6 +136,12 @@ class CandlePipeline:
     def __init__(self, cache: CandleCache):
         self.cache = cache
         self.data_dir = Path(project_root) / "data" / "binance"
+        
+        # Load the 24 canonical codec experts from GOALS.md
+        self.expert_classes = load_all_codecs()
+        self.experts = [ExpertClass({}) for ExpertClass in self.expert_classes]
+        if len(self.experts) != 24:
+            print(f"⚠️  WARNING: Loaded {len(self.experts)} codec experts, expected exactly 24!")
 
     def load_candles(self, symbols: List[str], start: str, end: str) -> pd.DataFrame:
         cache_key = f"candles:{','.join(sorted(symbols))}:{start}:{end}"
@@ -196,10 +203,10 @@ class CandlePipeline:
 
     def compute_signals(self, df: pd.DataFrame, n_codec_outputs: int = 24) -> np.ndarray:
         """
-        Compute codec input features from raw OHLCV candles.
+        Compute codec input features from raw OHLCV candles using the 24 expert panel.
 
         Returns an array of shape [T, n_codec_outputs * 2]:
-          - First n_codec_outputs columns : normalised price/vol features
+          - First n_codec_outputs columns : expert signal convictions (with direction signs)
           - Last n_codec_outputs columns  : per-bar close returns tiled across codecs
         """
         df = df.sort_values(['symbol', 'timestamp'])
@@ -209,26 +216,43 @@ class CandlePipeline:
         c = df['close'].values.astype(np.float32)
         h = df['high'].values.astype(np.float32)
         l = df['low'].values.astype(np.float32)
+        v = df['volume'].values.astype(np.float32) if 'volume' in df.columns else np.ones(T, dtype=np.float32)
 
         c = np.nan_to_num(c, nan=1.0)
         h = np.nan_to_num(h, nan=c)
         l = np.nan_to_num(l, nan=c)
-
-        # Feature 0: normalised close price
-        codec_features[:, 0] = np.clip((c - np.mean(c)) / (np.std(c) + 1e-8), -1, 1)
-        # Feature 1: high-low range normalised by close (intrabar volatility)
-        codec_features[:, 1] = (h - l) / (c + 1e-8)
-
-        # For true draw-thru architecture, we either use raw features or explicitly derived metrics
-        # Removing previous mock `np.random.randn()` loops since user explicitly rejected mocks.
-        # This will leave features 2-n_codec_outputs as zeros if not computed, which is mathematically safer
-        # (Zero-filled inputs to LayerNorm/Linear will just pass zero gradients and zero activations for those dimensions).
         
-        # Tiled close-bar returns across all codec output channels
+        # Tiled close-bar returns (channels 24-47)
         close_bar_returns = np.diff(c, prepend=c[0]) / (c + 1e-8)
         codec_features[:, n_codec_outputs:] = np.tile(
             close_bar_returns.reshape(-1, 1), (1, n_codec_outputs)
         )
+
+        num_experts = min(len(self.experts), n_codec_outputs)
+        
+        # Run the full DataFrame stream through the actual expert codecs
+        # We pass a rolling context window to simulate real-time streaming constraints
+        context_buffer = {'close': [], 'high': [], 'low': [], 'volume': [], 'returns': []}
+        
+        for i in range(T):
+            context_buffer['close'].append(c[i])
+            context_buffer['high'].append(h[i])
+            context_buffer['low'].append(l[i])
+            context_buffer['volume'].append(v[i])
+            context_buffer['returns'].append(close_bar_returns[i])
+            
+            # Keep rolling memory short for performance, 100 bars is enough for EMA/MACD lags
+            if len(context_buffer['close']) > 100:
+                for k in context_buffer.keys():
+                    context_buffer[k] = context_buffer[k][-100:]
+            
+            # Route the stream into the GOALS.md expert panel
+            for expert_idx in range(num_experts):
+                # Return dict is { signal_conviction, direction, regime_fit }
+                signal = self.experts[expert_idx].forward(context_buffer)
+                
+                # Encode signal conviction with its directional sign directly into the HRM feature path
+                codec_features[i, expert_idx] = signal.get('signal_conviction', 0.0) * signal.get('direction', 0.0)
 
         return codec_features
 
@@ -462,10 +486,10 @@ class EpochEpisodeTrainer:
         Run the full stochastic epoch episode training loop.
 
         Implements Self-Adapting Pareto Replay:
-          - 30% chance to replay from Pareto-tail episodes (|z| > 1.5)
+          - 60% pure stochastic episodes
+          - 20% alpha_extreme tail replay: densify profitable patterns
+          - 20% drawdown_extreme tail replay: build regime robustness
           - Perturbation magnitude scales with tail extremity
-          - alpha_extreme tail: densify profitable patterns
-          - drawdown_extreme tail: build regime robustness
         """
         self.running = True
         self.results = []
@@ -500,23 +524,30 @@ class EpochEpisodeTrainer:
                 for r in self.results:
                     r['z_score'] = (r.get('realized_pnl', 0.0) - mean_pnl) / std_pnl
 
-                # Pareto tails: |z| > 1.5 (outside normalcy)
-                pareto_extremes = [r for r in self.results if abs(r.get('z_score', 0)) > 1.5]
+                # Split extremes into alpha/drawdown channels
+                alpha_extremes = [r for r in pareto_extremes if r['z_score'] > 0]
+                drawdown_extremes = [r for r in pareto_extremes if r['z_score'] < 0]
 
-                # 30% chance to replay from Pareto extremes if any exist
-                if pareto_extremes and np.random.random() < 0.30:
+                # Explicit 60/20/20 replay logic per GOALS.md specification
+                roll = np.random.random()
+                
+                selected = None
+                if roll < 0.20 and alpha_extremes:
+                    weights = np.array([abs(r['z_score']) for r in alpha_extremes])
+                    selected = np.random.choice(alpha_extremes, p=weights / weights.sum())
+                    pareto_tail_label = "alpha_extreme"
+                elif 0.20 <= roll < 0.40 and drawdown_extremes:
+                    weights = np.array([abs(r['z_score']) for r in drawdown_extremes])
+                    selected = np.random.choice(drawdown_extremes, p=weights / weights.sum())
+                    pareto_tail_label = "drawdown_extreme"
+
+                if selected:
                     is_pareto_replay = True
-                    # Weight selection towards the most extreme (highest |z|)
-                    weights = np.array([abs(r['z_score']) for r in pareto_extremes])
-                    weights /= weights.sum()
-                    selected = np.random.choice(pareto_extremes, p=weights)
-
                     z_score = selected['z_score']
                     # Self-adapting perturbation: stronger for wilder extremes
                     pareto_perturbation_mag = min(0.5, 0.1 * abs(z_score))
                     episode_pairs = selected['symbols']
 
-                    pareto_tail_label = "alpha_extreme" if z_score > 0 else "drawdown_extreme"
                     print(
                         f"Pareto Replay [{pareto_tail_label}] episode {selected['episode_id']} "
                         f"(z={z_score:.2f}, perturb={pareto_perturbation_mag:.2f})"

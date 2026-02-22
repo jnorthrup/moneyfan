@@ -170,4 +170,4 @@ def create_codec(config: Dict[str, Any] = None):
     """Create generic codec instance"""
     if config is None:
         config = {}
-    return GenericCodec(config)
+    return GenericCodec(config)    def online_adapter(self, *args, **kwargs) -> None:\n        pass\n

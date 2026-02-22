@@ -43,7 +43,7 @@ Conventional ML training fails in markets:
 
 Stochastic training is superior:
 
-- Random epoch basket selection per epoch → regime robustness
+- Random epoch episode selection per epoch → regime robustness
 - `pair_width=30` random pairs + 75% missing data → generalization
 - Resampled continuously → no memorization
 
@@ -51,9 +51,9 @@ Stochastic training is superior:
 
 **Stochastic in ALL Dimensions:**
 
-1. **Pairs**: Random `pair_width` coin pairs per basket
+1. **Pairs**: Random `pair_width` coin pairs per episode
 2. **Duration**: Random bar window length (`min_bar_window`–`max_bar_window` candles)
-3. **Composition**: Random `n_epoch_baskets`-wide basket per epoch
+3. **Composition**: Random `n_epoch_episodes`-wide episode per epoch
 4. **Time Unit**: Random timeframe (5m/15m/1h)
 
 No fixed anything. Every epoch samples fresh across all four dimensions.
@@ -70,15 +70,15 @@ extent = T + n
 
 **Performance-Extremes Replay (Breadth + Density Balance)**
 
-- Track every basket's normalized PnL / Sharpe / max-DD in a rolling histogram.
+- Track every episode's normalized PnL / Sharpe / max-DD in a rolling histogram.
 - Replay probability weighted by extremity (|z-score| of performance).
 - **Alpha-extreme** (top 5-10%): mild perturbation → densify profitable patterns.
 - **Drawdown-extreme** (bottom 5-10%): stronger augmentation → build regime robustness.
 - Mix ratio per epoch: 60% pure stochastic + 20% alpha-extreme replay + 20% drawdown-extreme replay.
-- Always apply fresh resampling across all four dimensions on replayed baskets.
-- Track "familiar-ground generalization" metric: Δ on replayed baskets vs fresh stochastic.
+- Always apply fresh resampling across all four dimensions on replayed episodes.
+- Track "familiar-ground generalization" metric: Δ on replayed episodes vs fresh stochastic.
 
-**Regime Shock Replays (Sub-Basket Outliers)**
+**Regime Shock Replays (Sub-Episode Outliers)**
 To guarantee the model masters the hardest edges of the market:
 
 - **Shock Z-Threshold (`shock_z_threshold`)**: Any extent where world_model_loss z-score > 2.0.
@@ -114,7 +114,7 @@ Each codec expert is an independent model/strategy trained on tick context and i
 21. **transformer_attention** – self-attention on multi-timeframe bar patches
 22. **rl_dqn_policy** – deep Q-network tactical execution agent
 23. **pair_correlation_arb** – statistical arbitrage on coin pairs
-24. **zscore_stat_arb** – multi-asset z-score mean-reversion baskets
+24. **zscore_stat_arb** – multi-asset z-score mean-reversion episodes
 
 Each expert output: `[signal_conviction ∈ [0,1], direction ∈ [-1/0/1], regime_fit_score]`
 
@@ -182,7 +182,7 @@ world_model_loss.backward()  # updates EVERYTHING together
 
 - Columnar storage, fast aggregations
 - Provenance tracking (source, timestamp, quality)
-- SQL queries for stochastic basket sampling
+- SQL queries for stochastic episode sampling
 - Parquet export for portability
 
 **Layer 2 — CandleCache (Async Draw-Through)**
@@ -194,10 +194,10 @@ threshold = frame_count | extent_complete | data_ready
 extent = T + n  →  train forward when extent filled
 ```
 
-**Layer 3 — EpochBasketTrainer (Learn)**
+**Layer 3 — EpochEpisodeTrainer (Learn)**
 
 - MLX-native codec training
-- Stochastic basket: `pair_width=30` random pairs per epoch
+- Stochastic episode: `pair_width=30` random pairs per epoch
 - Signal generation: 24 expert codec outputs per bar
 - Output: `[signal_conviction, direction, regime_fit]`
 
@@ -215,13 +215,12 @@ extent = T + n  →  train forward when extent filled
 
 ```
 moneyfan/
-├── train.py              # EpochBasketTrainer (stochastic basket training)
+├── train.py              # EpochEpisodeTrainer (stochastic episode training)
 ├── run.py                # Paper/Live execution
 ├── dashboard.py          # Streamlit viewserver (visualization only)
 ├── hrm/
 │   ├── hierarchical_codec.py      # HRM architecture (PyTorch reference)
 │   ├── hierarchical_codec_mlx.py  # HRM implementation (MLX native)
-│   └── duck_store.py              # DuckDB persistence
 ├── codec_models/
 │   ├── base_codec.py              # BaseExpert interface (24-expert panel)
 │   └── codec_01_*.py .. codec_24_*.py  # 24 expert strategies
@@ -232,7 +231,7 @@ moneyfan/
 
 **Entry Points:**
 
-- `python train.py --baskets 500` → Train stochastic epoch baskets
+- `python train.py --episodes 500` → Train stochastic epoch episodes
 - `python run.py --mode paper` → Paper trade
 - `streamlit run dashboard.py` → Viewserver (visualization)
 
@@ -254,7 +253,7 @@ moneyfan/
 ### Phase 1: Foundation ✅ COMPLETE
 
 - [x] 24 codec expert panel
-- [x] Stochastic epoch basket implementation
+- [x] Stochastic epoch episode implementation
 - [x] MLX optimisation (no PyTorch in hot path)
 - [x] Multi-task HRM with macro_regime_layer/tactical_execution_layer shared backbone
 - [x] Real MLX training with backpropagation
