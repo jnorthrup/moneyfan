@@ -37,6 +37,11 @@ except ImportError:
     HAS_MLX = False
 
 from train import CandlePipeline, CandleCache
+from hrm.order_intent import NormalizedTradeIntent, RiskTier
+from execution.order_intent_adapter import (
+    intent_to_coinbase_order_preview,
+    intent_to_legacy_signal,
+)
 
 
 @dataclass
@@ -88,10 +93,10 @@ class TradingEngine:
             return
         
         self.model_config = HierarchicalCodecConfig(
-            n_signals=24,
+            n_codec_outputs=24,
             hidden_dim=64,
-            sparkline_frames=20,
-            sparkline_horizon=200
+            ob_depth_frames=20,
+            ob_lookback_horizon=200
         )
         
         self.model = MLXHierarchicalCodec(self.model_config)
@@ -165,16 +170,22 @@ class TradingEngine:
         
         if len(self.positions) >= self.config.max_positions:
             return None
-        
-        position_size = self.config.capital * self.config.risk_per_trade / self.config.stop_loss
+
+        stop_loss = float(signal.get('stop_loss_pct', self.config.stop_loss))
+        take_profit = float(signal.get('take_profit_pct', self.config.take_profit))
+        position_fraction = float(signal.get('position_fraction', 1.0))
+        position_fraction = min(1.0, max(0.0, position_fraction))
+
+        base_position_size = self.config.capital * self.config.risk_per_trade / max(self.config.stop_loss, 1e-6)
+        position_size = base_position_size * position_fraction
         
         position = {
             'symbol': symbol,
             'direction': direction,
             'size': position_size,
             'entry_price': self._get_current_price(symbol),
-            'stop_loss': self.config.stop_loss,
-            'take_profit': self.config.take_profit,
+            'stop_loss': stop_loss,
+            'take_profit': take_profit,
             'confidence': confidence,
             'timestamp': datetime.now().isoformat()
         }
@@ -188,6 +199,34 @@ class TradingEngine:
             print(f"🔴 LIVE: {direction:+.0f} {symbol} @ ${position['entry_price']:.2f}")
         
         return position
+
+    def _signal_to_intent(self, signal: Dict) -> Optional[NormalizedTradeIntent]:
+        if 'error' in signal:
+            return None
+
+        direction = float(signal.get('signal', 0.0))
+        confidence = float(signal.get('confidence', 0.0))
+        pred = float(signal.get('prediction', 0.0))
+
+        return NormalizedTradeIntent(
+            symbol=signal['symbol'],
+            direction=direction,
+            pred_fwd_return=pred,
+            confidence=confidence,
+            position_fraction=min(1.0, max(0.0, confidence)),
+            stop_loss_pct=-abs(self.config.stop_loss),
+            take_profit_pct=abs(self.config.take_profit),
+            risk_tier=RiskTier.NORMAL,
+        )
+
+    def execute_trade_intent(self, intent: NormalizedTradeIntent):
+        if intent.vetoed:
+            return None
+
+        # Record a broker-agnostic preview for observability / future adapters.
+        self.orders.append(intent_to_coinbase_order_preview(intent))
+        legacy_signal = intent_to_legacy_signal(intent)
+        return self.execute_trade(legacy_signal)
     
     def _get_current_price(self, symbol: str) -> float:
         return np.random.uniform(100, 1000)
@@ -257,9 +296,10 @@ class TradingEngine:
                     break
                 
                 signal = self.generate_signals(symbol)
-                
-                if 'error' not in signal:
-                    self.execute_trade(signal)
+                intent = self._signal_to_intent(signal)
+                if intent is None:
+                    continue
+                self.execute_trade_intent(intent)
             
             self.update_positions()
             self._save_state()

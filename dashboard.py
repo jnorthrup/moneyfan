@@ -487,95 +487,96 @@ def main():
                 
                 if selected_label:
                     selected_episode = options[selected_label]
-                    eq_curve = selected_episode['equity_curve']
-                    
-                    # 3D Path representation
-                    # Z-axis: Equity value
-                    # Y-axis: Episode ID (to give it depth relative to the run)
-                    # X-axis: Sequence Step
-                    
+                    # Calculate sequence step X-axis
                     x_vals = list(range(len(eq_curve)))
-                    y_vals = [selected_episode['episode_id']] * len(eq_curve)
-                    z_vals = eq_curve
                     
-                    fig3d = go.Figure(data=[go.Scatter3d(
+                    # 1. 2D Portfolio Health (True Equity Curve + Drawdown)
+                    st.markdown("#### 📉 Portfolio Health (True Equity & Drawdown)")
+                    
+                    fig_eq = go.Figure()
+                    
+                    # Main Equity line
+                    fig_eq.add_trace(go.Scatter(
                         x=x_vals,
-                        y=y_vals,
-                        z=z_vals,
-                        mode='lines+markers',
-                        marker=dict(
-                            size=3,
-                            color=z_vals,
-                            colorscale='Viridis',
-                            opacity=0.8
-                        ),
-                        line=dict(
-                            color='#ff0055',
-                            width=3
-                        )
-                    )])
+                        y=eq_curve,
+                        mode='lines',
+                        name='HRM Capital ($)',
+                        line=dict(color='#00ff88', width=2),
+                        fill='tozeroy',
+                        fillcolor='rgba(0, 255, 136, 0.1)'
+                    ))
                     
-                    fig3d.update_layout(
-                        title=f"3D Micro Replay: Episode #{selected_episode['episode_id']}",
-                        scene=dict(
-                            xaxis_title='Sequence Step',
-                            yaxis_title='Episode ID',
-                            zaxis_title='Capital ($)'
-                        ),
-                        height=500,
-                        margin=dict(l=0, r=0, b=0, t=40)
+                    # Buy and Hold Benchmark (if available, otherwise flat line)
+                    bh_curve = selected_episode.get('benchmark_curve', [selected_episode.get('final_capital', 100)] * len(eq_curve))
+                    if len(bh_curve) == len(eq_curve):
+                        fig_eq.add_trace(go.Scatter(
+                            x=x_vals, y=bh_curve, mode='lines',
+                            name='Buy & Hold (Equally Weighted)',
+                            line=dict(color='gray', width=1, dash='dash')
+                        ))
+
+                    fig_eq.update_layout(
+                        title=f"Episode #{selected_episode['episode_id']} Equity Curve",
+                        xaxis_title="Bar/Step",
+                        yaxis_title="Notional Value ($)",
+                        height=350, margin=dict(l=0, r=0, t=30, b=0),
+                        legend=dict(x=0, y=1, bgcolor='rgba(0,0,0,0)')
                     )
-                    
-                    st.plotly_chart(fig3d, use_container_width=True)
-                    
-                    # 2.5D Pandas Hierarchy Visualizer (Dumbing down the Parquet structure)
-                    with st.container(border=True):
-                        st.markdown(f"**Current Episode Configuration**: `{len(selected_episode['symbols'])} Symbols` ➔ `{getattr(st.session_state.config, 'bar_sequences_per_episode', 10)} Sequences` ➔ `Timeframe Steps`")
+                    st.plotly_chart(fig_eq, use_container_width=True)
+
+                    # Compute Drawdown
+                    eq_arr = np.array(eq_curve)
+                    peak_arr = np.maximum.accumulate(eq_arr)
+                    dd_pct = np.zeros_like(eq_arr)
+                    valid_idx = peak_arr > 0
+                    dd_pct[valid_idx] = (eq_arr[valid_idx] - peak_arr[valid_idx]) / peak_arr[valid_idx]
+
+                    fig_dd = go.Figure()
+                    fig_dd.add_trace(go.Scatter(
+                        x=x_vals, y=dd_pct, mode='lines', name='Drawdown',
+                        line=dict(color='#ff3366', width=1),
+                        fill='tozeroy', fillcolor='rgba(255, 51, 102, 0.3)'
+                    ))
+                    fig_dd.update_layout(
+                        title="Underwater Curve (Drawdown Depth)",
+                        xaxis_title="Bar/Step",
+                        yaxis_title="Drawdown (%)",
+                        yaxis_tickformat='.1%',
+                        height=200, margin=dict(l=0, r=0, t=30, b=0)
+                    )
+                    st.plotly_chart(fig_dd, use_container_width=True)
+
+                    # 2. Episode Predictor Truth Scatter (if available)
+                    # If this episode logged raw trades/bars (in future trainer iter), show them
+                    trades = selected_episode.get('trades', [])
+                    if trades and isinstance(trades, list) and len(trades) > 0 and 'hrm_score' in trades[0]:
+                        st.markdown("#### ⚖️ Predictor Truth (Score vs PnL)")
+
+                        scores = [t.get('hrm_score', 0) for t in trades]
+                        pnls = [t.get('pnl', 0) for t in trades]
+
+                        fig_scatter = px.scatter(
+                            x=scores, y=pnls,
+                            color=np.sign(pnls),
+                            color_continuous_scale=['#ff3366', 'gray', '#00ff88'],
+                            labels={'x': 'HRM Conviction Score', 'y': 'Realised Trade PnL ($)', 'color': 'PnL Sign'}
+                        )
+                        fig_scatter.add_hline(y=0, line_dash="dash", line_color="gray")
+                        fig_scatter.update_layout(height=300, margin=dict(l=0, r=0, t=10, b=0))
+                        st.plotly_chart(fig_scatter, use_container_width=True)
                         
-                        # Show some of the paired instruments
-                        display_syms = selected_episode['symbols'][:4]
-                        st.markdown("**Paired Active Symbols:**")
-                        cols = st.columns(len(display_syms))
-                        for i, sym in enumerate(display_syms):
-                            with cols[i]:
-                                st.metric(
-                                    label=sym, 
-                                    value="Active", 
-                                    delta=f"{np.random.randn():.2f}%" # Placeholder for live change
-                                )
-                                
-                        st.caption("Here is the authentic structural representation of how the native Pandas/Parquet backbone unrolls this episode's assets into memory for the model, utilizing generic MultiIndex auto-layouts:")
-                        
-                        # Show raw MultiIndex data-frame shape illustration
-                        # Since we don't pass the actual df to the dashboard, we sketch a visual analog here 
-                        
-                        st.code("""
-# (Timestamp, Asset) MultiIndex Shape
-pd.DataFrame([
-    ...
-], index=pd.MultiIndex.from_product([dates, symbols]), columns=feature_cols)
-                        """, language="python")
-                        
-                        if len(selected_episode['symbols']) > 4:
-                            st.caption(f"...and `{len(selected_episode['symbols']) - 4}` more paired assets fused into this same hyper-matrix horizontally.")
-                            
-                    with st.expander("🔌 Microservice Data Contract (JSON Payload)"):
-                        st.caption("This matches the expected schema for our portable inference microservices. The model consumes this generic structure directly from the Parquet-native feed.")
-                        
-                        # Generate a clean JSON sample for this specific episode context
-                        contract_payload = {
-                            "episode_id": selected_episode['episode_id'],
-                            "symbols": selected_episode['symbols'],
-                            "data_shape": [5, len(selected_episode['symbols']) * 6], # 5 time steps, 6 features per symbol
-                            "schema_version": "v2.5-parquet-native",
-                            "metrics_summary": {
-                                "realized_pnl": selected_episode.get('realized_pnl', 0.0),
-                                "hit_rate": selected_episode.get('hit_rate', 0.0),
-                                "final_capital": selected_episode.get('final_capital', 100.0)
-                            },
-        "features_mapping": ["open", "high", "low", "close", "volume", "trades"]
-                        }
-                        st.json(contract_payload)
+                    # 3. Codec Allocator Imprint (Which agents won this pair basket?)
+                    if 'codec_scores' in selected_episode:
+                        st.markdown("#### 🧠 Allocator Weights (Episode Conviction)")
+                        cs = selected_episode['codec_scores']
+                        if cs:
+                            cs_df = pd.DataFrame(list(cs.items()), columns=['Agent', 'Total Conviction']).sort_values('Total Conviction', ascending=True)
+                            fig_bar = px.bar(
+                                cs_df, x='Total Conviction', y='Agent', orientation='h',
+                                color='Total Conviction', color_continuous_scale='Viridis'
+                            )
+                            fig_bar.update_layout(height=max(300, len(cs)*20), margin=dict(l=0,r=0,t=10,b=0), showlegend=False)
+                            st.plotly_chart(fig_bar, use_container_width=True)
 
             else:
                 st.info("No detailed equity curves available for replay yet.")

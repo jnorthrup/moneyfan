@@ -1,13 +1,23 @@
 # General ignore patterns
 .aider.chat.history.md
 
+# Training Results & Demo Code
+training_results.json
+training_checkpoint.json
+trainer_cockpit.ipynb
+train.log
+dashboard.log
+streamlit.log
+
+# Mac stuff
+.DS_Store
+.vscode/
+
 # IDE and editor files
 .idea/
 *.iml
 *.ipr
 *.iws
-*.DS_Store
-.vscode/
 
 # Build and distribution
 **/target/
@@ -42,6 +52,8 @@ htmlcov/
 *.db
 *.log
 *.hprof
+*.merged
+*.bak_lane_*
 *.swp
 *.swo
 *.swn
