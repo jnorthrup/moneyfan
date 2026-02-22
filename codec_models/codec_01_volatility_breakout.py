@@ -70,3 +70,7 @@ class Codec01(BaseCodec):
         if not HAS_MLX or self.model is None:
             return
         pass
+    
+    def online_adapter(self, *args, **kwargs) -> None:
+        pass
+

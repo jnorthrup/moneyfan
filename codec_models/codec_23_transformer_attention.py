@@ -1,78 +1,33 @@
-"""
-Codec 23: Transformer Attention
-Self-attention on multi-timeframe patches.
-"""
-
 import numpy as np
-from typing import Tuple, Dict, Any
-from .base_codec import BaseCodec
+from typing import Dict, Any
+from .base_codec import BaseExpert
 
-try:
-    import mlx.core as mx
-    import mlx.nn as nn
-    HAS_MLX = True
-except ImportError:
-    HAS_MLX = False
-
-
-class Codec23(BaseCodec):
+class Codec23TransformerAttention(BaseExpert):
+    """
+    Expert 23: transformer_attention
+    Self-attention simulated over multi-timeframe bar patches.
+    """
     def __init__(self, config: Dict[str, Any] = None):
-        config = config or {}
-        config['name'] = 'transformer_attention'
         super().__init__(config)
         
-        self.n_heads = config.get('n_heads', 4)
-        self.d_model = config.get('d_model', 64)
+    def forward(self, context) -> Dict[str, float]:
+        if "close" not in context or len(context["close"]) < 5:
+            return {'signal_conviction': 0.0, 'direction': 0.0, 'regime_fit': 0.0}
+            
+        recent = np.array(context["close"][-5:])
+        weights = np.array([0.1, 0.15, 0.2, 0.25, 0.3]) # Simulated attention map
         
-        if HAS_MLX:
-            self.model = nn.Sequential(
-                nn.Linear(64, 128),
-                nn.ReLU(),
-                nn.Linear(128, 128),
-                nn.ReLU(),
-                nn.Linear(128, 3)
-            )
-    
-    def _self_attention(self, x: np.ndarray) -> np.ndarray:
-        if len(x.shape) == 1:
-            x = x.reshape(1, -1)
+        attended_val = float(np.sum(recent * weights))
+        last_close = float(recent[-1])
         
-        d_k = x.shape[-1]
-        scores = x @ x.T / np.sqrt(d_k)
-        attention = np.exp(scores - np.max(scores, axis=-1, keepdims=True))
-        attention = attention / np.sum(attention, axis=-1, keepdims=True)
-        return attention @ x
-    
-    def forward(self, market_data: Dict[str, Any], features: np.ndarray) -> Tuple[float, float]:
-        if len(features) >= 64:
-            attended = self._self_attention(features[:64])
-            pooled = np.mean(attended, axis=0) if len(attended.shape) > 1 else attended
-        else:
-            pooled = features
+        direction = 1.0 if attended_val > last_close else -1.0
+        conviction = min(1.0, float(np.abs(attended_val - last_close) / last_close) * 100)
         
-        direction = np.tanh(np.sum(pooled[:16]) * 0.5)
-        confidence = min(np.std(pooled) * 2 + 0.3, 1.0)
+        return {
+            'signal_conviction': conviction,
+            'direction': direction,
+            'regime_fit': 0.9
+        }
         
-        trend_features = [
-            market_data.get('returns_5m', 0),
-            market_data.get('returns_15m', 0),
-            market_data.get('returns_1h', 0),
-        ]
-        trend_signal = np.mean(trend_features)
-        direction = direction * 0.7 + np.sign(trend_signal) * min(abs(trend_signal) * 10, 0.3)
-        
-        if HAS_MLX and self.model is not None and len(features) >= 64:
-            try:
-                mx_features = mx.array(features[:64].reshape(1, -1).astype(np.float32))
-                output = self.model(mx_features)
-                ml_dir = float(np.tanh(output[0, 1]))
-                ml_conf = float(mx.sigmoid(output[0, 0]))
-                direction = direction * 0.3 + ml_dir * 0.7
-                confidence = confidence * 0.3 + ml_conf * 0.7
-            except:
-                pass
-        
-        return self.validate_signal(confidence, direction)
-    
-    def test_time_adapter(self, batch_data: Dict[str, Any], learning_rate: float = 1e-3) -> None:
+    def online_adapter(self, *args, **kwargs) -> None:
         pass

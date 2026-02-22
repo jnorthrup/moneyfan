@@ -63,3 +63,7 @@ class Codec17(BaseCodec):
     
     def test_time_adapter(self, batch_data: Dict[str, Any], learning_rate: float = 1e-3) -> None:
         pass
+    
+    def online_adapter(self, *args, **kwargs) -> None:
+        pass
+
