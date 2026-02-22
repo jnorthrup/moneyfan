@@ -30,6 +30,25 @@ import plotly.express as px
 from train import EpisodeTrainingConfig, EpochEpisodeTrainer
 
 
+CHECKPOINT_FILE = Path("training_checkpoint.json")
+RESULTS_FILE    = Path("training_results.json")
+
+
+def load_cli_checkpoint():
+    """Return list of episode result dicts from the CLI trainer checkpoint, or []."""
+    import json
+    for p in (CHECKPOINT_FILE, RESULTS_FILE):
+        if p.exists():
+            try:
+                data = json.loads(p.read_text())
+                results = data.get('results', [])
+                if results:
+                    return results, data
+            except Exception:
+                pass
+    return [], {}
+
+
 def init_session_state():
     if 'trainer' not in st.session_state:
         st.session_state.trainer = None
@@ -43,6 +62,10 @@ def init_session_state():
         st.session_state.current_epoch_info = None
     if 'config' not in st.session_state:
         st.session_state.config = {}
+    if 'cli_results' not in st.session_state:
+        st.session_state.cli_results = []
+    if 'cli_checkpoint_meta' not in st.session_state:
+        st.session_state.cli_checkpoint_meta = {}
 
 
 def main():
@@ -121,6 +144,21 @@ def main():
         
         if st.session_state.training_thread and not st.session_state.training_thread.is_alive():
             st.session_state.training_active = False
+
+    # ── CLI trainer passthrough ────────────────────────────────────────────────
+    # Poll the checkpoint written by the background `python train.py` process.
+    # This makes the dashboard a live observer even without clicking Start.
+    cli_results, cli_meta = load_cli_checkpoint()
+    if cli_results:
+        st.session_state.cli_results = cli_results
+        st.session_state.cli_checkpoint_meta = cli_meta
+        completed_cli = cli_meta.get('completed_episodes', len(cli_results))
+        total_cli     = cli_meta.get('total_episodes', 500)
+        st.info(
+            f"🖥️  **External CLI trainer detected** — "
+            f"{completed_cli}/{total_cli} episodes completed "
+            f"(`python train.py` → `training_checkpoint.json`)"
+        )
     
     st.divider()
     
@@ -180,8 +218,68 @@ def main():
         st.progress(progress)
     
     st.divider()
-    
+
+    # ── 24-Agent Leaderboard ─────────────────────────────────────────────────
+    # Aggregate codec_scores across all available episodes (own trainer or CLI)
+    active_results = st.session_state.results or st.session_state.cli_results
+    all_codec_scores: Dict[str, float] = {}
+    for r in active_results:
+        for agent, score in r.get('codec_scores', {}).items():
+            all_codec_scores[agent] = all_codec_scores.get(agent, 0.0) + score
+
+    if all_codec_scores:
+        st.subheader("🏆 24-Agent Leaderboard")
+        lb_df = (
+            pd.DataFrame.from_dict(all_codec_scores, orient='index', columns=['total_conviction'])
+            .sort_values('total_conviction', ascending=True)     # ascending for horizontal bar
+            .reset_index()
+            .rename(columns={'index': 'agent'})
+        )
+        top_score = lb_df['total_conviction'].max()
+        lb_df['pct'] = (lb_df['total_conviction'] / max(top_score, 1e-8)) * 100
+
+        fig_lb = go.Figure(go.Bar(
+            x=lb_df['total_conviction'],
+            y=lb_df['agent'],
+            orientation='h',
+            marker=dict(
+                color=lb_df['pct'],
+                colorscale='Viridis',
+                showscale=False,
+            ),
+            text=[f"{v:.1f}" for v in lb_df['total_conviction']],
+            textposition='outside',
+        ))
+        fig_lb.update_layout(
+            xaxis_title='Cumulative Conviction Score',
+            yaxis_title='',
+            height=max(400, len(lb_df) * 22),
+            margin=dict(l=0, r=80, t=0, b=0),
+            showlegend=False,
+        )
+        st.plotly_chart(fig_lb, use_container_width=True)
+
+        # Win-count column: how many episodes each agent was top scorer
+        win_counts: Dict[str, int] = {}
+        for r in active_results:
+            wa = r.get('winning_agent')
+            if wa:
+                win_counts[wa] = win_counts.get(wa, 0) + 1
+        if win_counts:
+            wc_df = (
+                pd.DataFrame.from_dict(win_counts, orient='index', columns=['episode_wins'])
+                .sort_values('episode_wins', ascending=False)
+                .reset_index()
+                .rename(columns={'index': 'agent'})
+            )
+            st.caption(f"Episode wins — top agent: **{wc_df.iloc[0]['agent']}** "
+                       f"({wc_df.iloc[0]['episode_wins']} wins / {len(active_results)} episodes)")
+            st.dataframe(wc_df, use_container_width=True, hide_index=True)
+
+    st.divider()
+
     if st.session_state.results:
+
         col1, col2 = st.columns(2)
         
         with col1:
@@ -515,9 +613,40 @@ pd.DataFrame([
                 st.metric("Worst Episode PnL", "$0.00")
     
     else:
-        st.info("No training results yet. Click 'Start' to begin training.")
+        # Show CLI trainer results as a fallback if the dashboard hasn't started its own run
+        if st.session_state.cli_results:
+            cli_df = pd.DataFrame(st.session_state.cli_results)
+            st.subheader("📡 Live Results from CLI Trainer (`train.py`)")
+            required_cols = ['episode_id', 'realized_pnl', 'hit_rate', 'total_trades',
+                             'predictor_loss', 'outlier_extents', 'optimizer_replays']
+            for col in required_cols:
+                if col not in cli_df.columns:
+                    cli_df[col] = 0
+            cli_df['cumulative_pnl'] = cli_df['realized_pnl'].fillna(0.0).cumsum()
+
+            m1, m2, m3 = st.columns(3)
+            m1.metric("Episodes", len(cli_df))
+            m2.metric("Cumulative PnL", f"${cli_df['cumulative_pnl'].iloc[-1]:.2f}")
+            m3.metric("Avg Hit Rate", f"{cli_df['hit_rate'].mean():.1%}")
+
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(
+                y=cli_df['cumulative_pnl'], mode='lines',
+                line=dict(color='#00ff88', width=2)
+            ))
+            fig.update_layout(
+                xaxis_title='Episode', yaxis_title='Cumul. PnL ($)',
+                height=300, margin=dict(l=0, r=0, t=0, b=0), showlegend=False
+            )
+            st.plotly_chart(fig, use_container_width=True)
+            st.dataframe(
+                cli_df[required_cols].tail(20).round(3),
+                use_container_width=True, hide_index=True
+            )
+        else:
+            st.info("No training results yet. Click 'Start' to begin, or run `python train.py` in a terminal.")
     
-    if st.session_state.training_active:
+    if st.session_state.training_active or CHECKPOINT_FILE.exists():
         time.sleep(1)
         st.rerun()
 

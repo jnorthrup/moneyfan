@@ -64,6 +64,11 @@ class Codec01(BaseCodec):
             confidence = abs(volatility_signal) + 0.3
             direction = volatility_signal
         
+        self.record_instruments(
+                volatility_signal=float(volatility_signal),
+                atr_norm=float(market_data.get('atr_14', 0.0)) / (float(market_data.get('price', 1.0)) + 1e-8),
+                momentum=float(market_data.get('momentum', 0.0)),
+            )
         return self.validate_signal(confidence, direction)
     
     def test_time_adapter(self, batch_data: Dict[str, Any], learning_rate: float = 1e-3) -> None:

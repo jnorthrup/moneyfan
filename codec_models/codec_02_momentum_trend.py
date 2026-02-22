@@ -68,6 +68,10 @@ class Codec02(BaseCodec):
             confidence = abs(trend_signal) + 0.25
             direction = trend_signal
         
+        self.record_instruments(
+                momentum_fast=float(market_data.get('momentum', 0.0)),
+                returns_last=float(features[0]) if len(features) > 0 else 0.0,
+            )
         return self.validate_signal(confidence, direction)
     
     def test_time_adapter(self, batch_data: Dict[str, Any], learning_rate: float = 1e-3) -> None:

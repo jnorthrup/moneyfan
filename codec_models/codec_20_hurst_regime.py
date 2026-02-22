@@ -79,6 +79,9 @@ class Codec20(BaseCodec):
             except:
                 pass
         
+        self.record_instruments(
+                hurst_exponent=float(hurst_exp) if 'hurst_exp' in dir() else 0.5,
+            )
         return self.validate_signal(confidence, direction)
     
     def test_time_adapter(self, batch_data: Dict[str, Any], learning_rate: float = 1e-3) -> None:

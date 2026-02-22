@@ -36,7 +36,7 @@ try:
 except ImportError:
     HAS_MLX = False
 
-from train import DataPipeline, DataCache
+from train import CandlePipeline, CandleCache
 
 
 @dataclass
@@ -61,8 +61,8 @@ class TradingConfig:
 class TradingEngine:
     def __init__(self, config: TradingConfig):
         self.config = config
-        self.cache = DataCache()
-        self.pipeline = DataPipeline(self.cache)
+        self.cache = CandleCache()
+        self.pipeline = CandlePipeline(self.cache)
         
         self.model = None
         self.model_config = None

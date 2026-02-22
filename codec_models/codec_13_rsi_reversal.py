@@ -60,6 +60,9 @@ class Codec13(BaseCodec):
             except:
                 pass
         
+        self.record_instruments(
+                rsi_14=float(rsi) if 'rsi' in dir() else 50.0,
+            )
         return self.validate_signal(confidence, direction)
     
     def test_time_adapter(self, batch_data: Dict[str, Any], learning_rate: float = 1e-3) -> None:

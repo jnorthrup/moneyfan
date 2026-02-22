@@ -53,6 +53,14 @@ class BaseExpert(ABC):
         self.ob_memory = np.zeros((512, 64), dtype=np.float32)
         self.ob_memory_idx = 0
 
+        # ── Instrument predictor bus ──────────────────────────────────────
+        # Each codec populates this dict in forward() with all raw indicator
+        # values it computed (RSI, MACD, ATR, z-score, etc.).
+        # train.py harvests these into the HRM feature matrix so the shared
+        # TemporalOrderBook encoder can learn to predict indicator dynamics
+        # (GOALS.md §3: "predicts next-bar codec features + all indicator kernels").
+        self.instruments: Dict[str, float] = {}
+
         # Trade performance ledger
         self.trade_ledger = {
             'sharpe': 0.0,
@@ -186,6 +194,58 @@ class BaseExpert(ABC):
             'cumulative_pnl': 0.0,
             'signal_count': 0,
         }
+
+    def get_ohlcv(self, market_data: dict, features: np.ndarray):
+        """
+        Return real rolling OHLCV arrays from market_data when available
+        (populated by train.py's compute_signals from the actual pandas parquet data),
+        falling back to reconstruction from the return series in `features`.
+
+        Returns:
+            closes, highs, lows, volumes  — each a np.ndarray of shape [n_bars]
+        """
+        closes  = market_data.get('closes')
+        highs   = market_data.get('highs')
+        lows    = market_data.get('lows')
+        volumes = market_data.get('volumes')
+
+        if closes is not None and len(closes) > 1:
+            return (
+                np.asarray(closes,  dtype=np.float32),
+                np.asarray(highs,   dtype=np.float32),
+                np.asarray(lows,    dtype=np.float32),
+                np.asarray(volumes, dtype=np.float32),
+            )
+
+        # Fallback: reconstruct price series from returns in features
+        price = float(market_data.get('price', 1.0))
+        returns = features[:min(len(features), 64)]
+        if len(returns) > 0:
+            reconstructed = price * np.exp(np.cumsum(-returns[::-1])[::-1])
+        else:
+            reconstructed = np.array([price], dtype=np.float32)
+        n = len(reconstructed)
+        h  = float(market_data.get('high', price))
+        l  = float(market_data.get('low',  price))
+        return (
+            reconstructed.astype(np.float32),
+            np.full(n, h, dtype=np.float32),
+            np.full(n, l, dtype=np.float32),
+            np.ones(n, dtype=np.float32),
+        )
+
+    def record_instruments(self, **kwargs: float) -> None:
+
+        """
+        Populate self.instruments with named indicator readings.
+
+        Call this inside forward() before returning:
+            self.record_instruments(rsi_14=rsi14, macd_hist=hist, atr_norm=atr)
+
+        train.py collects these values into the HRM feature matrix so the
+        shared encoder can learn to predict each indicator's next value.
+        """
+        self.instruments.update({k: float(v) for k, v in kwargs.items()})
 
     def validate_signal(self, conviction: float, direction: float) -> Tuple[float, float]:
         """Clip and validate signal output to valid ranges."""

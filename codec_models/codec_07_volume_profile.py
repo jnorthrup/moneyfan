@@ -1,6 +1,13 @@
 """
 Codec 07: Volume Profile
-Analyzes volume distribution to find support/resistance.
+Volume-weighted price distribution and VPOC (Volume Point of Control) analysis.
+
+Signal logic:
+  - Reconstruct an approximate price-volume distribution from the OHLCV stream
+  - Identify the VPOC (price level with highest volume density)
+  - Compute the current price's distance from VPOC (in z-score units)
+  - Price below VPOC → potential buy; above VPOC → potential sell
+  - Conviction proportional to |distance| and cumulative volume skew
 """
 
 import numpy as np
@@ -20,47 +27,89 @@ class Codec07(BaseCodec):
         config = config or {}
         config['name'] = 'volume_profile'
         super().__init__(config)
-        
+
+        self.n_bins  = config.get('n_bins', 20)
+        self.window  = config.get('window', 50)
+
         if HAS_MLX:
             self.model = nn.Sequential(
-                nn.Linear(64, 128),
-                nn.ReLU(),
-                nn.Linear(128, 3)
+                nn.Linear(64, 64), nn.ReLU(),
+                nn.Linear(64, 2)
             )
-    
+        else:
+            self.model = None
+
     def forward(self, market_data: Dict[str, Any], features: np.ndarray) -> Tuple[float, float]:
-        volume = market_data.get('volume', 0)
-        avg_volume = market_data.get('avg_volume', volume)
-        vwap = market_data.get('vwap', market_data.get('price', 0))
-        price = market_data.get('price', 0)
-        
-        vol_ratio = volume / avg_volume if avg_volume > 0 else 1.0
-        vwap_signal = 0.0
-        if vwap > 0:
-            vwap_deviation = (price - vwap) / vwap
-            vwap_signal = -np.sign(vwap_deviation) * min(abs(vwap_deviation) * 10, 1.0)
-        
-        volume_signal = 0.0
-        if vol_ratio > 2.0:
-            momentum = market_data.get('momentum', 0)
-            volume_signal = np.sign(momentum) * min(vol_ratio / 5, 1.0)
-        
-        direction = vwap_signal * 0.5 + volume_signal * 0.5
-        confidence = min((vol_ratio - 1) * 0.3 + 0.3, 1.0)
-        
+        price   = float(market_data.get('price', 1.0))
+        high    = float(market_data.get('high', price))
+        low     = float(market_data.get('low', price))
+        volume  = float(market_data.get('volume', 1.0))
+
+        returns = features[:min(len(features), 64)]
+        n = len(returns)
+
+        if n < 10:
+            return self.validate_signal(0.15, 0.0)
+
+        closes, highs, lows, volumes = self.get_ohlcv(market_data, features)
+
+
+        prices = closes  # calibrated to pandas parquet data
+        w       = min(n, self.window)
+        p_seg   = prices[-w:]
+
+        # Approximate volume weights: use squared return as proxy
+        #   (large moves = high volume participation)
+        ret_seg   = returns[-w:]
+        vol_proxy = np.abs(ret_seg) + 1e-6
+        vol_proxy /= vol_proxy.sum()
+
+        # Volume-weighted histogram → VPOC
+        price_min = p_seg.min()
+        price_max = p_seg.max() + 1e-8
+        bins = np.linspace(price_min, price_max, self.n_bins + 1)
+        vol_hist = np.zeros(self.n_bins)
+        if price_max <= price_min + 1e-8:
+            return self.validate_signal(0.15, 0.0)
+
+        for i, p in enumerate(p_seg):
+            b = min(int((p - price_min) / (price_max - price_min) * self.n_bins),
+                    self.n_bins - 1)
+            vol_hist[b] += vol_proxy[i]
+
+        vpoc_bin  = int(np.argmax(vol_hist))
+        vpoc_price = float(bins[vpoc_bin] + (bins[vpoc_bin + 1] - bins[vpoc_bin]) / 2.0)
+
+        # Distance from VPOC in normalised units
+        price_std = float(p_seg.std()) + 1e-8
+        dist_z    = (price - vpoc_price) / price_std
+
+        # Mean-reversion toward VPOC
+        direction  = -float(np.sign(dist_z)) if abs(dist_z) > 0.3 else 0.0
+
+        # Volume skew: is more volume above or below current price?
+        above_bin = min(int((price - price_min) / (price_max - price_min) * self.n_bins),
+                        self.n_bins - 1)
+        vol_above = vol_hist[above_bin + 1:].sum()
+        vol_below = vol_hist[:above_bin].sum()
+        vol_skew  = float(vol_below - vol_above)   # positive → more vol below → buy pressure
+
+        confidence = min(1.0, (abs(dist_z) * 0.4 + abs(vol_skew) * 0.4 + 0.2))
+
         if HAS_MLX and self.model is not None and len(features) >= 64:
             try:
-                mx_features = mx.array(features[:64].reshape(1, -1).astype(np.float32))
-                output = self.model(mx_features)
-                direction = direction * 0.5 + float(np.tanh(output[0, 1])) * 0.5
-            except:
+                mlx_in = mx.array(features[:64].reshape(1, -1).astype(np.float32))
+                out = self.model(mlx_in)
+                direction  = direction * 0.6 + float(np.tanh(float(out[0, 0]))) * 0.4
+                confidence = confidence * 0.6 + float(mx.sigmoid(out[0, 1])) * 0.4
+            except Exception:
                 pass
-        
+
+        self.record_instruments(
+                vpoc_dist_z=float(dist_z) if 'dist_z' in dir() else 0.0,
+                vol_skew=float(vol_skew) if 'vol_skew' in dir() else 0.0,
+            )
         return self.validate_signal(confidence, direction)
-    
-    def test_time_adapter(self, batch_data: Dict[str, Any], learning_rate: float = 1e-3) -> None:
-        pass
-    
+
     def online_adapter(self, *args, **kwargs) -> None:
         pass
-

@@ -69,6 +69,10 @@ class Codec14(BaseCodec):
             except:
                 pass
         
+        self.record_instruments(
+                bb_pct=float(pct_b) if 'pct_b' in dir() else 0.5,
+                bb_width=float(bandwidth) if 'bandwidth' in dir() else 0.0,
+            )
         return self.validate_signal(confidence, direction)
     
     def test_time_adapter(self, batch_data: Dict[str, Any], learning_rate: float = 1e-3) -> None:

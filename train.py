@@ -205,56 +205,106 @@ class CandlePipeline:
         """
         Compute codec input features from raw OHLCV candles using the 24 expert panel.
 
-        Returns an array of shape [T, n_codec_outputs * 2]:
-          - First n_codec_outputs columns : expert signal convictions (with direction signs)
-          - Last n_codec_outputs columns  : per-bar close returns tiled across codecs
+        Returns an array of shape [T, n_codec_outputs * 2 + n_instruments]:
+          - Channels 0   .. n_codecs-1          : signed conviction per expert per bar
+          - Channels n_codecs .. 2*n_codecs-1   : tiled close-bar returns
+          - Channels 2*n_codecs ..               : named raw instrument readings
+            (RSI, MACD, ATR, z-scores, etc. — harvested from expert.instruments)
+            These give the HRM encoder multi-task prediction targets as specified
+            in GOALS.md §3: 'predicts next-bar codec features + all indicator kernels'.
         """
-        df = df.sort_values(['symbol', 'timestamp'])
+        from instrument_panel import InstrumentPanel
+
+        df = df.sort_values(['symbol', 'timestamp']).reset_index(drop=True)
         T = len(df)
         codec_features = np.zeros((T, n_codec_outputs * 2), dtype=np.float32)
 
-        c = df['close'].values.astype(np.float32)
-        h = df['high'].values.astype(np.float32)
-        l = df['low'].values.astype(np.float32)
-        v = df['volume'].values.astype(np.float32) if 'volume' in df.columns else np.ones(T, dtype=np.float32)
+        # ── Step 1: vectorized indicator pre-computation via pandas ────────
+        # InstrumentPanel runs ALL indicator families (RSI, MACD, Bollinger,
+        # ATR, ADX, VWAP, Stochastic, Kalman, Hurst, z-scores, OBV, EMA stack, …)
+        # in a single pandas pass before any bar-level codec loop.
+        # This is the authoritative GOALS.md draw-thru: pandas → instruments.
+        df_enriched = InstrumentPanel(df).compute()
 
-        c = np.nan_to_num(c, nan=1.0)
-        h = np.nan_to_num(h, nan=c)
-        l = np.nan_to_num(l, nan=c)
-        
-        # Tiled close-bar returns (channels 24-47)
-        close_bar_returns = np.diff(c, prepend=c[0]) / (c + 1e-8)
+        c = df_enriched['close'].values.astype(np.float32)
+        h = df_enriched['high'].values.astype(np.float32)
+        l = df_enriched['low'].values.astype(np.float32)
+        v = df_enriched['volume'].values.astype(np.float32)
+
+        close_bar_returns = df_enriched['log_return'].values.astype(np.float32)
         codec_features[:, n_codec_outputs:] = np.tile(
             close_bar_returns.reshape(-1, 1), (1, n_codec_outputs)
         )
 
         num_experts = min(len(self.experts), n_codec_outputs)
-        
-        # Run the full DataFrame stream through the actual expert codecs
-        # We pass a rolling context window to simulate real-time streaming constraints
-        context_buffer = {'close': [], 'high': [], 'low': [], 'volume': [], 'returns': []}
-        
-        for i in range(T):
-            context_buffer['close'].append(c[i])
-            context_buffer['high'].append(h[i])
-            context_buffer['low'].append(l[i])
-            context_buffer['volume'].append(v[i])
-            context_buffer['returns'].append(close_bar_returns[i])
-            
-            # Keep rolling memory short for performance, 100 bars is enough for EMA/MACD lags
-            if len(context_buffer['close']) > 100:
-                for k in context_buffer.keys():
-                    context_buffer[k] = context_buffer[k][-100:]
-            
-            # Route the stream into the GOALS.md expert panel
-            for expert_idx in range(num_experts):
-                # Return dict is { signal_conviction, direction, regime_fit }
-                signal = self.experts[expert_idx].forward(context_buffer)
-                
-                # Encode signal conviction with its directional sign directly into the HRM feature path
-                codec_features[i, expert_idx] = signal.get('signal_conviction', 0.0) * signal.get('direction', 0.0)
 
-        return codec_features
+        # ── Instrument predictor matrix ────────────────────────────────────
+        # First pass: discover instrument key ordering from bar 0
+        # We collect instrument values per bar → [T, n_instruments]
+        instrument_rows: list = []          # list of dicts, one per bar
+        instrument_keys: list = []          # canonical ordered key list (set on first non-empty bar)
+
+        # Run the full DataFrame stream through the actual expert codecs
+        context_buffer = {'close': [], 'high': [], 'low': [], 'volume': [], 'returns': []}
+
+        # Rows array for O(1) bar access (avoid iterrows overhead)
+        enriched_records = df_enriched.to_dict(orient='records')
+
+        # Lean rolling buffer — only needed for 64-bar features array (MLX models)
+        return_buffer: list = []
+
+        for i in range(T):
+            return_buffer.append(float(close_bar_returns[i]))
+            if len(return_buffer) > 64:
+                return_buffer = return_buffer[-64:]
+
+            # ── market_data: pre-computed pandas indicator row ──────────────
+            # All scalar values (RSI, MACD, ATR, Bollinger, ADX, VWAP, z-scores,
+            # Kalman velocity, Hurst, momentum windows…) are already in this dict.
+            # No per-bar indicator recomputation needed inside any codec.
+            market_data = enriched_records[i]
+
+            # 64-bar return series for MLX model backward compat
+            n_ret = len(return_buffer)
+            features = np.zeros(64, dtype=np.float32)
+            features[:n_ret] = return_buffer
+
+            bar_instruments: dict = {}
+
+            for expert_idx in range(num_experts):
+                expert = self.experts[expert_idx]
+                try:
+                    confidence, direction = expert.forward(market_data, features)
+                    # Harvest instrument readings emitted by this codec's forward()
+                    for k, val in expert.instruments.items():
+                        bar_instruments[f'{expert.name}__{k}'] = float(val)
+                except Exception:
+                    confidence, direction = 0.0, 0.0
+
+                # Signed conviction into codec channel
+                codec_features[i, expert_idx] = float(confidence) * float(direction)
+
+            instrument_rows.append(bar_instruments)
+
+            # Build canonical key ordering from first bar that populates instruments
+            if not instrument_keys and bar_instruments:
+                instrument_keys = sorted(bar_instruments.keys())
+
+        # ── Assemble instrument matrix ─────────────────────────────────────
+        if instrument_keys:
+            n_inst = len(instrument_keys)
+            inst_matrix = np.zeros((T, n_inst), dtype=np.float32)
+            for i, row in enumerate(instrument_rows):
+                for j, k in enumerate(instrument_keys):
+                    inst_matrix[i, j] = float(row.get(k, 0.0))
+            # Store key registry on the pipeline for downstream use
+            self.instrument_keys = instrument_keys
+            return np.concatenate([codec_features, inst_matrix], axis=1)
+        else:
+            self.instrument_keys = []
+            return codec_features
+
+
 
 
 class EpochEpisodeTrainer:
@@ -310,10 +360,27 @@ class EpochEpisodeTrainer:
 
         codec_features = self.candle_pipeline.compute_signals(df, self.model_config.n_signals)
 
+        # ── Per-codec accumulators ─────────────────────────────────────────────
+        # Track cumulative |signal| per codec so we can rank experts & surface
+        # a leaderboard on the dashboard.
+        n_codecs = self.model_config.n_signals  # 24
+        codec_names = [
+            getattr(inst, 'name', f'codec_{i+1:02d}')
+            for i, inst in enumerate(self.candle_pipeline.experts[:n_codecs])
+        ]
+        codec_conviction_sum = np.zeros(n_codecs, dtype=np.float64)  # sum of |signal|
+        codec_active_bars    = np.zeros(n_codecs, dtype=np.int64)    # bars with nonzero signal
+
         notional = self.config.notional
         realized_pnl = 0.0
         profitable_trades = 0
         total_trade_signals = 0
+
+        # Accumulate per-codec conviction from the precomputed feature matrix
+        # codec_features[:, 0:24] = signed signal convictions per expert per bar
+        codec_abs_signals = np.abs(codec_features[:, :n_codecs])
+        codec_conviction_sum = codec_abs_signals.sum(axis=0)
+        codec_active_bars    = (codec_abs_signals > 1e-6).sum(axis=0)
 
         # Per-bar-window loss history for regime shock detection
         bar_window_losses: List[float] = []
@@ -447,6 +514,14 @@ class EpochEpisodeTrainer:
             ):
                 self._last_event_time = current_time
 
+                # Determine winning agent by highest cumulative conviction this episode
+                top_idx = int(np.argmax(codec_conviction_sum))
+                winning_agent = codec_names[top_idx] if codec_names else "HRM Meta-Allocator"
+                codec_scores = {
+                    name: round(float(codec_conviction_sum[i]), 4)
+                    for i, name in enumerate(codec_names)
+                }
+
                 self.event_queue.put(('episode_complete', {
                     'episode_id': episode_id,
                     'epoch': epoch + 1,
@@ -455,12 +530,21 @@ class EpochEpisodeTrainer:
                     'realized_pnl': notional - self.config.notional,
                     'hit_rate': profitable_trades / max(total_trade_signals, 1),
                     'symbols': episode_pairs,
-                    'winning_agent': "HRM Meta-Allocator",
+                    'winning_agent': winning_agent,
+                    'codec_scores': codec_scores,
                     'hrm_score': 0.0,
                     'predictor_loss': float(np.mean(bar_window_losses[-10:])) if bar_window_losses else 0.0,
                     'outlier_extents': regime_shock_count,
                     'optimizer_replays': adaptive_replay_count
                 }))
+
+        # Final per-codec leaderboard
+        top_idx = int(np.argmax(codec_conviction_sum))
+        winning_agent = codec_names[top_idx] if codec_names else "HRM Meta-Allocator"
+        codec_scores = {
+            name: round(float(codec_conviction_sum[i]), 4)
+            for i, name in enumerate(codec_names)
+        }
 
         result = {
             'episode_id': episode_id,
@@ -470,7 +554,8 @@ class EpochEpisodeTrainer:
             'hit_rate': profitable_trades / max(total_trade_signals, 1),
             'wins': profitable_trades,
             'total_trades': total_trade_signals,
-            'winning_agent': "HRM Meta-Allocator",
+            'winning_agent': winning_agent,
+            'codec_scores': codec_scores,
             'hrm_score': 0.0,
             'predictor_loss': float(np.mean(bar_window_losses)) if bar_window_losses else 0.0,
             'outlier_extents': regime_shock_count,
@@ -524,7 +609,8 @@ class EpochEpisodeTrainer:
                 for r in self.results:
                     r['z_score'] = (r.get('realized_pnl', 0.0) - mean_pnl) / std_pnl
 
-                # Split extremes into alpha/drawdown channels
+                # Identify Pareto tails (|z| > 1.0) and split into alpha/drawdown channels
+                pareto_extremes = [r for r in self.results if abs(r.get('z_score', 0.0)) > 1.0]
                 alpha_extremes = [r for r in pareto_extremes if r['z_score'] > 0]
                 drawdown_extremes = [r for r in pareto_extremes if r['z_score'] < 0]
 
