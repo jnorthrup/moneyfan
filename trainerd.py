@@ -281,6 +281,11 @@ class TrainerHTTPHandler(SimpleHTTPRequestHandler):
             response_data = {
                 "status": "running" if trainer_instance.running else "stopped",
                 "session_start_time": trainer_instance.session_start_time,
+                "training_config": {
+                    "optimizer_name": getattr(trainer_instance.config, "optimizer_name", "adamw"),
+                    "learning_rate": getattr(trainer_instance.config, "learning_rate", None),
+                    "weight_decay": getattr(trainer_instance.config, "weight_decay", None),
+                },
                 "history": latest_results, # Last N completed episodes
                 "samples": latest_samples, # Last N sampling events
             }
@@ -358,12 +363,22 @@ if __name__ == '__main__':
     parser.add_argument("--port", type=int, default=8080, help="HTTP Server Port")
     parser.add_argument("--episodes", type=int, default=500, help="Epoch Episodes")
     parser.add_argument("--notional", type=float, default=100.0, help="Starting Notional")
+    parser.add_argument("--optimizer", type=str, default="adamw",
+                        choices=["adam", "adamw", "lion", "muon"],
+                        help="MLX optimizer for HRM training")
+    parser.add_argument("--learning-rate", type=float, default=1e-4,
+                        help="MLX optimizer learning rate")
+    parser.add_argument("--weight-decay", type=float, default=1e-2,
+                        help="MLX optimizer weight decay")
     args = parser.parse_args()
 
     # Determine background config
     config = EpisodeTrainingConfig(
         n_epoch_episodes=args.episodes,
-        notional=args.notional
+        notional=args.notional,
+        optimizer_name=args.optimizer,
+        learning_rate=args.learning_rate,
+        weight_decay=args.weight_decay,
     )
 
     # Start the singleton background trainer
