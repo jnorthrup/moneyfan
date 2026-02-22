@@ -149,6 +149,11 @@ class CandlePipeline:
     def __init__(self, cache: CandleCache):
         self.cache = cache
         self.data_dir = Path(project_root) / "data" / "binance"
+        self.instrument_keys: List[str] = []
+        self.context_feature_keys: List[str] = []
+        self.last_feature_symbols: List[str] = []
+        self.last_feature_timestamps: List[str] = []
+        self.last_symbol_ranges: List[Dict[str, int]] = []
         
         # Load the 24 canonical codec experts from GOALS.md
         self.expert_classes = load_all_codecs()
@@ -234,10 +239,11 @@ class CandlePipeline:
         """
         Compute codec input features from raw OHLCV candles using the 24 expert panel.
 
-        Returns an array of shape [T, n_codec_outputs * 2 + n_instruments]:
+        Returns an array of shape [T, n_codec_outputs * 2 + n_context + n_instruments]:
           - Channels 0   .. n_codecs-1          : signed conviction per expert per bar
           - Channels n_codecs .. 2*n_codecs-1   : tiled close-bar returns
-          - Channels 2*n_codecs ..               : named raw instrument readings
+          - Next n_context channels              : symbol/source boundary metadata
+          - Remaining channels                   : named raw instrument readings
             (RSI, MACD, ATR, z-scores, etc. — harvested from expert.instruments)
             These give the HRM encoder multi-task prediction targets as specified
             in GOALS.md §3: 'predicts next-bar codec features + all indicator kernels'.
@@ -254,6 +260,12 @@ class CandlePipeline:
         # in a single pandas pass before any bar-level codec loop.
         # This is the authoritative GOALS.md draw-thru: pandas → instruments.
         df_enriched = InstrumentPanel(df).compute()
+        row_symbols = df_enriched['symbol'].astype(str).tolist() if 'symbol' in df_enriched.columns else ["UNKNOWN"] * len(df_enriched)
+        self.last_feature_symbols = row_symbols
+        self.last_feature_timestamps = (
+            df_enriched['timestamp'].astype(str).tolist()
+            if 'timestamp' in df_enriched.columns else []
+        )
 
         c = df_enriched['close'].values.astype(np.float32)
         h = df_enriched['high'].values.astype(np.float32)
@@ -272,20 +284,87 @@ class CandlePipeline:
         # We collect instrument values per bar → [T, n_instruments]
         instrument_rows: list = []          # list of dicts, one per bar
         instrument_keys: list = []          # canonical ordered key list (set on first non-empty bar)
+        symbol_change_flag = np.zeros((T, 1), dtype=np.float32)
+
+        symbol_id_map = {
+            symbol: idx for idx, symbol in enumerate(sorted(set(row_symbols)))
+        } if row_symbols else {}
+        symbol_counts = {
+            symbol: row_symbols.count(symbol) for symbol in symbol_id_map.keys()
+        }
+        symbol_id_norm = np.zeros((T, 1), dtype=np.float32)
+        symbol_pos_norm = np.zeros((T, 1), dtype=np.float32)
+
+        source_col = next(
+            (col for col in ('exchange', 'source', 'venue') if col in df_enriched.columns),
+            None,
+        )
+        timeframe_col = next(
+            (col for col in ('timeframe', 'interval', 'resolution') if col in df_enriched.columns),
+            None,
+        )
+        source_values = (
+            df_enriched[source_col].astype(str).tolist() if source_col else ['unknown'] * T
+        )
+        timeframe_values = (
+            df_enriched[timeframe_col].astype(str).tolist() if timeframe_col else ['unknown'] * T
+        )
+        source_id_map = {v: i for i, v in enumerate(sorted(set(source_values)))}
+        timeframe_id_map = {v: i for i, v in enumerate(sorted(set(timeframe_values)))}
+        source_id_norm = np.zeros((T, 1), dtype=np.float32)
+        timeframe_id_norm = np.zeros((T, 1), dtype=np.float32)
 
         # Run the full DataFrame stream through the actual expert codecs
-        context_buffer = {'close': [], 'high': [], 'low': [], 'volume': [], 'returns': []}
-
         # Rows array for O(1) bar access (avoid iterrows overhead)
         enriched_records = df_enriched.to_dict(orient='records')
 
         # Lean rolling buffer — only needed for 64-bar features array (MLX models)
         return_buffer: list = []
+        prev_symbol: Optional[str] = None
+        pos_in_symbol = -1
+        symbol_ranges: List[Dict[str, int]] = []
+        range_start_idx = 0
 
         for i in range(T):
+            current_symbol = row_symbols[i] if i < len(row_symbols) else "UNKNOWN"
+            is_symbol_boundary = (i == 0) or (current_symbol != prev_symbol)
+            if is_symbol_boundary:
+                return_buffer = []
+                pos_in_symbol = 0
+                symbol_change_flag[i, 0] = 1.0
+                for expert in self.experts[:num_experts]:
+                    reset_runtime_state = getattr(expert, "reset_runtime_state", None)
+                    if callable(reset_runtime_state):
+                        reset_runtime_state()
+                if i > 0 and prev_symbol is not None:
+                    symbol_ranges.append({
+                        'symbol': str(prev_symbol),
+                        'start': int(range_start_idx),
+                        'end': int(i),
+                        'length': int(i - range_start_idx),
+                    })
+                range_start_idx = i
+            else:
+                pos_in_symbol += 1
+
             return_buffer.append(float(close_bar_returns[i]))
             if len(return_buffer) > 64:
                 return_buffer = return_buffer[-64:]
+
+            symbol_idx = symbol_id_map.get(current_symbol, 0)
+            symbol_den = max(len(symbol_id_map) - 1, 1)
+            symbol_id_norm[i, 0] = float(symbol_idx) / float(symbol_den)
+
+            symbol_count = symbol_counts.get(current_symbol, 1)
+            symbol_pos_norm[i, 0] = float(pos_in_symbol) / float(max(symbol_count - 1, 1))
+
+            source_idx = source_id_map.get(source_values[i], 0)
+            source_den = max(len(source_id_map) - 1, 1)
+            source_id_norm[i, 0] = float(source_idx) / float(source_den)
+
+            timeframe_idx = timeframe_id_map.get(timeframe_values[i], 0)
+            timeframe_den = max(len(timeframe_id_map) - 1, 1)
+            timeframe_id_norm[i, 0] = float(timeframe_idx) / float(timeframe_den)
 
             # ── market_data: pre-computed pandas indicator row ──────────────
             # All scalar values (RSI, MACD, ATR, Bollinger, ADX, VWAP, z-scores,
@@ -319,6 +398,36 @@ class CandlePipeline:
             if not instrument_keys and bar_instruments:
                 instrument_keys = sorted(bar_instruments.keys())
 
+            prev_symbol = current_symbol
+
+        if T > 0:
+            last_symbol = row_symbols[-1]
+            symbol_ranges.append({
+                'symbol': str(last_symbol),
+                'start': int(range_start_idx),
+                'end': int(T),
+                'length': int(T - range_start_idx),
+            })
+
+        self.last_symbol_ranges = symbol_ranges
+        self.context_feature_keys = [
+            'ctx_symbol_change',
+            'ctx_symbol_id_norm',
+            'ctx_symbol_pos_norm',
+            'ctx_source_id_norm',
+            'ctx_timeframe_id_norm',
+        ]
+        context_matrix = np.concatenate(
+            [
+                symbol_change_flag,
+                symbol_id_norm,
+                symbol_pos_norm,
+                source_id_norm,
+                timeframe_id_norm,
+            ],
+            axis=1,
+        ).astype(np.float32)
+
         # ── Assemble instrument matrix ─────────────────────────────────────
         if instrument_keys:
             n_inst = len(instrument_keys)
@@ -328,10 +437,10 @@ class CandlePipeline:
                     inst_matrix[i, j] = float(row.get(k, 0.0))
             # Store key registry on the pipeline for downstream use
             self.instrument_keys = instrument_keys
-            return np.concatenate([codec_features, inst_matrix], axis=1)
+            return np.concatenate([codec_features, context_matrix, inst_matrix], axis=1)
         else:
             self.instrument_keys = []
-            return codec_features
+            return np.concatenate([codec_features, context_matrix], axis=1)
 
 
 
@@ -372,7 +481,25 @@ class EpochEpisodeTrainer:
         self.model = None
         self.trainer = None
         self._init_model_if_needed()
-        if HAS_MLX:
+
+        self.results: List[Dict] = []
+        self.event_queue = queue.Queue()
+        self.running = False
+        # ISO-8601 timestamp recorded at trainer construction
+        self.session_start_time: str = datetime.now().isoformat()
+
+    def _init_model_if_needed(self, force_reinit: bool = False, known_input_dim: Optional[int] = None):
+        """Initialize HRM model and trainer once, preserving training state across episodes."""
+        if not HAS_MLX:
+            return
+        if (not force_reinit) and self.model is not None and self.trainer is not None:
+            return  # Already initialized
+
+        # Determine actual input dimension by running a robust signal pass
+        if known_input_dim is not None:
+            self.model_config.input_dim = int(known_input_dim)
+            print(f"[Trainer] Reinit using known input_dim={int(known_input_dim)}.")
+        else:
             try:
                 # Use a larger dummy window (100 bars) to ensure all indicators (like Hurst-60) compute fully
                 probe_len = 100
@@ -392,40 +519,6 @@ class EpochEpisodeTrainer:
             except Exception as e:
                 print(f"[Trainer] Warning: Calibration failed: {e}. Defaulting to 92.")
                 self.model_config.input_dim = 92
-
-        self.results: List[Dict] = []
-        self.event_queue = queue.Queue()
-        self.running = False
-        # ISO-8601 timestamp recorded at trainer construction
-        self.session_start_time: str = datetime.now().isoformat()
-
-    def _init_model_if_needed(self, force_reinit: bool = False):
-        """Initialize HRM model and trainer once, preserving training state across episodes."""
-        if not HAS_MLX:
-            return
-        if (not force_reinit) and self.model is not None and self.trainer is not None:
-            return  # Already initialized
-
-        # Determine actual input dimension by running a robust signal pass
-        try:
-            # Use a larger dummy window (100 bars) to ensure all indicators compute fully
-            probe_len = 100
-            dummy_df = pd.DataFrame({
-                'symbol': ['BTCUSDT'] * probe_len,
-                'timestamp': pd.date_range('2023-01-01', periods=probe_len, freq='1min'),
-                'open': np.linspace(20000, 20100, probe_len),
-                'high': np.linspace(20100, 20200, probe_len),
-                'low': np.linspace(19900, 20000, probe_len),
-                'close': np.linspace(20050, 20150, probe_len),
-                'volume': np.random.random(probe_len) * 100
-            })
-            probed_signals = self.candle_pipeline.compute_signals(dummy_df, 24)
-            actual_dim = probed_signals.shape[1]
-            self.model_config.input_dim = actual_dim
-            print(f"[Trainer] Robust calibration: {actual_dim} input features detected.")
-        except Exception as e:
-            print(f"[Trainer] Warning: Calibration failed: {e}. Defaulting to 92.")
-            self.model_config.input_dim = 92
 
         # Initialize persistent model and trainer
         self.model = MLXHierarchicalCodec(self.model_config)
@@ -539,8 +632,7 @@ class EpochEpisodeTrainer:
         current_input_dim = codec_features.shape[1]
         if self.model is None or getattr(self.model_config, 'input_dim', None) != current_input_dim:
             print(f"[Trainer] Recalibrating: input_dim {getattr(self.model_config, 'input_dim', 'None')} -> {current_input_dim}")
-            self.model_config.input_dim = current_input_dim
-            self._init_model_if_needed(force_reinit=True)
+            self._init_model_if_needed(force_reinit=True, known_input_dim=current_input_dim)
 
         # Reuse existing model by default; after force_reinit this points at the refreshed instance.
         trainer = self.trainer
@@ -580,8 +672,11 @@ class EpochEpisodeTrainer:
         regime_shock_count = 0
         adaptive_replay_count = 0
 
-        # Close-bar returns from feature channel 0 (normalised close)
-        close_bar_returns = codec_features[:, 0]
+        # Close-bar log returns are tiled in channels [n_codecs .. 2*n_codecs-1].
+        close_return_channel = min(n_codecs, max(codec_features.shape[1] - 1, 0))
+        close_bar_returns = codec_features[:, close_return_channel]
+        feature_row_symbols = list(getattr(self.candle_pipeline, 'last_feature_symbols', []))
+        symbol_ranges = list(getattr(self.candle_pipeline, 'last_symbol_ranges', []))
 
         for epoch in range(self.config.epochs):
             bar_window_len = np.random.randint(
@@ -594,7 +689,23 @@ class EpochEpisodeTrainer:
                 if bar_window_len > len(codec_features):
                     continue
 
-                start_idx = np.random.randint(0, len(codec_features) - bar_window_len)
+                selected_range = None
+                eligible_ranges = [
+                    r for r in symbol_ranges
+                    if int(r.get('length', 0)) >= int(bar_window_len)
+                ]
+                if eligible_ranges:
+                    selected_range = eligible_ranges[np.random.randint(0, len(eligible_ranges))]
+                    range_start = int(selected_range['start'])
+                    range_end = int(selected_range['end'])
+                    max_start_exclusive = range_end - bar_window_len + 1
+                    if max_start_exclusive <= range_start:
+                        start_idx = range_start
+                    else:
+                        start_idx = np.random.randint(range_start, max_start_exclusive)
+                else:
+                    start_idx = np.random.randint(0, len(codec_features) - bar_window_len + 1)
+
                 batch_np = codec_features[start_idx:start_idx + bar_window_len]
                 batch_np = batch_np.reshape(1, bar_window_len, -1)
 
@@ -677,14 +788,18 @@ class EpochEpisodeTrainer:
                         output_mx, _ = trainer.model.forward(batch_mx, memory=hrm_memory, mode="trade")
                         mx.eval(output_mx)
                         output_np = np.array(output_mx[0, :]) # Output is [B, 5] since it already pools the final sequence step
-                        active_symbol = episode_pairs[0] if episode_pairs else "UNKNOWN"
+                        end_idx = min(start_idx + bar_window_len - 1, len(close_bar_returns) - 1)
+                        active_symbol = (
+                            str(feature_row_symbols[end_idx])
+                            if end_idx < len(feature_row_symbols)
+                            else (str(selected_range.get('symbol')) if selected_range else (episode_pairs[0] if episode_pairs else "UNKNOWN"))
+                        )
                         trade_intent = self._build_trade_intent(active_symbol, output_np)
                         running_peak = max(notional_curve) if notional_curve else notional
                         drawdown_pct = (notional - running_peak) / max(running_peak, 1e-8)
                         veto_decision = self._mechanical_veto(trade_intent, drawdown_pct)
-                        end_idx = min(start_idx + bar_window_len - 1, len(close_bar_returns) - 1)
-                        candle_return = close_bar_returns[end_idx] - close_bar_returns[start_idx]
-                        raw_move = float(candle_return) * 0.01
+                        window_log_return = float(np.nansum(close_bar_returns[start_idx:end_idx + 1]))
+                        raw_move = window_log_return
 
                         if veto_decision.vetoed:
                             veto_count += 1
@@ -731,10 +846,10 @@ class EpochEpisodeTrainer:
                     # Fallback random execution if MLX crashes/disabled
                     if np.random.random() > 0.5:
                         end_idx = min(start_idx + bar_window_len - 1, len(close_bar_returns) - 1)
-                        candle_return = close_bar_returns[end_idx] - close_bar_returns[start_idx]
+                        candle_return = float(np.nansum(close_bar_returns[start_idx:end_idx + 1]))
 
                         position = np.sign(np.random.randn())
-                        ret = position * abs(candle_return) * 0.01
+                        ret = position * abs(candle_return)
                         realized_pnl += ret * notional
 
                         if ret > 0:

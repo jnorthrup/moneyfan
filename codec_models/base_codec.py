@@ -133,6 +133,17 @@ class BaseExpert(ABC):
         self.ob_memory[self.ob_memory_idx] = indicator_vec
         self.ob_memory_idx = (self.ob_memory_idx + 1) % 512
 
+    def reset_runtime_state(self) -> None:
+        """
+        Reset per-stream transient state when the input symbol/source changes.
+
+        This avoids leaking one symbol's rolling context into the next symbol
+        when train.py processes a concatenated multi-symbol DataFrame.
+        """
+        self.ob_memory.fill(0.0)
+        self.ob_memory_idx = 0
+        self.instruments.clear()
+
     def get_ob_summary(self) -> Dict[str, float]:
         """
         Summary statistics of the temporal order book buffer.
