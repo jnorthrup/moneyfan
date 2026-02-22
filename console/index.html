@@ -172,6 +172,34 @@
                             </div>
                         </div>
 
+                        <div class="drawthru-db-panel">
+                            <div class="drawthru-db-header">
+                                <h3>DuckDB Import Health</h3>
+                                <span class="badge" id="drawthruStatus">Unknown</span>
+                            </div>
+                            <div class="drawthru-db-grid">
+                                <div class="cache-stat">
+                                    <span class="label">Rows</span>
+                                    <span class="value" id="drawthruRows">0</span>
+                                </div>
+                                <div class="cache-stat">
+                                    <span class="label">Symbols</span>
+                                    <span class="value" id="drawthruSymbols">0</span>
+                                </div>
+                                <div class="cache-stat">
+                                    <span class="label">Latest Tick</span>
+                                    <span class="value" id="drawthruLatest">--</span>
+                                </div>
+                                <div class="cache-stat">
+                                    <span class="label">Table</span>
+                                    <span class="value" id="drawthruTable">--</span>
+                                </div>
+                            </div>
+                            <ul id="drawthruTopSymbols" class="scrolling-list compact-list">
+                                <li class="empty-state">Waiting for DuckDB snapshot...</li>
+                            </ul>
+                        </div>
+
                         <div class="cache-recently-accessed">
                             <h3>BUFFER INVENTORY (Stochastic Persistence)</h3>
                             <ul id="cacheList" class="scrolling-list">

@@ -19,6 +19,7 @@ import threading
 import queue
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from urllib.parse import urlparse
+from pathlib import Path
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -39,6 +40,70 @@ transfer_lock = threading.Lock()
 
 # Global lock for thread-safe state access
 state_lock = threading.Lock()
+
+DRAWTHRU_DUCKDB_FILE = Path(__file__).resolve().parent / "data" / "binance" / "hrm_data.duckdb"
+
+
+def load_drawthru_snapshot():
+    try:
+        import duckdb
+    except Exception as e:
+        return {"status": "unavailable", "error": f"duckdb import failed: {e}"}
+
+    if not DRAWTHRU_DUCKDB_FILE.exists():
+        return {"status": "missing", "db_path": str(DRAWTHRU_DUCKDB_FILE)}
+
+    try:
+        con = duckdb.connect(str(DRAWTHRU_DUCKDB_FILE), read_only=True)
+        tables = {r[0] for r in con.execute("SHOW TABLES").fetchall()}
+        if "binance_sequences_import" in tables:
+            table_name = "binance_sequences_import"
+            where = ""
+        elif "market_data" in tables:
+            table_name = "market_data"
+            where = "WHERE lower(coalesce(exchange, '')) = 'binance'"
+        else:
+            con.close()
+            return {
+                "status": "empty",
+                "db_path": str(DRAWTHRU_DUCKDB_FILE),
+                "tables": sorted(tables),
+            }
+
+        row = con.execute(
+            f"""
+            SELECT COUNT(*), COUNT(DISTINCT symbol), MIN(timestamp), MAX(timestamp)
+            FROM {table_name}
+            {where}
+            """
+        ).fetchone()
+        top = con.execute(
+            f"""
+            SELECT symbol, COUNT(*) AS row_count, MAX(timestamp) AS last_ts
+            FROM {table_name}
+            {where}
+            GROUP BY symbol
+            ORDER BY row_count DESC, symbol ASC
+            LIMIT 8
+            """
+        ).fetchall()
+        con.close()
+
+        return {
+            "status": "ok",
+            "db_path": str(DRAWTHRU_DUCKDB_FILE),
+            "table": table_name,
+            "row_count": int(row[0] or 0),
+            "symbol_count": int(row[1] or 0),
+            "min_ts": None if row[2] is None else str(row[2]),
+            "max_ts": None if row[3] is None else str(row[3]),
+            "top_symbols": [
+                {"symbol": s, "row_count": int(c), "last_ts": None if ts is None else str(ts)}
+                for s, c, ts in top
+            ],
+        }
+    except Exception as e:
+        return {"status": "error", "db_path": str(DRAWTHRU_DUCKDB_FILE), "error": str(e)}
 
 def start_background_trainer(config: EpisodeTrainingConfig):
     global trainer_instance
@@ -109,6 +174,9 @@ class TrainerHTTPHandler(SimpleHTTPRequestHandler):
             return
         elif parsed_path.path == '/api/cache':
             self.serve_api_cache()
+            return
+        elif parsed_path.path == '/api/drawthru':
+            self.serve_api_drawthru()
             return
         elif parsed_path.path == '/api/vqa':
             self.serve_api_vqa()
@@ -224,6 +292,12 @@ class TrainerHTTPHandler(SimpleHTTPRequestHandler):
             response_data["transfers"] = trans_list
 
         self.wfile.write(json.dumps(response_data).encode('utf-8'))
+
+    def serve_api_drawthru(self):
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.end_headers()
+        self.wfile.write(json.dumps(load_drawthru_snapshot()).encode('utf-8'))
 
 
 def run_server(port: int = 8080):
