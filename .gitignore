@@ -1,5 +1,6 @@
 # General ignore patterns
 .aider.chat.history.md
+.aider.input.history
 
 # Training Results & Demo Code
 training_results.json
@@ -77,4 +78,9 @@ hrm/checkpoints/
 test-results/
 logs/
 *_state.json
+training_sessions/
+tmp/session-*.md
+*.duckdb-wal
+*.duckdb-journal
+*.duckdb.tmp
 data/
