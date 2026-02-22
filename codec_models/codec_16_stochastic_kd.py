@@ -60,6 +60,10 @@ class Codec16(BaseCodec):
             except:
                 pass
         
+        self.record_instruments(
+                stoch_k=float(k_pct) if 'k_pct' in dir() else 50.0,
+                stoch_d=float(d_pct) if 'd_pct' in dir() else 50.0,
+            )
         return self.validate_signal(confidence, direction)
     
     def test_time_adapter(self, batch_data: Dict[str, Any], learning_rate: float = 1e-3) -> None:

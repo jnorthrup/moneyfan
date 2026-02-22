@@ -68,6 +68,9 @@ class Codec03(BaseCodec):
             confidence = abs(combined) + 0.2
             direction = combined
         
+        self.record_instruments(
+                returns_last=float(features[0]) if len(features) > 0 else 0.0,
+            )
         return self.validate_signal(confidence, direction)
     
     def test_time_adapter(self, batch_data: Dict[str, Any], learning_rate: float = 1e-3) -> None:

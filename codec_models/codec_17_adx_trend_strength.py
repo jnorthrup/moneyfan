@@ -31,24 +31,29 @@ class Codec17(BaseCodec):
             )
     
     def forward(self, market_data: Dict[str, Any], features: np.ndarray) -> Tuple[float, float]:
-        adx = market_data.get('adx_14', 0)
-        plus_di = market_data.get('plus_di', 0)
-        minus_di = market_data.get('minus_di', 0)
-        
-        direction = 0.0
-        confidence = 0.2
-        
-        if adx > self.adx_threshold:
-            di_diff = plus_di - minus_di
-            direction = np.sign(di_diff) * min(abs(di_diff) / 20, 1.0)
-            confidence = min(adx / 50 + 0.3, 1.0)
-        else:
-            confidence = 0.2
-            direction = 0.0
-        
-        momentum = market_data.get('momentum', 0)
-        if np.sign(direction) == np.sign(momentum) and adx > 30:
-            confidence = min(confidence * 1.3, 1.0)
+        # InstrumentPanel emits 'adx', 'plus_di', 'minus_di'
+        adx      = float(market_data.get('adx',      market_data.get('adx_14', 0.0)))
+        plus_di  = float(market_data.get('plus_di',  0.0))
+        minus_di = float(market_data.get('minus_di', 0.0))
+
+        di_diff    = plus_di - minus_di
+        direction  = float(np.tanh(di_diff / 20.0))   # DI spread → direction
+
+        # Graded conviction: full above threshold, tapered below, never zero
+        if adx >= self.adx_threshold:          # strong trend ≥ 25
+            adx_factor = min(1.0, adx / 50.0 + 0.3)
+        elif adx >= 15:                        # moderate trend 15-25
+            adx_factor = 0.15 + (adx - 15) / 10.0 * 0.3
+        else:                                  # weak / choppy, follow DI gently
+            adx_factor = 0.1 + adx / 15.0 * 0.1
+
+        confidence = min(1.0, adx_factor + abs(di_diff) / 50.0)
+
+        # Momentum confirmation
+        momentum = float(market_data.get('momentum', market_data.get('log_return', 0.0)))
+        if np.sign(direction) == np.sign(momentum) and adx > 20:
+            confidence = min(confidence * 1.2, 1.0)
+
         
         if HAS_MLX and self.model is not None and len(features) >= 64:
             try:
@@ -59,6 +64,11 @@ class Codec17(BaseCodec):
             except:
                 pass
         
+        self.record_instruments(
+                adx=float(adx) if 'adx' in dir() else 0.0,
+                plus_di=float(plus_di) if 'plus_di' in dir() else 0.0,
+                minus_di=float(minus_di) if 'minus_di' in dir() else 0.0,
+            )
         return self.validate_signal(confidence, direction)
     
     def test_time_adapter(self, batch_data: Dict[str, Any], learning_rate: float = 1e-3) -> None:

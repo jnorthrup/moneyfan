@@ -65,6 +65,9 @@ class Codec04(BaseCodec):
             except:
                 pass
         
+        self.record_instruments(
+                momentum=float(market_data.get('momentum', 0.0)),
+            )
         return self.validate_signal(confidence, direction)
     
     def test_time_adapter(self, batch_data: Dict[str, Any], learning_rate: float = 1e-3) -> None:

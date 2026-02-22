@@ -55,6 +55,10 @@ class Codec15(BaseCodec):
             except:
                 pass
         
+        self.record_instruments(
+                macd_hist=float(macd_hist) if 'macd_hist' in dir() else 0.0,
+                macd_line=float(macd_line) if 'macd_line' in dir() else 0.0,
+            )
         return self.validate_signal(confidence, direction)
     
     def test_time_adapter(self, batch_data: Dict[str, Any], learning_rate: float = 1e-3) -> None:
