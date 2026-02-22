@@ -178,7 +178,17 @@ Each expert output: `[signal_conviction ∈ [0,1], direction ∈ [-1/0/1], regim
 **Shared TemporalOrderBook Encoder** (the world-model heart):
 
 - Predicts next-bar codec features + all indicator kernels (multi-task heads)
-- Both macro_regime_layer and tactical_execution_layer read from this same encoder
+
+**Dual-Layer Signal Separation (HF vs LF)**
+To minimize slippage exposure and fee bleed from moving positions too frequently, the HRM explicitly separates decision-making into two operational frequencies:
+
+1. **Macro Regime Layer (Low Frequency / LF):**
+   - Acts as the "Strategist". It reads the deep 200-bar temporal order book and long-sequence indicators (Hurst, AR(1)).
+   - **Does not emit trade signals.** Instead, it outputs a *Trust Matrix* that allocates capital weight across the 24 Codec Experts for the current market regime (e.g., heavily weighting Mean-Reversion experts during chop). It holds these opinions steady over longer horizons.
+2. **Tactical Execution Layer (High Frequency / HF):**
+   - Acts as the "Trader". It receives the Trust Matrix from the Macro layer but applies its own independent confidence based on immediate tick-level context (e.g., order book imbalance, micro-momentum).
+   - **Applies Veto Power:** Even if the LF Regime layer trusts a strategy that is screaming "Buy", the HF layer manages the actual execution sequence. It will delay or veto the entry if the immediate spread, slippage, or volume absorption creates unfavorable entry conditions. This ensures the system does not churn positions row-by-row on micro-fluctuations.- Both macro_regime_layer and tactical_execution_layer read from this same encoder
+
 - Gradients flow through shared weights → mutual generalization boost
 
 **macro_regime_layer (Strategic — high level)**:
