@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MoneyFan Trainer Console</title>
+    <!-- Google Fonts for Modern Typography -->
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=Inter:wght@400;500;600&display=swap"
+        rel="stylesheet">
+    <!-- Chart.js for Equity Curve -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="style.css?v=2">
+</head>
+
+<body>
+    <!-- Global Overlays for Immersion -->
+    <div class="scanlines"></div>
+    <div class="vignette"></div>
+
+    <div class="app-container">
+        <!-- Sidebar Navigation (Aesthetics) -->
+        <aside class="sidebar glass-panel">
+            <div class="logo">
+                <span class="logo-icon">▲</span> MoneyFan
+            </div>
+            <nav>
+                <a href="#" class="nav-item active" data-target="view-training">Live Training</a>
+                <a href="#" class="nav-item" data-target="view-cache">Drawthru Cache</a>
+                <a href="#" class="nav-item" data-target="view-codecs">Codecs</a>
+                <a href="#" class="nav-item" data-target="view-settings">Settings</a>
+            </nav>
+            <div class="system-status">
+                <div class="status-indicator live" id="statusIndicator"></div>
+                <span id="statusText">System Booting</span>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="content-area">
+            <header class="top-bar glass-panel">
+                <div class="header-left">
+                    <div class="header-title">AI Cockpit & Performance Panel</div>
+                    <div class="header-sub">
+                        <span class="mission-clock" id="missionClock">MISSION: 00:00:00</span>
+                        <div class="heartbeat-container">
+                            <div class="heartbeat-pulse" id="kernelHeartbeat"></div>
+                            <span class="heartbeat-label">KERNEL ACTIVE</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="header-metrics">
+                    <div class="metric">
+                        <span class="metric-label">Notional</span>
+                        <span class="metric-value" id="globalCapital">$0.00</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Net PnL</span>
+                        <span class="metric-value highlight" id="globalPnl">+$0.00</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Episodes</span>
+                        <span class="metric-value" id="globalEpoch">0 / 500</span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Tabbed Viewports -->
+            <div id="view-training" class="viewport active">
+                <div class="dashboard-grid">
+                    <!-- Equity Curve Graph -->
+                    <section class="card glass-panel wide-card">
+                        <div class="card-header">
+                            <h2>Equity Curve</h2>
+                            <span class="subtitle">Live real-time drawing</span>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="equityChart"></canvas>
+                        </div>
+                    </section>
+
+                    <!-- Stochastic Training Metrics -->
+                    <section class="card glass-panel">
+                        <div class="card-header">
+                            <h2>Last Pilot Mission</h2>
+                        </div>
+                        <div class="stats-grid">
+                            <div class="stat-box">
+                                <span class="label">Direction Accuracy</span>
+                                <span class="value" id="lastWinRate">0.0%</span>
+                            </div>
+                            <div class="stat-box">
+                                <span class="label">Mission PnL</span>
+                                <span class="value" id="lastPnl">$0.00</span>
+                            </div>
+                            <div class="stat-box">
+                                <span class="label">Decisions Made</span>
+                                <span class="value" id="lastTrades">0</span>
+                            </div>
+                            <div class="stat-box">
+                                <span class="label">World Model Loss</span>
+                                <span class="value" id="lastLoss">0.000</span>
+                            </div>
+                            <div class="stat-box">
+                                <span class="label">Market Turbulence</span>
+                                <span class="value" id="lastShocks">0</span>
+                            </div>
+                            <div class="stat-box">
+                                <span class="label">Active Hero Expert</span>
+                                <span class="value highlight-text" id="lastExpert">--</span>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+
+                <div class="dashboard-grid">
+                    <!-- Tactical Comms (Integrated VQA) -->
+                    <section class="card glass-panel wide-card">
+                        <div class="card-header">
+                            <h2>COMMS: NEURAL ADVISOR</h2>
+                            <div class="comms-status">
+                                <span class="blink">●</span> ENCRYPTED_CHANNEL_7
+                            </div>
+                        </div>
+                        <div class="comms-container">
+                            <div id="vqaHistory" class="comms-history">
+                                <div class="vqa-msg system">Pilot: Waiting for mission parameters... Ready for
+                                    consultation.</div>
+                            </div>
+                            <div class="comms-input-wrapper">
+                                <span class="comms-prompt">></span>
+                                <input type="text" id="vqaInput" placeholder="ASK_ADVISOR..." autocomplete="off">
+                                <button id="vqaSubmit">SEND</button>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Expert Conviction Leaderboard -->
+                    <section class="card glass-panel">
+                        <div class="card-header">
+                            <h2>Conviction Lead</h2>
+                        </div>
+                        <div class="leaderboard-container">
+                            <ul id="leaderboardList" class="leaderboard-list compact">
+                                <li class="empty-state">No data...</li>
+                            </ul>
+                        </div>
+                    </section>
+                </div>
+            </div>
+
+            <div id="view-cache" class="viewport">
+                <div class="dashboard-grid">
+                    <!-- Drawthru Cache Visuals -->
+                    <section class="card glass-panel">
+                        <div class="card-header">
+                            <h2>Candle Cache (Drawthru)</h2>
+                            <span class="badge" id="cacheStatus">Offline</span>
+                        </div>
+                        <div class="cache-metrics">
+                            <div class="cache-bar-wrapper">
+                                <span class="label">Capacity</span>
+                                <div class="progress-bar">
+                                    <div class="progress-fill" id="cacheFill" style="width: 0%;"></div>
+                                </div>
+                                <span class="value" id="cachePct">0 / 0</span>
+                            </div>
+                            <div class="cache-stat">
+                                <span class="label">Loaded Memory Rows</span>
+                                <span class="value gradient-text" id="cacheRows">0 frames</span>
+                            </div>
+                        </div>
+
+                        <div class="cache-recently-accessed">
+                            <h3>BUFFER INVENTORY (Stochastic Persistence)</h3>
+                            <ul id="cacheList" class="scrolling-list">
+                                <li class="empty-state">No cache activity</li>
+                            </ul>
+                        </div>
+                    </section>
+
+                    <!-- Network & File Transports -->
+                    <section class="card glass-panel wide-card">
+                        <div class="card-header">
+                            <h2>Network & File Transports</h2>
+                            <span class="subtitle">Live API and disk I/O</span>
+                        </div>
+                        <div class="transfer-grid" id="transferGrid">
+                            <div class="empty-state">No active transfers</div>
+                        </div>
+                    </section>
+
+                    <!-- drw0thru Live Sampling Log -->
+                    <section class="card glass-panel wide-card">
+                        <div class="card-header">
+                            <h2>drw0thru: Stochastic Sampling Log</h2>
+                            <span class="subtitle">Verifying model diversity (Anti-Cheating)</span>
+                        </div>
+                        <div class="log-container">
+                            <table class="log-table">
+                                <thead>
+                                    <tr>
+                                        <th>Symbol</th>
+                                        <th>Window</th>
+                                        <th>Len</th>
+                                        <th>Time</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="sampleLog">
+                                    <tr>
+                                        <td colspan="4" class="empty-state">Waiting for sampling events...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+                </div>
+            </div>
+
+            <div id="view-codecs" class="viewport">
+                <div class="dashboard-grid">
+                    <!-- Neural Conviction Radar -->
+                    <section class="card glass-panel wide-card">
+                        <div class="card-header">
+                            <h2>Neural Conviction Radar</h2>
+                            <span class="subtitle">Expert weights & attention matrix</span>
+                        </div>
+                        <div id="convictionRadar" class="conviction-radar">
+                            <!-- Expert bars will be rendered here -->
+                            <div class="empty-state">No neural data available</div>
+                        </div>
+                    </section>
+
+                    <!-- System Vitals / Health Gauges -->
+                    <section class="card glass-panel">
+                        <div class="card-header">
+                            <h2>System Vitals</h2>
+                        </div>
+                        <div class="vitals-container">
+                            <div class="vital-gauge" id="gaugeEntropy">
+                                <div class="gauge-header">Regime Entropy</div>
+                                <div class="gauge-canvas-wrapper">
+                                    <svg viewBox="0 0 100 100">
+                                        <circle class="gauge-bg" cx="50" cy="50" r="45"></circle>
+                                        <circle class="gauge-fill" id="entropyFill" cx="50" cy="50" r="45"></circle>
+                                        <text x="50" y="55" class="gauge-text" id="entropyValue">0.0</text>
+                                    </svg>
+                                </div>
+                                <div class="gauge-footer" id="entropyLabel">Stable Regime</div>
+                            </div>
+
+                            <div class="vital-gauge" id="gaugeConfidence">
+                                <div class="gauge-header">Neural Confidence</div>
+                                <div class="gauge-canvas-wrapper">
+                                    <svg viewBox="0 0 100 100">
+                                        <circle class="gauge-bg" cx="50" cy="50" r="45"></circle>
+                                        <circle class="gauge-fill" id="confidenceFill" cx="50" cy="50" r="45"></circle>
+                                        <text x="50" y="55" class="gauge-text" id="confidenceValue">0%</text>
+                                    </svg>
+                                </div>
+                                <div class="gauge-footer" id="confidenceLabel">Booting Model...</div>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- Brainless polling logic -->
+    <script src="app.js?v=2"></script>
+</body>
+
+</html>

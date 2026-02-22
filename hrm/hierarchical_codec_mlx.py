@@ -61,14 +61,20 @@ class HRMConfig:
       n_heads              : number of attention heads
     """
     n_codec_outputs: int = 24
+    input_dim: int = 92
     hidden_dim: int = 64
     ob_depth_frames: int = 20
     ob_lookback_horizon: int = 200
+    ob_decay_mode: str = "exponential"
+    ob_hyperbolic_tau: float = 32.0
+    ob_tactical_near_frames: int = 64
     regime_attn_layers: int = 2
     tactical_attn_layers: int = 2
     regime_update_cycles: int = 2
     tactical_update_cycles: int = 3
     n_heads: int = 4
+    use_mechanical_veto: bool = False
+    replay_coalescing: bool = False
 
     # Legacy aliases for callers that still use old field names
     @property
@@ -106,11 +112,29 @@ class MLXTemporalOrderBook:
     This creates a cascading temporal memory — NO tiling, NO parallel frame computation.
     """
 
-    def __init__(self, hidden_dim: int, ob_depth_frames: int = 20, ob_lookback_horizon: int = 200):
+    def __init__(
+        self,
+        hidden_dim: int,
+        ob_depth_frames: int = 20,
+        ob_lookback_horizon: int = 200,
+        decay_mode: str = "exponential",
+        hyperbolic_tau: float = 32.0,
+    ):
         self.hidden_dim = hidden_dim
         self.ob_depth_frames = ob_depth_frames
         self.ob_lookback_horizon = ob_lookback_horizon
         self.decay_ratio = ob_lookback_horizon ** (1.0 / max(ob_depth_frames - 1, 1))
+        self.decay_mode = decay_mode
+        self.hyperbolic_tau = hyperbolic_tau
+
+    def _alpha_for_frame(self, k: int) -> float:
+        if self.decay_mode == "hyperbolic":
+            tau = max(self.hyperbolic_tau, 1.0)
+            # Slower falloff than exponential: preserves long-tail memory while
+            # keeping the first band responsive for execution features.
+            alpha = 1.0 / (1.0 + (k / tau))
+            return float(min(1.0, max(0.01, alpha)))
+        return float(1.0 / (self.decay_ratio ** k))
 
     def update(self, temporal_ob: Optional[mx.array], current_bar: mx.array) -> mx.array:
         """
@@ -134,14 +158,49 @@ class MLXTemporalOrderBook:
         # Sequential cascading: each depth level decays from the level above it
         depth_frames: List[mx.array] = [frame_0]
         for k in range(1, self.ob_depth_frames):
-            alpha_k = 1.0 / (self.decay_ratio ** k)
+            alpha_k = self._alpha_for_frame(k)
             prev_frame = depth_frames[-1]
             frame_k = (1.0 - alpha_k) * temporal_ob[:, k:k+1, :] + alpha_k * prev_frame
             depth_frames.append(frame_k)
 
         return mx.concatenate(depth_frames, axis=1)
 
-    def read(self, temporal_ob: mx.array) -> mx.array:
+    def _frame_weights(self) -> mx.array:
+        if self.decay_mode == "hyperbolic":
+            weights_list = [
+                1.0 / (1.0 + (k / max(self.hyperbolic_tau, 1e-6)))
+                for k in range(self.ob_depth_frames)
+            ]
+        else:
+            weights_list = [1.0 / (self.decay_ratio ** k) for k in range(self.ob_depth_frames)]
+
+        weights_sum = sum(weights_list)
+        return mx.array([w / weights_sum for w in weights_list])
+
+    def _read_with_weights(self, temporal_ob: mx.array, weights: mx.array) -> mx.array:
+        weighted = temporal_ob * weights.reshape(1, -1, 1)
+        return mx.sum(weighted, axis=1)  # [B, D]
+
+    def read_tactical(self, temporal_ob: mx.array, near_frames: int = 64) -> mx.array:
+        """
+        Tactical read seam for near-horizon context.
+
+        Trunk behavior remains conservative and backwards compatible:
+        it uses a normalized near-band weighting over the existing frame tensor.
+        """
+        active = min(max(1, near_frames), self.ob_depth_frames)
+        if self.decay_mode == "hyperbolic":
+            # Sharper recency bias than regime read to protect execution crispness.
+            tactical_tau = max(4.0, self.hyperbolic_tau * 0.25)
+            near_weights = [1.0 / (1.0 + (k / tactical_tau)) for k in range(active)]
+        else:
+            near_weights = [1.0 / (k + 1.0) for k in range(active)]
+        near_weights += [0.0] * (self.ob_depth_frames - active)
+        weights_sum = sum(near_weights) or 1.0
+        weights = mx.array([w / weights_sum for w in near_weights])
+        return self._read_with_weights(temporal_ob, weights)
+
+    def read_regime(self, temporal_ob: mx.array) -> mx.array:
         """
         Read the regime context vector from the temporal order book.
 
@@ -152,14 +211,41 @@ class MLXTemporalOrderBook:
         Returns:
             market_context : [B, D]
         """
-        B, F, D = temporal_ob.shape
+        if self.decay_mode != "hyperbolic":
+            return self._read_with_weights(temporal_ob, self._frame_weights())
 
-        weights_list = [1.0 / (self.decay_ratio ** k) for k in range(self.ob_depth_frames)]
-        weights_sum = sum(weights_list)
-        weights = mx.array([w / weights_sum for w in weights_list])  # [ob_depth_frames]
+        # Banded weighting so far memory survives the near-band dominance.
+        f = self.ob_depth_frames
+        near_end = min(64, f)
+        mid_end = min(192, f)
 
-        weighted = temporal_ob * weights.reshape(1, -1, 1)
-        return mx.sum(weighted, axis=1)  # [B, D]
+        weights = [0.0] * f
+        if near_end > 0:
+            near = [1.0 / (1.0 + (k / max(self.hyperbolic_tau * 0.5, 1.0))) for k in range(near_end)]
+            s = sum(near) or 1.0
+            for i, w in enumerate(near):
+                weights[i] = 0.45 * (w / s)
+
+        if mid_end > near_end:
+            mid_len = mid_end - near_end
+            mid = [1.0 / (1.0 + (k / max(self.hyperbolic_tau, 1.0))) for k in range(mid_len)]
+            s = sum(mid) or 1.0
+            for i, w in enumerate(mid, start=near_end):
+                weights[i] = 0.35 * (w / s)
+
+        if f > mid_end:
+            far_len = f - mid_end
+            far = [1.0 / (1.0 + (k / max(self.hyperbolic_tau * 2.0, 1.0))) for k in range(far_len)]
+            s = sum(far) or 1.0
+            for i, w in enumerate(far, start=mid_end):
+                weights[i] = 0.20 * (w / s)
+
+        wsum = sum(weights) or 1.0
+        return self._read_with_weights(temporal_ob, mx.array([w / wsum for w in weights]))
+
+    def read(self, temporal_ob: mx.array) -> mx.array:
+        """Backward-compatible alias for regime context read."""
+        return self.read_regime(temporal_ob)
 
 
 class MLXFeedForward(nn.Module):
@@ -265,11 +351,15 @@ class MLXHierarchicalCodec(nn.Module):
         self.hidden_dim = config.hidden_dim
 
         # Project raw OHLCV/codec features into HRM embedding space
-        self.bar_feature_proj = nn.Linear(config.n_codec_outputs * 2, config.hidden_dim)
+        self.bar_feature_proj = nn.Linear(config.input_dim, config.hidden_dim)
 
         # Temporal order book memory (replaces "sparkline")
         self.temporal_ob = MLXTemporalOrderBook(
-            config.hidden_dim, config.ob_depth_frames, config.ob_lookback_horizon
+            config.hidden_dim,
+            config.ob_depth_frames,
+            config.ob_lookback_horizon,
+            decay_mode=config.ob_decay_mode,
+            hyperbolic_tau=config.ob_hyperbolic_tau,
         )
 
         # Macro regime layer (Slow/High — strategic)
@@ -285,8 +375,8 @@ class MLXHierarchicalCodec(nn.Module):
         self.regime_state_init = mx.random.normal((config.hidden_dim,)) * 0.02
         self.tactical_state_init = mx.random.normal((config.hidden_dim,)) * 0.02
 
-        # World-model pre-training head: predict next bar's codec features
-        self.codec_score_head = nn.Linear(config.hidden_dim, config.n_codec_outputs * 2)
+        # World-model pre-training head: predict next bar's full feature vector (92 channels)
+        self.codec_score_head = nn.Linear(config.hidden_dim, config.input_dim)
 
         # Trade output heads
         self.expected_return_head = nn.Linear(config.hidden_dim, 1)
@@ -334,15 +424,23 @@ class MLXHierarchicalCodec(nn.Module):
         # Update temporal order book with current bar's mean embedding
         current_bar_embed = bar_embed.mean(axis=1)  # [B, D]
         temporal_ob_state = self.temporal_ob.update(temporal_ob_state, current_bar_embed)
-        market_context = self.temporal_ob.read(temporal_ob_state)  # [B, D]
+        regime_context = self.temporal_ob.read_regime(temporal_ob_state)  # [B, D]
+        tactical_context = self.temporal_ob.read_tactical(
+            temporal_ob_state,
+            near_frames=self.config.ob_tactical_near_frames,
+        )  # [B, D]
 
-        # Broadcast market context across all timesteps in the bar window
-        market_context_broadcast = mx.expand_dims(market_context, 1)  # [B, 1, D]
-        market_context_broadcast = mx.broadcast_to(
-            market_context_broadcast,
-            (B, T, self.hidden_dim)
-        )  # [B, T, D]
-        bar_features_with_context = bar_embed + market_context_broadcast
+        # Broadcast split contexts across all timesteps in the bar window
+        regime_context_broadcast = mx.broadcast_to(
+            mx.expand_dims(regime_context, 1),
+            (B, T, self.hidden_dim),
+        )
+        tactical_context_broadcast = mx.broadcast_to(
+            mx.expand_dims(tactical_context, 1),
+            (B, T, self.hidden_dim),
+        )
+        bar_features_with_regime_context = bar_embed + regime_context_broadcast
+        bar_features_with_tactical_context = bar_embed + tactical_context_broadcast
 
         # Initialise regime/tactical states if not carried from previous call
         if regime_state is None:
@@ -360,16 +458,20 @@ class MLXHierarchicalCodec(nn.Module):
         for _regime_cycle in range(self.config.regime_update_cycles - 1):
             for _tactical_cycle in range(self.config.tactical_update_cycles):
                 tactical_state = self.tactical_execution_layer(
-                    tactical_state, regime_state + bar_features_with_context
+                    tactical_state, regime_state + bar_features_with_tactical_context
                 )
-            regime_state = self.macro_regime_layer(regime_state, tactical_state)
+            regime_state = self.macro_regime_layer(
+                regime_state, tactical_state + bar_features_with_regime_context
+            )
 
         # Final cycle (with gradient)
         for _tactical_cycle in range(self.config.tactical_update_cycles):
             tactical_state = self.tactical_execution_layer(
-                tactical_state, regime_state + bar_features_with_context
+                tactical_state, regime_state + bar_features_with_tactical_context
             )
-        regime_state = self.macro_regime_layer(regime_state, tactical_state)
+        regime_state = self.macro_regime_layer(
+            regime_state, tactical_state + bar_features_with_regime_context
+        )
 
         # Output heads — always read from regime layer's final timestep
         regime_final = regime_state[:, -1, :]  # [B, D]
@@ -421,6 +523,15 @@ class MLXBasketTrainer:
         
         # Compile pure inner functions to avoid binding 'self' continually
         
+        def _split_trade_outputs(output: mx.array) -> Tuple[mx.array, mx.array, mx.array, mx.array, mx.array]:
+            return (
+                output[:, 0],
+                output[:, 1],
+                output[:, 2],
+                output[:, 3],
+                output[:, 4],
+            )
+
         @mx.compile
         def compiled_pretrain(bar_codec_features: mx.array, memory: Optional[Tuple] = None) -> Tuple[mx.array, Tuple]:
             output, next_memory = self.model.forward(bar_codec_features, memory=memory, mode="pretrain")
@@ -431,10 +542,29 @@ class MLXBasketTrainer:
         @mx.compile
         def compiled_trade(bar_codec_features: mx.array, realized_returns: mx.array, memory: Optional[Tuple] = None) -> Tuple[mx.array, Tuple]:
             output, next_memory = self.model.forward(bar_codec_features, memory=memory, mode="trade")
-            pred_fwd_return = output[:, 0]
-            signal_conviction = output[:, 1]
-            weighted_alpha = pred_fwd_return * signal_conviction
-            alpha_loss = -mx.mean(weighted_alpha * realized_returns)
+            pred_fwd_return, signal_conviction, stop_loss_pct, take_profit_pct, position_fraction = _split_trade_outputs(output)
+
+            # PyTorch parity: compute realized PnL with SL/TP clamping and position sizing.
+            # Conviction remains in the objective as a gate on realized exposure.
+            realized = realized_returns.reshape((-1, 1))
+            entry = mx.ones_like(realized)
+            exit_price = entry * (1.0 + realized)
+
+            pred_dir = mx.sign(pred_fwd_return).reshape((-1, 1))
+            active_mask = mx.abs(pred_dir)
+            conviction = signal_conviction.reshape((-1, 1))
+            sl = mx.maximum(mx.abs(stop_loss_pct).reshape((-1, 1)), 1e-4)
+            tp = mx.maximum(take_profit_pct.reshape((-1, 1)), 1e-4)
+            size = mx.clip(position_fraction.reshape((-1, 1)), 0.0, 1.0)
+
+            long_exit = mx.clip(exit_price, entry * (1.0 - sl), entry * (1.0 + tp))
+            short_exit = mx.clip(exit_price, entry * (1.0 - tp), entry * (1.0 + sl))
+            exit_final = mx.where(pred_dir > 0, long_exit, short_exit)
+
+            raw_pnl = (exit_final - entry) * size * conviction * 100.0
+            final_pnl = mx.where(pred_dir > 0, raw_pnl, -raw_pnl)
+            final_pnl = final_pnl * active_mask
+            alpha_loss = -mx.mean(final_pnl)
             return alpha_loss, next_memory
             
         self._compiled_pretrain = compiled_pretrain

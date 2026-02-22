@@ -54,6 +54,7 @@ except ImportError:
     HAS_MLX = False
 
 from codec_models import load_all_codecs
+from hrm.order_intent import NormalizedTradeIntent, RiskTier, VetoDecision
 
 
 
@@ -94,6 +95,11 @@ class EpisodeTrainingConfig:
     shock_z_threshold: float = 2.0
     bar_shock_z_threshold: float = 3.0
     max_adaptive_replays: int = 3
+    use_mechanical_veto: bool = False
+    replay_coalescing: bool = False
+    replay_coalescing_chunk_size: int = 8
+    ob_decay_mode: str = "exponential"
+    ob_hyperbolic_tau: float = 32.0
 
 
 class CandleCache:
@@ -151,26 +157,40 @@ class CandlePipeline:
             return cached
 
         try:
+            import duckdb
             from datetime import datetime
-            start_dt = datetime.strptime(start, '%Y-%m-%d') if start else None
-            end_dt = datetime.strptime(end, '%Y-%m-%d') if end else None
+
+            # Use an in-memory duckdb connection optimized for quick parquet scans
+            con = duckdb.connect(':memory:')
 
             dfs = []
             for sym in symbols:
                 slug = sym.replace("-", "_").replace("/", "_")
                 path = self.data_dir / f"{slug}_sequences.parquet"
 
-                print(f"[DEBUG] Checking path: {path} (exists? {path.exists()})")
+                # print(f"[DEBUG] Checking path: {path} (exists? {path.exists()})")
                 if path.exists():
                     try:
-                        df_sym = pd.read_parquet(path, engine='pyarrow')
-                        print(f"[DEBUG] Loaded {len(df_sym)} rows for {sym}")
+                        # Build the WHERE clause dynamically
+                        where_clauses = []
+                        if start:
+                            where_clauses.append(f"timestamp >= '{start} 00:00:00'")
+                        if end:
+                            where_clauses.append(f"timestamp <= '{end} 23:59:59'")
 
-                        # Filter by timestamp column (datetime64)
-                        if start_dt and 'timestamp' in df_sym.columns:
-                            df_sym = df_sym[df_sym['timestamp'] >= pd.Timestamp(start_dt)]
-                        if end_dt and 'timestamp' in df_sym.columns:
-                            df_sym = df_sym[df_sym['timestamp'] <= pd.Timestamp(end_dt)]
+                        where_sql = ""
+                        if where_clauses:
+                            where_sql = "WHERE " + " AND ".join(where_clauses)
+
+                        # Use DuckDB to query the parquet file natively (zero-copy date filtering)
+                        query = f"""
+                            SELECT * FROM read_parquet('{path}')
+                            {where_sql}
+                            ORDER BY timestamp ASC
+                        """
+
+                        df_sym = con.execute(query).df()
+                        # print(f"[DEBUG] DuckDB loaded {len(df_sym)} rows for {sym}")
 
                         if not df_sym.empty:
                             # Normalize column: 'pair' -> 'symbol'
@@ -180,11 +200,13 @@ class CandlePipeline:
                                 df_sym['symbol'] = sym
                             dfs.append(df_sym)
                         else:
-                            print(f"[DEBUG] df_sym empty after date filter for {sym}")
+                            print(f"[DEBUG] df_sym empty after DuckDB filter for {sym}")
                     except Exception as e:
-                        print(f"[DEBUG] Failed to read {path}: {e}")
+                        print(f"[DEBUG] Failed to read {path} via DuckDB: {e}")
                 else:
                     print(f"No parquet file at {path}")
+
+            con.close()
 
             if dfs:
                 df = pd.concat(dfs, ignore_index=True)
@@ -193,7 +215,7 @@ class CandlePipeline:
             else:
                 print(f"[DEBUG] dfs list is empty after iterating all symbols")
         except Exception as e:
-            print(f"Parquet load failed for {symbols}: {e}")
+            print(f"DuckDB parquet query failed for {symbols}: {e}")
 
         # Fail fast if data is missing, no mock data fallback allowed
         print(f"No data available in Parquet for {symbols} at {start} - {end}")
@@ -318,13 +340,43 @@ class EpochEpisodeTrainer:
         self.config = config
         self.candle_cache = CandleCache(config.cache_size)
         self.candle_pipeline = CandlePipeline(self.candle_cache)
+        ob_depth_frames = 256 if config.ob_decay_mode == "hyperbolic" else 20
 
         self.model_config = MLXConfig(
             n_codec_outputs=24,
             hidden_dim=64,
-            ob_depth_frames=20,
-            ob_lookback_horizon=200
+            ob_depth_frames=ob_depth_frames,
+            ob_lookback_horizon=200,
+            ob_decay_mode=config.ob_decay_mode,
+            ob_hyperbolic_tau=config.ob_hyperbolic_tau,
+            use_mechanical_veto=config.use_mechanical_veto,
+            replay_coalescing=config.replay_coalescing,
         ) if HAS_MLX else None
+
+        # Persistent HRM model and trainer - initialized once, trained continuously
+        self.model = None
+        self.trainer = None
+        self._init_model_if_needed()
+        if HAS_MLX:
+            try:
+                # Use a larger dummy window (100 bars) to ensure all indicators (like Hurst-60) compute fully
+                probe_len = 100
+                dummy_df = pd.DataFrame({
+                    'symbol': ['BTCUSDT'] * probe_len,
+                    'timestamp': pd.date_range('2023-01-01', periods=probe_len, freq='1min'),
+                    'open': np.linspace(20000, 20100, probe_len),
+                    'high': np.linspace(20100, 20200, probe_len),
+                    'low': np.linspace(19900, 20000, probe_len),
+                    'close': np.linspace(20050, 20150, probe_len),
+                    'volume': np.random.random(probe_len) * 100
+                })
+                probed_signals = self.candle_pipeline.compute_signals(dummy_df, 24)
+                actual_dim = probed_signals.shape[1]
+                self.model_config.input_dim = actual_dim
+                print(f"[Trainer] Robust calibration: {actual_dim} input features detected.")
+            except Exception as e:
+                print(f"[Trainer] Warning: Calibration failed: {e}. Defaulting to 92.")
+                self.model_config.input_dim = 92
 
         self.results: List[Dict] = []
         self.event_queue = queue.Queue()
@@ -332,7 +384,113 @@ class EpochEpisodeTrainer:
         # ISO-8601 timestamp recorded at trainer construction
         self.session_start_time: str = datetime.now().isoformat()
 
-    def train_episode(self, episode_id: int, episode_pairs: List[str]) -> Dict:
+    def _init_model_if_needed(self, force_reinit: bool = False):
+        """Initialize HRM model and trainer once, preserving training state across episodes."""
+        if not HAS_MLX:
+            return
+        if (not force_reinit) and self.model is not None and self.trainer is not None:
+            return  # Already initialized
+
+        # Determine actual input dimension by running a robust signal pass
+        try:
+            # Use a larger dummy window (100 bars) to ensure all indicators compute fully
+            probe_len = 100
+            dummy_df = pd.DataFrame({
+                'symbol': ['BTCUSDT'] * probe_len,
+                'timestamp': pd.date_range('2023-01-01', periods=probe_len, freq='1min'),
+                'open': np.linspace(20000, 20100, probe_len),
+                'high': np.linspace(20100, 20200, probe_len),
+                'low': np.linspace(19900, 20000, probe_len),
+                'close': np.linspace(20050, 20150, probe_len),
+                'volume': np.random.random(probe_len) * 100
+            })
+            probed_signals = self.candle_pipeline.compute_signals(dummy_df, 24)
+            actual_dim = probed_signals.shape[1]
+            self.model_config.input_dim = actual_dim
+            print(f"[Trainer] Robust calibration: {actual_dim} input features detected.")
+        except Exception as e:
+            print(f"[Trainer] Warning: Calibration failed: {e}. Defaulting to 92.")
+            self.model_config.input_dim = 92
+
+        # Initialize persistent model and trainer
+        self.model = MLXHierarchicalCodec(self.model_config)
+        self.trainer = MLXCodecTrainer(self.model_config)
+        self.trainer.model = self.model
+        print(f"[Trainer] HRM model initialized: {self.model_config.input_dim} features, "
+              f"hidden={self.model_config.hidden_dim}")
+
+    def _build_trade_intent(self, symbol: str, output_np: np.ndarray) -> NormalizedTradeIntent:
+        pred_fwd_return = float(output_np[0])
+        signal_conviction = float(output_np[1])
+        stop_loss_pct = float(output_np[2])
+        take_profit_pct = float(output_np[3])
+        position_fraction = float(output_np[4])
+        direction = float(np.sign(pred_fwd_return))
+
+        return NormalizedTradeIntent(
+            symbol=symbol,
+            direction=direction,
+            pred_fwd_return=pred_fwd_return,
+            confidence=signal_conviction,
+            position_fraction=position_fraction,
+            stop_loss_pct=stop_loss_pct,
+            take_profit_pct=take_profit_pct,
+            risk_tier=RiskTier.NORMAL,
+        )
+
+    def _mechanical_veto(self, intent: NormalizedTradeIntent, drawdown_pct: float) -> VetoDecision:
+        if drawdown_pct <= -0.15:
+            risk_tier = RiskTier.PROTECTIVE
+        elif drawdown_pct <= -0.08:
+            risk_tier = RiskTier.CAUTION
+        else:
+            risk_tier = RiskTier.NORMAL
+
+        if not self.config.use_mechanical_veto:
+            return VetoDecision(vetoed=False, reason=None, risk_tier=risk_tier)
+
+        if intent.direction == 0.0:
+            return VetoDecision(vetoed=True, reason="flat_direction", risk_tier=risk_tier)
+
+        sl = abs(intent.stop_loss_pct)
+        tp = max(intent.take_profit_pct, 0.0)
+        rr = tp / max(sl, 1e-6)
+
+        # Basic sanity on model risk heads.
+        if sl < 0.002:
+            return VetoDecision(vetoed=True, reason="stop_too_tight", risk_tier=risk_tier)
+        if sl > 0.15:
+            return VetoDecision(vetoed=True, reason="stop_too_wide", risk_tier=risk_tier)
+        if tp < 0.003:
+            return VetoDecision(vetoed=True, reason="target_too_small", risk_tier=risk_tier)
+
+        min_conf = {
+            RiskTier.NORMAL: 0.25,
+            RiskTier.CAUTION: 0.40,
+            RiskTier.PROTECTIVE: 0.55,
+        }[risk_tier]
+        min_rr = {
+            RiskTier.NORMAL: 1.10,
+            RiskTier.CAUTION: 1.30,
+            RiskTier.PROTECTIVE: 1.60,
+        }[risk_tier]
+        max_size = {
+            RiskTier.NORMAL: 1.00,
+            RiskTier.CAUTION: 0.60,
+            RiskTier.PROTECTIVE: 0.35,
+        }[risk_tier]
+
+        if intent.confidence < min_conf:
+            return VetoDecision(vetoed=True, reason="low_confidence", risk_tier=risk_tier)
+        if rr < min_rr:
+            return VetoDecision(vetoed=True, reason="poor_risk_reward", risk_tier=risk_tier)
+        if intent.position_fraction > (max_size * 1.4):
+            return VetoDecision(vetoed=True, reason="oversized_for_tier", risk_tier=risk_tier)
+
+        return VetoDecision(vetoed=False, reason=None, risk_tier=risk_tier)
+
+    def train_episode(self, episode_id: int, episode_pairs: List[str],
+                      cached_codec_features: Optional[np.ndarray] = None) -> Dict:
         """
         Train one epoch episode.
 
@@ -346,10 +504,6 @@ class EpochEpisodeTrainer:
         if not HAS_MLX:
             return {'episode_id': episode_id, 'error': 'MLX not available'}
 
-        model = MLXHierarchicalCodec(self.model_config)
-        trainer = MLXCodecTrainer(self.model_config)
-        trainer.model = model
-
         df = self.candle_pipeline.load_candles(episode_pairs, None, None)
 
         if df.empty:
@@ -358,7 +512,24 @@ class EpochEpisodeTrainer:
         if not df.empty and self.config.candles_per_extent != -1:
             df = df.iloc[-self.config.candles_per_extent:]
 
-        codec_features = self.candle_pipeline.compute_signals(df, self.model_config.n_signals)
+        # Use cached codec features during Pareto replay, skip expensive recompute
+        if cached_codec_features is not None:
+            codec_features = cached_codec_features
+            cached_msg = f" [cached {codec_features.shape}]"
+        else:
+            codec_features = self.candle_pipeline.compute_signals(df, self.model_config.n_signals)
+            cached_msg = ""
+
+        # Ensure HRM model is initialized with correct input_dim
+        current_input_dim = codec_features.shape[1]
+        if self.model is None or getattr(self.model_config, 'input_dim', None) != current_input_dim:
+            print(f"[Trainer] Recalibrating: input_dim {getattr(self.model_config, 'input_dim', 'None')} -> {current_input_dim}")
+            self.model_config.input_dim = current_input_dim
+            self._init_model_if_needed(force_reinit=True)
+
+        # Reuse existing model by default; after force_reinit this points at the refreshed instance.
+        trainer = self.trainer
+        model = self.model
 
         # ── Per-codec accumulators ─────────────────────────────────────────────
         # Track cumulative |signal| per codec so we can rank experts & surface
@@ -375,6 +546,12 @@ class EpochEpisodeTrainer:
         realized_pnl = 0.0
         profitable_trades = 0
         total_trade_signals = 0
+        veto_count = 0
+        veto_regret = 0.0
+        pretrain_eval_count = 0
+        replay_eval_count = 0
+        replay_coalesced_batches = 0
+        replay_coalesced_steps = 0
 
         # Accumulate per-codec conviction from the precomputed feature matrix
         # codec_features[:, 0:24] = signed signal convictions per expert per bar
@@ -412,6 +589,7 @@ class EpochEpisodeTrainer:
                         batch_mx = mx.array(batch_np)
                         world_model_loss, hrm_memory = trainer.pretrain_step(batch_mx, memory=hrm_memory)
                         mx.eval(world_model_loss, *hrm_memory)  # Force evaluation and truncate graph
+                        pretrain_eval_count += 1
                         loss_val = float(world_model_loss.item())
                         bar_window_losses.append(loss_val)
 
@@ -427,25 +605,49 @@ class EpochEpisodeTrainer:
                                 num_replays = np.random.randint(
                                     1, self.config.max_adaptive_replays + 1
                                 )
-
+                                replay_batches_np: List[np.ndarray] = []
+                                shock_perturbation_mag = min(0.1 * shock_z, 0.5)
                                 for _replay in range(num_replays):
                                     adaptive_replay_count += 1
-                                    # Perturbation magnitude scales with shock severity
-                                    shock_perturbation_mag = min(0.1 * shock_z, 0.5)
                                     shock_perturbation_noise = (
                                         np.random.randn(*batch_np.shape) * shock_perturbation_mag
                                     )
-                                    # Random frame masking (simulates missing candle data)
                                     frame_mask = (
                                         np.random.random(batch_np.shape) > 0.1
                                     ).astype(np.float32)
+                                    replay_batches_np.append(
+                                        (batch_np + shock_perturbation_noise) * frame_mask
+                                    )
 
-                                    perturbed_bar_batch = (batch_np + shock_perturbation_noise) * frame_mask
-                                    perturbed_batch_mx = mx.array(perturbed_bar_batch)
-                                    
-                                    # Replay World-Model optimization with threaded memory
-                                    replay_loss, hrm_memory = trainer.pretrain_step(perturbed_batch_mx, memory=hrm_memory)
-                                    mx.eval(replay_loss, *hrm_memory)
+                                if self.config.replay_coalescing and len(replay_batches_np) > 1:
+                                    chunk_size = max(1, int(self.config.replay_coalescing_chunk_size))
+                                    for chunk_start in range(0, len(replay_batches_np), chunk_size):
+                                        chunk = replay_batches_np[chunk_start:chunk_start + chunk_size]
+                                        replay_losses = []
+                                        for perturbed_bar_batch in chunk:
+                                            perturbed_batch_mx = mx.array(perturbed_bar_batch)
+                                            replay_loss, hrm_memory = trainer.pretrain_step(
+                                                perturbed_batch_mx, memory=hrm_memory
+                                            )
+                                            replay_losses.append(replay_loss)
+
+                                        total_replay_loss = (
+                                            replay_losses[0]
+                                            if len(replay_losses) == 1
+                                            else mx.mean(mx.stack(replay_losses))
+                                        )
+                                        mx.eval(total_replay_loss, *hrm_memory)
+                                        replay_eval_count += 1
+                                        replay_coalesced_batches += 1
+                                        replay_coalesced_steps += len(chunk)
+                                else:
+                                    for perturbed_bar_batch in replay_batches_np:
+                                        perturbed_batch_mx = mx.array(perturbed_bar_batch)
+                                        replay_loss, hrm_memory = trainer.pretrain_step(
+                                            perturbed_batch_mx, memory=hrm_memory
+                                        )
+                                        mx.eval(replay_loss, *hrm_memory)
+                                        replay_eval_count += 1
 
                     except Exception as e:
                         print(f"MLX disabled on episode {episode_id}: {type(e).__name__}: {e}")
@@ -462,24 +664,48 @@ class EpochEpisodeTrainer:
                         output_mx, _ = trainer.model.forward(batch_mx, memory=hrm_memory, mode="trade")
                         mx.eval(output_mx)
                         output_np = np.array(output_mx[0, :]) # Output is [B, 5] since it already pools the final sequence step
-                        
-                        pred_fwd_return = float(output_np[0])
-                        signal_conviction = float(output_np[1])
-                        position_fraction = float(output_np[4])
-
-                        # The action: long if pred > 0, short if pred < 0
-                        position_direction = np.sign(pred_fwd_return)
-                        # Position sizing logic leveraging conviction output
-                        position_size = position_direction * position_fraction * signal_conviction
-
-                        # Calculate actual realized return over this predicted span
+                        active_symbol = episode_pairs[0] if episode_pairs else "UNKNOWN"
+                        trade_intent = self._build_trade_intent(active_symbol, output_np)
+                        running_peak = max(notional_curve) if notional_curve else notional
+                        drawdown_pct = (notional - running_peak) / max(running_peak, 1e-8)
+                        veto_decision = self._mechanical_veto(trade_intent, drawdown_pct)
                         end_idx = min(start_idx + bar_window_len - 1, len(close_bar_returns) - 1)
                         candle_return = close_bar_returns[end_idx] - close_bar_returns[start_idx]
+                        raw_move = float(candle_return) * 0.01
 
-                        # Apply execution results (simulate position hold against raw candle move)
-                        # We use candle_return direction properly aligned against position_direction
-                        # E.g. If long (pos) and candle goes up (pos) = positive ret
-                        ret = position_size * candle_return * 0.01
+                        if veto_decision.vetoed:
+                            veto_count += 1
+                            potential_signed_move = trade_intent.direction * raw_move
+                            potential_sl = max(abs(trade_intent.stop_loss_pct), 1e-4)
+                            potential_tp = max(trade_intent.take_profit_pct, 1e-4)
+                            potential_clamped = min(max(potential_signed_move, -potential_sl), potential_tp)
+                            potential_ret = (
+                                trade_intent.position_fraction
+                                * trade_intent.confidence
+                                * potential_clamped
+                            )
+                            veto_regret += max(0.0, potential_ret)
+                            continue
+
+                        pred_fwd_return = trade_intent.pred_fwd_return
+                        signal_conviction = trade_intent.confidence
+                        tier_size_cap = {
+                            RiskTier.NORMAL: 1.00,
+                            RiskTier.CAUTION: 0.60,
+                            RiskTier.PROTECTIVE: 0.35,
+                        }[veto_decision.risk_tier]
+                        position_fraction = min(trade_intent.position_fraction, tier_size_cap)
+
+                        # The action: long if pred > 0, short if pred < 0
+                        position_direction = trade_intent.direction
+                        signed_move = position_direction * raw_move
+                        sl = max(abs(trade_intent.stop_loss_pct), 1e-4)
+                        tp = max(trade_intent.take_profit_pct, 1e-4)
+                        clamped_signed_move = min(max(signed_move, -sl), tp)
+
+                        # Position sizing logic leveraging conviction and drawdown-tier cap
+                        exposure = position_fraction * signal_conviction
+                        ret = exposure * clamped_signed_move
                         realized_pnl += ret * notional
 
                         if ret > 0:
@@ -535,7 +761,13 @@ class EpochEpisodeTrainer:
                     'hrm_score': 0.0,
                     'predictor_loss': float(np.mean(bar_window_losses[-10:])) if bar_window_losses else 0.0,
                     'outlier_extents': regime_shock_count,
-                    'optimizer_replays': adaptive_replay_count
+                    'optimizer_replays': adaptive_replay_count,
+                    'veto_count': veto_count,
+                    'veto_regret': veto_regret,
+                    'pretrain_eval_count': pretrain_eval_count,
+                    'replay_eval_count': replay_eval_count,
+                    'replay_coalesced_batches': replay_coalesced_batches,
+                    'replay_coalesced_steps': replay_coalesced_steps,
                 }))
 
         # Final per-codec leaderboard
@@ -560,8 +792,18 @@ class EpochEpisodeTrainer:
             'predictor_loss': float(np.mean(bar_window_losses)) if bar_window_losses else 0.0,
             'outlier_extents': regime_shock_count,
             'optimizer_replays': adaptive_replay_count,
+            'veto_count': veto_count,
+            'veto_regret': veto_regret,
+            'pretrain_eval_count': pretrain_eval_count,
+            'replay_eval_count': replay_eval_count,
+            'replay_coalesced_batches': replay_coalesced_batches,
+            'replay_coalesced_steps': replay_coalesced_steps,
+            'replay_coalescing_enabled': self.config.replay_coalescing,
             'equity_curve': notional_curve,
-            'timestamp': datetime.now().isoformat()
+            'timestamp': datetime.now().isoformat(),
+            # Cache codec_features for Pareto replay - HRM-only retraining
+            'codec_features': codec_features.tobytes().hex() if codec_features is not None else None,
+            'codec_features_shape': codec_features.shape if codec_features is not None else None,
         }
 
         return result
