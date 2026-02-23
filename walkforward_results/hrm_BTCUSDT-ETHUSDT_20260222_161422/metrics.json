@@ -1,0 +1,32 @@
+{
+  "total_trades": 80,
+  "winning_trades": 12,
+  "losing_trades": 68,
+  "total_pnl": -39.3108411937888,
+  "total_commission": 25.9702742784896,
+  "total_slippage": 15.582164567093757,
+  "max_drawdown": -0.03962131822054582,
+  "peak_equity": 1000.323286046065,
+  "trough_equity": 960.6891588062118,
+  "profit_factor": 0.08274788956051715,
+  "sharpe_ratio": -282.3407701400646,
+  "final_equity": 960.6891588062118,
+  "return_pct": -3.9310841193788137,
+  "win_rate": 0.15,
+  "annualized_return": -1.0,
+  "calmar_ratio": -25.238938150256832,
+  "turnover": 26.495248065448294,
+  "bars_evaluated": 80,
+  "common_timestamps": 80,
+  "symbols": [
+    "BTCUSDT",
+    "ETHUSDT"
+  ],
+  "seq_len": 64,
+  "top_k": 1,
+  "signal_threshold": 0.25,
+  "commission_bps": 5.0,
+  "slippage_bps": 3.0,
+  "use_mechanical_veto": true,
+  "carry_memory": false
+}

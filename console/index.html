@@ -115,23 +115,92 @@
                 </div>
 
                 <div class="dashboard-grid">
-                    <!-- Tactical Comms (Integrated VQA) -->
+                    <!-- Training Telemetry / Logs (replaces chat advisor) -->
                     <section class="card glass-panel wide-card">
                         <div class="card-header">
-                            <h2>COMMS: NEURAL ADVISOR</h2>
+                            <h2>Training Telemetry Window</h2>
                             <div class="comms-status">
-                                <span class="blink">●</span> ENCRYPTED_CHANNEL_7
+                                <span class="blink">●</span> LOSS + DD + AGENT LOGS + DUCKDB WINDOW
                             </div>
                         </div>
-                        <div class="comms-container">
-                            <div id="vqaHistory" class="comms-history">
-                                <div class="vqa-msg system">Pilot: Waiting for mission parameters... Ready for
-                                    consultation.</div>
+                        <div class="telemetry-panel">
+                            <div class="telemetry-kpis">
+                                <div class="telemetry-kpi">
+                                    <span class="label">Predictor Loss</span>
+                                    <span class="value" id="telemetryLossKpi">0.0000</span>
+                                </div>
+                                <div class="telemetry-kpi">
+                                    <span class="label">Current DD</span>
+                                    <span class="value" id="telemetryCurrentDd">0.00%</span>
+                                </div>
+                                <div class="telemetry-kpi">
+                                    <span class="label">Max DD (Episode)</span>
+                                    <span class="value" id="telemetryMaxDd">0.00%</span>
+                                </div>
+                                <div class="telemetry-kpi">
+                                    <span class="label">Veto Count</span>
+                                    <span class="value" id="telemetryVetoKpi">0</span>
+                                </div>
+                                <div class="telemetry-kpi">
+                                    <span class="label">Replay Evals</span>
+                                    <span class="value" id="telemetryReplayKpi">0</span>
+                                </div>
+                                <div class="telemetry-kpi">
+                                    <span class="label">Optimizer</span>
+                                    <span class="value" id="telemetryOptimizerKpi">--</span>
+                                </div>
                             </div>
-                            <div class="comms-input-wrapper">
-                                <span class="comms-prompt">></span>
-                                <input type="text" id="vqaInput" placeholder="ASK_ADVISOR..." autocomplete="off">
-                                <button id="vqaSubmit">SEND</button>
+
+                            <div class="telemetry-columns">
+                                <div class="telemetry-block">
+                                    <div class="telemetry-block-head">
+                                        <h3>Agent Mission Log</h3>
+                                        <span class="subtitle">Recent episode outcomes</span>
+                                    </div>
+                                    <div class="telemetry-table-wrap">
+                                        <table class="telemetry-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Ep</th>
+                                                    <th>Agent</th>
+                                                    <th>PnL</th>
+                                                    <th>Loss</th>
+                                                    <th>DD</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="telemetryAgentLogRows">
+                                                <tr>
+                                                    <td colspan="5" class="empty-state">Waiting for training results...</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                <div class="telemetry-block">
+                                    <div class="telemetry-block-head">
+                                        <h3>DuckDB Window</h3>
+                                        <span class="subtitle" id="telemetryDbWindowMeta">Waiting for drawthru snapshot...</span>
+                                    </div>
+                                    <div class="telemetry-table-wrap">
+                                        <table class="telemetry-table compact-db">
+                                            <thead>
+                                                <tr>
+                                                    <th>Time</th>
+                                                    <th>Open</th>
+                                                    <th>High</th>
+                                                    <th>Low</th>
+                                                    <th>Close</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="telemetryDbWindowRows">
+                                                <tr>
+                                                    <td colspan="5" class="empty-state">Waiting for DuckDB preview bars...</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </section>
@@ -257,15 +326,15 @@
 
             <div id="view-codecs" class="viewport">
                 <div class="dashboard-grid">
-                    <!-- Neural Conviction Radar -->
+                    <!-- Conviction Radar -->
                     <section class="card glass-panel wide-card">
                         <div class="card-header">
-                            <h2>Neural Conviction Radar</h2>
+                            <h2>Conviction Radar</h2>
                             <span class="subtitle">Expert weights & attention matrix</span>
                         </div>
                         <div id="convictionRadar" class="conviction-radar">
                             <!-- Expert bars will be rendered here -->
-                            <div class="empty-state">No neural data available</div>
+                            <div class="empty-state">No codec data available</div>
                         </div>
                     </section>
 
@@ -288,7 +357,7 @@
                             </div>
 
                             <div class="vital-gauge" id="gaugeConfidence">
-                                <div class="gauge-header">Neural Confidence</div>
+                                <div class="gauge-header">Signal Confidence</div>
                                 <div class="gauge-canvas-wrapper">
                                     <svg viewBox="0 0 100 100">
                                         <circle class="gauge-bg" cx="50" cy="50" r="45"></circle>
@@ -298,6 +367,118 @@
                                 </div>
                                 <div class="gauge-footer" id="confidenceLabel">Booting Model...</div>
                             </div>
+                        </div>
+                    </section>
+                </div>
+            </div>
+
+            <div id="view-settings" class="viewport">
+                <div class="dashboard-grid">
+                    <section class="card glass-panel wide-card">
+                        <div class="card-header">
+                            <h2>Realtime Daemon Controls</h2>
+                            <span class="subtitle">Runtime-safe trainer parameters (applies while daemon is running)</span>
+                        </div>
+
+                        <div id="controlStatus" class="control-status neutral">
+                            Waiting for daemon state...
+                        </div>
+
+                        <form id="realtimeControlsForm" class="controls-form">
+                            <div class="controls-grid">
+                                <label class="control-field">
+                                    <span>Notional</span>
+                                    <input type="number" step="0.01" min="0" id="ctlNotional" data-control-key="notional">
+                                </label>
+                                <label class="control-field">
+                                    <span>Pair Width</span>
+                                    <input type="number" step="1" min="1" id="ctlPairWidth" data-control-key="pair_width">
+                                </label>
+                                <label class="control-field">
+                                    <span>Bar Sequences / Episode</span>
+                                    <input type="number" step="1" min="1" id="ctlBarSeq" data-control-key="bar_sequences_per_episode">
+                                </label>
+                                <label class="control-field">
+                                    <span>Epochs / Episode</span>
+                                    <input type="number" step="1" min="1" id="ctlEpochs" data-control-key="epochs">
+                                </label>
+                                <label class="control-field">
+                                    <span>Min Bar Window</span>
+                                    <input type="number" step="1" min="8" id="ctlMinBarWindow" data-control-key="min_bar_window">
+                                </label>
+                                <label class="control-field">
+                                    <span>Max Bar Window</span>
+                                    <input type="number" step="1" min="8" id="ctlMaxBarWindow" data-control-key="max_bar_window">
+                                </label>
+                                <label class="control-field">
+                                    <span>Shock Z Threshold</span>
+                                    <input type="number" step="0.1" min="0" id="ctlShockZ" data-control-key="shock_z_threshold">
+                                </label>
+                                <label class="control-field">
+                                    <span>Bar Shock Z Threshold</span>
+                                    <input type="number" step="0.1" min="0" id="ctlBarShockZ" data-control-key="bar_shock_z_threshold">
+                                </label>
+                                <label class="control-field">
+                                    <span>Max Adaptive Replays</span>
+                                    <input type="number" step="1" min="0" id="ctlMaxReplays" data-control-key="max_adaptive_replays">
+                                </label>
+                                <label class="control-field">
+                                    <span>Replay Chunk Size</span>
+                                    <input type="number" step="1" min="1" id="ctlReplayChunk" data-control-key="replay_coalescing_chunk_size">
+                                </label>
+                                <label class="control-field">
+                                    <span>Cache Size</span>
+                                    <input type="number" step="1" min="1" id="ctlCacheSize" data-control-key="cache_size">
+                                </label>
+                                <label class="control-field">
+                                    <span>Candles / Extent</span>
+                                    <input type="number" step="1" min="-1" id="ctlCandlesPerExtent" data-control-key="candles_per_extent">
+                                </label>
+                            </div>
+
+                            <div class="controls-toggles">
+                                <label class="toggle-field">
+                                    <input type="checkbox" id="ctlMechanicalVeto" data-control-key="use_mechanical_veto">
+                                    <span>Mechanical Veto</span>
+                                </label>
+                                <label class="toggle-field">
+                                    <input type="checkbox" id="ctlReplayCoalescing" data-control-key="replay_coalescing">
+                                    <span>Replay Coalescing</span>
+                                </label>
+                            </div>
+
+                            <div class="controls-actions">
+                                <button type="button" id="saneDefaultsBtn" class="control-btn secondary">Load Sane Defaults</button>
+                                <button type="button" id="refreshControlsBtn" class="control-btn secondary">Refresh from Daemon</button>
+                                <button type="submit" id="applyControlsBtn" class="control-btn primary">Apply Realtime Controls</button>
+                            </div>
+                        </form>
+                    </section>
+
+                    <section class="card glass-panel">
+                        <div class="card-header">
+                            <h2>Daemon Runtime Snapshot</h2>
+                        </div>
+                        <div class="stats-grid">
+                            <div class="stat-box">
+                                <span class="label">Optimizer</span>
+                                <span class="value" id="ctlSnapshotOptimizer">--</span>
+                            </div>
+                            <div class="stat-box">
+                                <span class="label">Learning Rate</span>
+                                <span class="value" id="ctlSnapshotLr">--</span>
+                            </div>
+                            <div class="stat-box">
+                                <span class="label">Weight Decay</span>
+                                <span class="value" id="ctlSnapshotWd">--</span>
+                            </div>
+                            <div class="stat-box">
+                                <span class="label">Daemon State</span>
+                                <span class="value" id="ctlSnapshotState">--</span>
+                            </div>
+                        </div>
+                        <div class="settings-note">
+                            Use "Load Sane Defaults" to reset the runtime controls to a stable baseline. Optimizer, learning rate, and weight decay are shown for visibility; hot-swapping optimizer internals may still require a trainer restart.
                         </div>
                     </section>
                 </div>

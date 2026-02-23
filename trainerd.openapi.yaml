@@ -1,0 +1,1269 @@
+openapi: 3.0.3
+info:
+  title: MoneyFan Trainer Daemon API
+  version: 1.0.0
+  description: |
+    OpenAPI 3 spec for the MoneyFan HTTP daemon (`trainerd.py`) that serves the training console
+    and realtime trainer state/control endpoints.
+
+    Notes:
+    - `/api/state` and `/api/cache` are polled by the console UI every second.
+    - `/api/state.history` contains a mixed stream of throttled in-flight episode telemetry and
+      final episode results.
+    - `/api/control` updates runtime-safe trainer config fields on the daemon process.
+servers:
+  - url: http://localhost:8080
+    description: Local trainer daemon default
+tags:
+  - name: Docs
+  - name: Training
+  - name: Cache
+  - name: Drawthru
+  - name: Streaming
+  - name: Controls
+paths:
+  /api/openapi.yaml:
+    get:
+      tags: [Docs]
+      summary: Get daemon OpenAPI spec (YAML)
+      operationId: getOpenApiYaml
+      responses:
+        '200':
+          description: OpenAPI YAML document
+          content:
+            application/yaml:
+              schema:
+                type: string
+        '404':
+          description: Spec file not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorEnvelope'
+        '500':
+          description: Spec read failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorEnvelope'
+
+  /api/state:
+    get:
+      tags: [Training]
+      summary: Get live trainer state and recent results
+      operationId: getTrainerState
+      responses:
+        '200':
+          description: Current daemon/trainer state snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DaemonStateResponse'
+              examples:
+                booting:
+                  summary: Daemon booting before trainer instance is ready
+                  value:
+                    status: booting
+                    stream_transports:
+                      longpoll_url: http://localhost:8080/api/events
+                      websocket_url: ws://localhost:8080/api/ws
+                      websocket_status: reserved_not_implemented
+                      recommended_poll_ms: 1000
+                      default_longpoll_timeout_ms: 15000
+                      max_longpoll_timeout_ms: 60000
+                    runtime_control_defaults:
+                      optimizer_name: adamw
+                      learning_rate: 0.0001
+                      weight_decay: 0.01
+                      notional: 100.0
+                      pair_width: 30
+                      bar_sequences_per_episode: 100
+                      epochs: 1
+                      min_bar_window: 64
+                      max_bar_window: 256
+                      cache_size: 1000
+                      candles_per_extent: 1000
+                      shock_z_threshold: 2.0
+                      bar_shock_z_threshold: 3.0
+                      max_adaptive_replays: 3
+                      use_mechanical_veto: false
+                      replay_coalescing: false
+                      replay_coalescing_chunk_size: 8
+                      runtime_control_fields:
+                        - bar_sequences_per_episode
+                        - bar_shock_z_threshold
+                        - cache_size
+                        - candles_per_extent
+                        - epochs
+                        - max_adaptive_replays
+                        - max_bar_window
+                        - min_bar_window
+                        - notional
+                        - pair_width
+                        - replay_coalescing
+                        - replay_coalescing_chunk_size
+                        - shock_z_threshold
+                        - use_mechanical_veto
+                running:
+                  summary: Active training session
+                  value:
+                    status: running
+                    session_start_time: '2026-02-22T14:25:10.220145'
+                    stream_transports:
+                      longpoll_url: http://localhost:8080/api/events
+                      websocket_url: ws://localhost:8080/api/ws
+                      websocket_status: reserved_not_implemented
+                      recommended_poll_ms: 1000
+                      default_longpoll_timeout_ms: 15000
+                      max_longpoll_timeout_ms: 60000
+                    training_config:
+                      optimizer_name: adamw
+                      learning_rate: 0.0001
+                      weight_decay: 0.01
+                      notional: 100.0
+                      pair_width: 30
+                      bar_sequences_per_episode: 100
+                      epochs: 1
+                      min_bar_window: 64
+                      max_bar_window: 256
+                      cache_size: 1000
+                      candles_per_extent: 1000
+                      shock_z_threshold: 2.0
+                      bar_shock_z_threshold: 3.0
+                      max_adaptive_replays: 3
+                      use_mechanical_veto: false
+                      replay_coalescing: false
+                      replay_coalescing_chunk_size: 8
+                      runtime_control_fields:
+                        - bar_sequences_per_episode
+                        - bar_shock_z_threshold
+                        - cache_size
+                        - candles_per_extent
+                        - epochs
+                        - max_adaptive_replays
+                        - max_bar_window
+                        - min_bar_window
+                        - notional
+                        - pair_width
+                        - replay_coalescing
+                        - replay_coalescing_chunk_size
+                        - shock_z_threshold
+                        - use_mechanical_veto
+                    runtime_control_defaults:
+                      optimizer_name: adamw
+                      learning_rate: 0.0001
+                      weight_decay: 0.01
+                      notional: 100.0
+                      pair_width: 30
+                      bar_sequences_per_episode: 100
+                      epochs: 1
+                      min_bar_window: 64
+                      max_bar_window: 256
+                      cache_size: 1000
+                      candles_per_extent: 1000
+                      shock_z_threshold: 2.0
+                      bar_shock_z_threshold: 3.0
+                      max_adaptive_replays: 3
+                      use_mechanical_veto: false
+                      replay_coalescing: false
+                      replay_coalescing_chunk_size: 8
+                      runtime_control_fields:
+                        - bar_sequences_per_episode
+                        - bar_shock_z_threshold
+                        - cache_size
+                        - candles_per_extent
+                        - epochs
+                        - max_adaptive_replays
+                        - max_bar_window
+                        - min_bar_window
+                        - notional
+                        - pair_width
+                        - replay_coalescing
+                        - replay_coalescing_chunk_size
+                        - shock_z_threshold
+                        - use_mechanical_veto
+                    latest_metrics:
+                      total_trained: 12
+                      current_capital: 104.53
+                      total_realized_pnl: 3.81
+                    history:
+                      - episode_id: 11
+                        symbols: [BTCUSDT, ETHUSDT, SOLUSDT]
+                        final_capital: 104.53
+                        realized_pnl: 4.53
+                        hit_rate: 0.57
+                        wins: 34
+                        total_trades: 60
+                        winning_agent: codec_04_trend_following___class__
+                        codec_scores:
+                          codec_04_trend_following___class__: 12.3021
+                          codec_03_mean_reversion___class__: 7.2184
+                        hrm_score: 0.0
+                        predictor_loss: 0.0421
+                        outlier_extents: 3
+                        optimizer_replays: 2
+                        veto_count: 4
+                        veto_regret: 0.31
+                        pretrain_eval_count: 100
+                        replay_eval_count: 2
+                        replay_coalesced_batches: 1
+                        replay_coalesced_steps: 2
+                        replay_coalescing_enabled: false
+                        optimizer_name: adamw
+                        equity_curve: [100.0, 101.4, 100.9, 102.2, 104.53]
+                        timestamp: '2026-02-22T14:28:50.042004'
+                    samples: []
+
+  /api/cache:
+    get:
+      tags: [Cache]
+      summary: Get drawthru cache stats and active transfers
+      operationId: getCacheState
+      responses:
+        '200':
+          description: Cache snapshot (online or offline)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CacheResponse'
+              examples:
+                offline:
+                  value:
+                    cache_status: offline
+                    transfers: []
+                online:
+                  value:
+                    cache_status: online
+                    max_size: 1000
+                    current_size: 228
+                    keys:
+                      - candles:BTCUSDT:2026-02-01:2026-02-22
+                    memory_rows: 45872
+                    access_order:
+                      - candles:ETHUSDT:2026-02-01:2026-02-22
+                      - candles:BTCUSDT:2026-02-01:2026-02-22
+                    transfers:
+                      - name: binance_duckdb_import
+                        type: file
+                        progress_pct: 62.5
+                        status_text: Importing parquet shards
+
+  /api/drawthru:
+    get:
+      tags: [Drawthru]
+      summary: Get drawthru DuckDB import snapshot and preview bars
+      operationId: getDrawthruSnapshot
+      responses:
+        '200':
+          description: Drawthru snapshot payload (status-dependent shape)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DrawthruSnapshotResponse'
+              examples:
+                ok:
+                  value:
+                    status: ok
+                    db_path: /Users/jim/work/moneyfan/data/binance/hrm_data.duckdb
+                    table: binance_sequences_import
+                    row_count: 1250043
+                    symbol_count: 112
+                    min_ts: '2026-02-01 00:00:00'
+                    max_ts: '2026-02-22 18:59:00'
+                    top_symbols:
+                      - symbol: BTCUSDT
+                        row_count: 40000
+                        last_ts: '2026-02-22 18:59:00'
+                    preview_symbol: BTCUSDT
+                    preview_bars:
+                      - timestamp: '2026-02-22 18:40:00'
+                        open: 51234.1
+                        high: 51280.0
+                        low: 51190.5
+                        close: 51210.3
+                        volume: 1423.81
+                missing:
+                  value:
+                    status: missing
+                    db_path: /Users/jim/work/moneyfan/data/binance/hrm_data.duckdb
+                unavailable:
+                  value:
+                    status: unavailable
+                    error: 'duckdb import failed: No module named ''duckdb'''
+
+  /api/events:
+    get:
+      tags: [Streaming]
+      summary: Get event stream updates (snapshot or longpoll)
+      operationId: getEventStream
+      description: |
+        Unified event stream for training events (`episode_complete`, `sample_event`).
+
+        Use `mode=longpoll` with a `cursor` to block until new events arrive or timeout.
+        If no `cursor` is provided in longpoll mode, the server waits for events after the current head.
+      parameters:
+        - name: mode
+          in: query
+          required: false
+          description: Streaming mode. `snapshot` returns immediately; `longpoll` waits for events.
+          schema:
+            type: string
+            enum: [snapshot, longpoll]
+            default: snapshot
+        - name: cursor
+          in: query
+          required: false
+          description: Next event sequence number the client wants. Events with `seq >= cursor` are returned.
+          schema:
+            type: integer
+            minimum: 1
+        - name: max_events
+          in: query
+          required: false
+          description: Maximum number of events to return.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 64
+        - name: timeout_ms
+          in: query
+          required: false
+          description: |
+            Longpoll wait timeout in milliseconds. Ignored in `snapshot` mode.
+            Values are clamped server-side.
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 60000
+            default: 15000
+      responses:
+        '200':
+          description: Event batch response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StreamEventsResponse'
+              examples:
+                snapshot:
+                  value:
+                    ok: true
+                    mode: snapshot
+                    cursor_received: null
+                    next_cursor: 143
+                    event_count: 2
+                    timed_out: false
+                    events:
+                      - seq: 141
+                        type: episode_complete
+                        timestamp: '2026-02-22T14:28:50.042'
+                        data:
+                          episode_id: 11
+                          realized_pnl: 4.53
+                          hit_rate: 0.57
+                          predictor_loss: 0.0421
+                      - seq: 142
+                        type: episode_complete
+                        timestamp: '2026-02-22T14:29:12.109'
+                        data:
+                          episode_id: 12
+                          realized_pnl: -1.22
+                          hit_rate: 0.48
+                          predictor_loss: 0.0518
+                    transports:
+                      longpoll_url: http://localhost:8080/api/events
+                      websocket_url: ws://localhost:8080/api/ws
+                      websocket_status: reserved_not_implemented
+                      recommended_poll_ms: 1000
+                      default_longpoll_timeout_ms: 15000
+                      max_longpoll_timeout_ms: 60000
+                longpollTimeout:
+                  value:
+                    ok: true
+                    mode: longpoll
+                    cursor_received: 143
+                    next_cursor: 143
+                    event_count: 0
+                    timed_out: true
+                    events: []
+                    transports:
+                      longpoll_url: http://localhost:8080/api/events
+                      websocket_url: ws://localhost:8080/api/ws
+                      websocket_status: reserved_not_implemented
+                      recommended_poll_ms: 1000
+                      default_longpoll_timeout_ms: 15000
+                      max_longpoll_timeout_ms: 60000
+        '400':
+          description: Invalid query parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorEnvelope'
+
+  /api/ws:
+    get:
+      tags: [Streaming]
+      summary: Reserved WebSocket stream endpoint (upgrade URL)
+      operationId: getWebSocketEndpointInfo
+      description: |
+        Reserved URL for future WebSocket streaming. The current daemon responds with:
+        - `426 Upgrade Required` for plain HTTP requests (includes fallback transport metadata)
+        - `501 Not Implemented` if a WebSocket upgrade is attempted
+
+        HTTP codegen clients can use this endpoint (and `/api/state`/`/api/events`) to discover the
+        canonical websocket URL while using longpoll as the current transport.
+      responses:
+        '426':
+          description: Upgrade required (plain HTTP request)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebSocketEndpointInfoResponse'
+        '501':
+          description: WebSocket endpoint reserved but not implemented
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebSocketEndpointInfoResponse'
+
+  /api/control:
+    post:
+      tags: [Controls]
+      summary: Apply runtime trainer control updates
+      operationId: postRuntimeControls
+      description: |
+        Updates runtime-safe config fields on the in-process trainer daemon. Unsupported fields
+        or invalid values return a validation error. Some settings (for example optimizer internals)
+        may require trainer reinitialization to fully take effect.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ControlRequest'
+            examples:
+              patch:
+                value:
+                  updates:
+                    pair_width: 24
+                    shock_z_threshold: 2.5
+                    replay_coalescing: true
+                    replay_coalescing_chunk_size: 16
+      responses:
+        '200':
+          description: Runtime controls applied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ControlSuccessResponse'
+              examples:
+                success:
+                  value:
+                    ok: true
+                    applied:
+                      pair_width: 24
+                      shock_z_threshold: 2.5
+                      replay_coalescing: true
+                      replay_coalescing_chunk_size: 16
+                    warnings: []
+                    training_config:
+                      optimizer_name: adamw
+                      learning_rate: 0.0001
+                      weight_decay: 0.01
+                      notional: 100.0
+                      pair_width: 24
+                      bar_sequences_per_episode: 100
+                      epochs: 1
+                      min_bar_window: 64
+                      max_bar_window: 256
+                      cache_size: 1000
+                      candles_per_extent: 1000
+                      shock_z_threshold: 2.5
+                      bar_shock_z_threshold: 3.0
+                      max_adaptive_replays: 3
+                      use_mechanical_veto: false
+                      replay_coalescing: true
+                      replay_coalescing_chunk_size: 16
+                      runtime_control_fields:
+                        - bar_sequences_per_episode
+                        - bar_shock_z_threshold
+                        - cache_size
+                        - candles_per_extent
+                        - epochs
+                        - max_adaptive_replays
+                        - max_bar_window
+                        - min_bar_window
+                        - notional
+                        - pair_width
+                        - replay_coalescing
+                        - replay_coalescing_chunk_size
+                        - shock_z_threshold
+                        - use_mechanical_veto
+                    message: Runtime controls applied to trainer daemon.
+        '400':
+          description: Invalid payload or validation failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ControlErrorResponse'
+              examples:
+                validation:
+                  value:
+                    ok: false
+                    error: validation_failed
+                    errors:
+                      min_bar_window: must be <= max_bar_window
+                      max_bar_window: must be >= min_bar_window
+                    training_config:
+                      optimizer_name: adamw
+                      learning_rate: 0.0001
+                      weight_decay: 0.01
+                      notional: 100.0
+                      pair_width: 30
+                      bar_sequences_per_episode: 100
+                      epochs: 1
+                      min_bar_window: 64
+                      max_bar_window: 256
+                      cache_size: 1000
+                      candles_per_extent: 1000
+                      shock_z_threshold: 2.0
+                      bar_shock_z_threshold: 3.0
+                      max_adaptive_replays: 3
+                      use_mechanical_veto: false
+                      replay_coalescing: false
+                      replay_coalescing_chunk_size: 8
+                      runtime_control_fields:
+                        - bar_sequences_per_episode
+                        - bar_shock_z_threshold
+                        - cache_size
+                        - candles_per_extent
+                        - epochs
+                        - max_adaptive_replays
+                        - max_bar_window
+                        - min_bar_window
+                        - notional
+                        - pair_width
+                        - replay_coalescing
+                        - replay_coalescing_chunk_size
+                        - shock_z_threshold
+                        - use_mechanical_veto
+        '503':
+          description: Trainer instance not yet ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ControlErrorResponse'
+              examples:
+                notReady:
+                  value:
+                    ok: false
+                    error: trainer_not_ready
+                    message: Trainer instance has not started yet.
+
+components:
+  schemas:
+    ApiErrorEnvelope:
+      type: object
+      additionalProperties: true
+      properties:
+        ok:
+          type: boolean
+          nullable: true
+        error:
+          type: string
+        message:
+          type: string
+      required: [error, message]
+
+    RuntimeControlFieldName:
+      type: string
+      enum:
+        - bar_sequences_per_episode
+        - bar_shock_z_threshold
+        - cache_size
+        - candles_per_extent
+        - epochs
+        - max_adaptive_replays
+        - max_bar_window
+        - min_bar_window
+        - notional
+        - pair_width
+        - replay_coalescing
+        - replay_coalescing_chunk_size
+        - shock_z_threshold
+        - use_mechanical_veto
+
+    TrainingConfigSnapshot:
+      type: object
+      additionalProperties: false
+      properties:
+        optimizer_name:
+          type: string
+          example: adamw
+        learning_rate:
+          type: number
+          format: double
+          example: 0.0001
+        weight_decay:
+          type: number
+          format: double
+          example: 0.01
+        notional:
+          type: number
+          format: double
+          example: 100.0
+        pair_width:
+          type: integer
+          minimum: 1
+          example: 30
+        bar_sequences_per_episode:
+          type: integer
+          minimum: 1
+          example: 100
+        epochs:
+          type: integer
+          minimum: 1
+          example: 1
+        min_bar_window:
+          type: integer
+          minimum: 8
+          example: 64
+        max_bar_window:
+          type: integer
+          minimum: 8
+          example: 256
+        cache_size:
+          type: integer
+          minimum: 1
+          example: 1000
+        candles_per_extent:
+          type: integer
+          description: Raw candle depth per extent (`-1` disables cap).
+          example: 1000
+        shock_z_threshold:
+          type: number
+          format: double
+          example: 2.0
+        bar_shock_z_threshold:
+          type: number
+          format: double
+          example: 3.0
+        max_adaptive_replays:
+          type: integer
+          minimum: 0
+          example: 3
+        use_mechanical_veto:
+          type: boolean
+          example: false
+        replay_coalescing:
+          type: boolean
+          example: false
+        replay_coalescing_chunk_size:
+          type: integer
+          minimum: 1
+          example: 8
+        runtime_control_fields:
+          type: array
+          items:
+            $ref: '#/components/schemas/RuntimeControlFieldName'
+      required:
+        - optimizer_name
+        - learning_rate
+        - weight_decay
+        - notional
+        - pair_width
+        - bar_sequences_per_episode
+        - epochs
+        - min_bar_window
+        - max_bar_window
+        - cache_size
+        - candles_per_extent
+        - shock_z_threshold
+        - bar_shock_z_threshold
+        - max_adaptive_replays
+        - use_mechanical_veto
+        - replay_coalescing
+        - replay_coalescing_chunk_size
+        - runtime_control_fields
+
+    LatestMetrics:
+      type: object
+      additionalProperties: false
+      properties:
+        total_trained:
+          type: integer
+          minimum: 0
+        current_capital:
+          type: number
+          format: double
+        total_realized_pnl:
+          type: number
+          format: double
+      required: [total_trained, current_capital, total_realized_pnl]
+
+    EpisodeHistoryItem:
+      type: object
+      description: |
+        Mixed episode telemetry event / final episode result entry. Fields are optional because
+        `/api/state.history` may contain throttled in-progress updates and final results.
+      additionalProperties: true
+      properties:
+        episode_id:
+          type: integer
+        epoch:
+          type: integer
+        total_epochs:
+          type: integer
+        capital:
+          type: number
+          format: double
+        final_capital:
+          type: number
+          format: double
+        realized_pnl:
+          type: number
+          format: double
+        hit_rate:
+          type: number
+          format: double
+        wins:
+          type: integer
+        total_trades:
+          type: integer
+        symbols:
+          type: array
+          items:
+            type: string
+        winning_agent:
+          type: string
+        codec_scores:
+          type: object
+          additionalProperties:
+            type: number
+            format: double
+        hrm_score:
+          type: number
+          format: double
+        predictor_loss:
+          type: number
+          format: double
+        outlier_extents:
+          type: integer
+        optimizer_replays:
+          type: integer
+        veto_count:
+          type: integer
+        veto_regret:
+          type: number
+          format: double
+        pretrain_eval_count:
+          type: integer
+        replay_eval_count:
+          type: integer
+        replay_coalesced_batches:
+          type: integer
+        replay_coalesced_steps:
+          type: integer
+        replay_coalescing_enabled:
+          type: boolean
+        optimizer_name:
+          type: string
+        equity_curve:
+          type: array
+          items:
+            type: number
+            format: double
+        timestamp:
+          type: string
+          format: date-time
+        is_replay:
+          type: boolean
+        replay_std:
+          type: number
+          format: double
+        codec_features:
+          type: string
+          description: Hex-encoded bytes; may be large and omitted by clients.
+        codec_features_shape:
+          type: array
+          items:
+            type: integer
+
+    SampleEvent:
+      type: object
+      description: Placeholder sample-event payload. Current trainer builds may not emit these events yet.
+      additionalProperties: true
+
+    StreamTransportInfo:
+      type: object
+      additionalProperties: false
+      properties:
+        longpoll_url:
+          type: string
+          format: uri
+          example: http://localhost:8080/api/events
+        websocket_url:
+          type: string
+          example: ws://localhost:8080/api/ws
+        websocket_status:
+          type: string
+          example: reserved_not_implemented
+        recommended_poll_ms:
+          type: integer
+          default: 1000
+          example: 1000
+        default_longpoll_timeout_ms:
+          type: integer
+          default: 15000
+          example: 15000
+        max_longpoll_timeout_ms:
+          type: integer
+          default: 60000
+          example: 60000
+      required:
+        - longpoll_url
+        - websocket_url
+        - websocket_status
+        - recommended_poll_ms
+        - default_longpoll_timeout_ms
+        - max_longpoll_timeout_ms
+
+    StreamEventEnvelope:
+      type: object
+      additionalProperties: false
+      properties:
+        seq:
+          type: integer
+          minimum: 1
+        type:
+          type: string
+          enum: [episode_complete, sample_event]
+        timestamp:
+          type: string
+          description: Server-side timestamp string (ISO-like with millisecond precision).
+          example: '2026-02-22T14:29:12.109'
+        data:
+          description: Event payload (`episode_complete` or `sample_event` payload).
+          oneOf:
+            - $ref: '#/components/schemas/EpisodeHistoryItem'
+            - $ref: '#/components/schemas/SampleEvent'
+            - type: object
+              additionalProperties: true
+      required: [seq, type, timestamp, data]
+
+    StreamEventsResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        ok:
+          type: boolean
+          enum: [true]
+        mode:
+          type: string
+          enum: [snapshot, longpoll]
+        cursor_received:
+          type: integer
+          nullable: true
+          minimum: 1
+        next_cursor:
+          type: integer
+          minimum: 1
+        event_count:
+          type: integer
+          minimum: 0
+        timed_out:
+          type: boolean
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/StreamEventEnvelope'
+        transports:
+          $ref: '#/components/schemas/StreamTransportInfo'
+      required:
+        - ok
+        - mode
+        - cursor_received
+        - next_cursor
+        - event_count
+        - timed_out
+        - events
+        - transports
+
+    WebSocketEndpointInfoResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        ok:
+          type: boolean
+          enum: [false]
+        error:
+          type: string
+          enum: [upgrade_required, websocket_not_implemented]
+        message:
+          type: string
+        transports:
+          $ref: '#/components/schemas/StreamTransportInfo'
+      required: [ok, error, message, transports]
+
+    DaemonStateResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        status:
+          type: string
+          enum: [booting, running, stopped]
+        session_start_time:
+          type: string
+          format: date-time
+          nullable: true
+        stream_transports:
+          $ref: '#/components/schemas/StreamTransportInfo'
+        training_config:
+          $ref: '#/components/schemas/TrainingConfigSnapshot'
+        runtime_control_defaults:
+          $ref: '#/components/schemas/TrainingConfigSnapshot'
+        latest_metrics:
+          $ref: '#/components/schemas/LatestMetrics'
+        history:
+          type: array
+          items:
+            $ref: '#/components/schemas/EpisodeHistoryItem'
+        samples:
+          type: array
+          items:
+            $ref: '#/components/schemas/SampleEvent'
+      required:
+        - status
+        - runtime_control_defaults
+        - stream_transports
+
+    TransferActivity:
+      type: object
+      additionalProperties: true
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+          enum: [file, api]
+        progress_pct:
+          type: number
+          format: double
+          nullable: true
+        status_text:
+          type: string
+          nullable: true
+
+    CacheOfflineResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        cache_status:
+          type: string
+          enum: [offline]
+        transfers:
+          type: array
+          items:
+            $ref: '#/components/schemas/TransferActivity'
+      required: [cache_status]
+
+    CacheOnlineResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        cache_status:
+          type: string
+          enum: [online]
+        max_size:
+          type: integer
+        current_size:
+          type: integer
+        keys:
+          type: array
+          items:
+            type: string
+        memory_rows:
+          type: integer
+        access_order:
+          type: array
+          items:
+            type: string
+        transfers:
+          type: array
+          items:
+            $ref: '#/components/schemas/TransferActivity'
+      required:
+        - cache_status
+        - max_size
+        - current_size
+        - keys
+        - memory_rows
+        - access_order
+
+    CacheResponse:
+      oneOf:
+        - $ref: '#/components/schemas/CacheOfflineResponse'
+        - $ref: '#/components/schemas/CacheOnlineResponse'
+
+    DrawthruTopSymbol:
+      type: object
+      additionalProperties: false
+      properties:
+        symbol:
+          type: string
+        row_count:
+          type: integer
+        last_ts:
+          type: string
+          nullable: true
+      required: [symbol, row_count]
+
+    DrawthruPreviewBar:
+      type: object
+      additionalProperties: false
+      properties:
+        timestamp:
+          type: string
+          nullable: true
+        open:
+          type: number
+          format: double
+          nullable: true
+        high:
+          type: number
+          format: double
+          nullable: true
+        low:
+          type: number
+          format: double
+          nullable: true
+        close:
+          type: number
+          format: double
+          nullable: true
+        volume:
+          type: number
+          format: double
+          nullable: true
+
+    DrawthruOkSnapshot:
+      type: object
+      additionalProperties: false
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        db_path:
+          type: string
+        table:
+          type: string
+        row_count:
+          type: integer
+        symbol_count:
+          type: integer
+        min_ts:
+          type: string
+          nullable: true
+        max_ts:
+          type: string
+          nullable: true
+        top_symbols:
+          type: array
+          items:
+            $ref: '#/components/schemas/DrawthruTopSymbol'
+        preview_symbol:
+          type: string
+          nullable: true
+        preview_bars:
+          type: array
+          items:
+            $ref: '#/components/schemas/DrawthruPreviewBar'
+      required:
+        - status
+        - db_path
+        - table
+        - row_count
+        - symbol_count
+        - top_symbols
+        - preview_bars
+
+    DrawthruMissingSnapshot:
+      type: object
+      additionalProperties: false
+      properties:
+        status:
+          type: string
+          enum: [missing]
+        db_path:
+          type: string
+      required: [status, db_path]
+
+    DrawthruUnavailableSnapshot:
+      type: object
+      additionalProperties: false
+      properties:
+        status:
+          type: string
+          enum: [unavailable]
+        error:
+          type: string
+      required: [status, error]
+
+    DrawthruEmptySnapshot:
+      type: object
+      additionalProperties: false
+      properties:
+        status:
+          type: string
+          enum: [empty]
+        db_path:
+          type: string
+        tables:
+          type: array
+          items:
+            type: string
+      required: [status, db_path, tables]
+
+    DrawthruErrorSnapshot:
+      type: object
+      additionalProperties: false
+      properties:
+        status:
+          type: string
+          enum: [error]
+        db_path:
+          type: string
+        error:
+          type: string
+      required: [status, db_path, error]
+
+    DrawthruSnapshotResponse:
+      oneOf:
+        - $ref: '#/components/schemas/DrawthruOkSnapshot'
+        - $ref: '#/components/schemas/DrawthruMissingSnapshot'
+        - $ref: '#/components/schemas/DrawthruUnavailableSnapshot'
+        - $ref: '#/components/schemas/DrawthruEmptySnapshot'
+        - $ref: '#/components/schemas/DrawthruErrorSnapshot'
+
+    RuntimeControlPatch:
+      type: object
+      additionalProperties: false
+      description: Runtime-safe trainer config fields accepted by `/api/control`.
+      properties:
+        notional:
+          type: number
+          minimum: 0.000001
+          maximum: 1000000000000
+          default: 100.0
+        pair_width:
+          type: integer
+          minimum: 1
+          maximum: 512
+          default: 30
+        bar_sequences_per_episode:
+          type: integer
+          minimum: 1
+          maximum: 100000
+          default: 100
+        epochs:
+          type: integer
+          minimum: 1
+          maximum: 128
+          default: 1
+        min_bar_window:
+          type: integer
+          minimum: 8
+          maximum: 8192
+          default: 64
+        max_bar_window:
+          type: integer
+          minimum: 8
+          maximum: 8192
+          default: 256
+        cache_size:
+          type: integer
+          minimum: 1
+          maximum: 500000
+          default: 1000
+        candles_per_extent:
+          type: integer
+          minimum: -1
+          maximum: 1000000
+          default: 1000
+        shock_z_threshold:
+          type: number
+          minimum: 0
+          maximum: 100
+          default: 2.0
+        bar_shock_z_threshold:
+          type: number
+          minimum: 0
+          maximum: 100
+          default: 3.0
+        max_adaptive_replays:
+          type: integer
+          minimum: 0
+          maximum: 1024
+          default: 3
+        use_mechanical_veto:
+          type: boolean
+          default: false
+        replay_coalescing:
+          type: boolean
+          default: false
+        replay_coalescing_chunk_size:
+          type: integer
+          minimum: 1
+          maximum: 4096
+          default: 8
+
+    ControlRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        updates:
+          $ref: '#/components/schemas/RuntimeControlPatch'
+      required: [updates]
+
+    ControlSuccessResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        ok:
+          type: boolean
+          enum: [true]
+        applied:
+          type: object
+          additionalProperties: true
+          description: Applied subset of runtime control updates.
+        warnings:
+          type: array
+          items:
+            type: string
+        training_config:
+          $ref: '#/components/schemas/TrainingConfigSnapshot'
+        message:
+          type: string
+      required: [ok, applied, warnings, training_config, message]
+
+    ControlErrorResponse:
+      type: object
+      additionalProperties: true
+      properties:
+        ok:
+          type: boolean
+          enum: [false]
+        error:
+          type: string
+          example: validation_failed
+        message:
+          type: string
+          nullable: true
+        errors:
+          type: object
+          additionalProperties:
+            type: string
+          nullable: true
+        training_config:
+          $ref: '#/components/schemas/TrainingConfigSnapshot'
+      required: [ok, error]

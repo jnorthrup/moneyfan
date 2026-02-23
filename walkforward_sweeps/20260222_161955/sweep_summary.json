@@ -1,0 +1,553 @@
+{
+  "created_at": "2026-02-22T16:20:30.143152",
+  "root_dir": "/Users/jim/work/moneyfan/walkforward_sweeps/20260222_161955",
+  "grid": {
+    "thresholds": [
+      0.6,
+      0.65,
+      0.7,
+      0.75,
+      0.8
+    ],
+    "topks": [
+      1
+    ],
+    "veto": [
+      false
+    ],
+    "carry_memory": [
+      false
+    ],
+    "min_pred_move_bps_grid": [
+      0.0
+    ],
+    "edge_cost_mult_grid": [
+      1.0
+    ],
+    "commission_bps": 5.0,
+    "slippage_bps": 3.0,
+    "max_steps": 60,
+    "max_bars": 320
+  },
+  "variants": [
+    {
+      "variant": "v01_k1_thr0.60_pm0_ec1.0_noveto_nomem",
+      "params": {
+        "signal_threshold": 0.6,
+        "top_k": 1,
+        "use_mechanical_veto": false,
+        "carry_memory": false,
+        "min_pred_move_bps": 0.0,
+        "edge_cost_multiplier": 1.0
+      },
+      "status": "ok",
+      "run_dir": "/Users/jim/work/moneyfan/walkforward_sweeps/20260222_161955/v01_k1_thr0.60_pm0_ec1.0_noveto_nomem",
+      "metrics": {
+        "total_trades": 1,
+        "winning_trades": 1,
+        "losing_trades": 0,
+        "total_pnl": 0.01313839289199812,
+        "total_commission": 0.47430330649675057,
+        "total_slippage": 0.28458198389805034,
+        "max_drawdown": 0.0,
+        "peak_equity": 1000.013138392892,
+        "trough_equity": 1000.0,
+        "profit_factor": "Infinity",
+        "sharpe_ratio": 42.21010301656425,
+        "final_equity": 1000.013138392892,
+        "return_pct": 0.0013138392891853812,
+        "win_rate": 1.0,
+        "annualized_return": 0.023285431093914566,
+        "calmar_ratio": 0.0,
+        "turnover": 0.47430330649675057,
+        "bars_evaluated": 60,
+        "common_timestamps": 60,
+        "symbols": [
+          "BTCUSDT",
+          "ETHUSDT"
+        ],
+        "seq_len": 64,
+        "top_k": 1,
+        "signal_threshold": 0.6,
+        "commission_bps": 5.0,
+        "slippage_bps": 3.0,
+        "use_mechanical_veto": false,
+        "carry_memory": false,
+        "min_pred_move_bps": 0.0,
+        "edge_cost_multiplier": 1.0
+      }
+    },
+    {
+      "variant": "v02_k1_thr0.65_pm0_ec1.0_noveto_nomem",
+      "params": {
+        "signal_threshold": 0.65,
+        "top_k": 1,
+        "use_mechanical_veto": false,
+        "carry_memory": false,
+        "min_pred_move_bps": 0.0,
+        "edge_cost_multiplier": 1.0
+      },
+      "status": "ok",
+      "run_dir": "/Users/jim/work/moneyfan/walkforward_sweeps/20260222_161955/v02_k1_thr0.65_pm0_ec1.0_noveto_nomem",
+      "metrics": {
+        "total_trades": 1,
+        "winning_trades": 1,
+        "losing_trades": 0,
+        "total_pnl": 0.013140471404844277,
+        "total_commission": 0.47437834196902173,
+        "total_slippage": 0.284627005181413,
+        "max_drawdown": 0.0,
+        "peak_equity": 1000.0131404714049,
+        "trough_equity": 1000.0,
+        "profit_factor": "Infinity",
+        "sharpe_ratio": 42.2101030205338,
+        "final_equity": 1000.0131404714049,
+        "return_pct": 0.0013140471404771148,
+        "win_rate": 1.0,
+        "annualized_return": 0.023289157445703035,
+        "calmar_ratio": 0.0,
+        "turnover": 0.47437834196902173,
+        "bars_evaluated": 60,
+        "common_timestamps": 60,
+        "symbols": [
+          "BTCUSDT",
+          "ETHUSDT"
+        ],
+        "seq_len": 64,
+        "top_k": 1,
+        "signal_threshold": 0.65,
+        "commission_bps": 5.0,
+        "slippage_bps": 3.0,
+        "use_mechanical_veto": false,
+        "carry_memory": false,
+        "min_pred_move_bps": 0.0,
+        "edge_cost_multiplier": 1.0
+      }
+    },
+    {
+      "variant": "v03_k1_thr0.70_pm0_ec1.0_noveto_nomem",
+      "params": {
+        "signal_threshold": 0.7,
+        "top_k": 1,
+        "use_mechanical_veto": false,
+        "carry_memory": false,
+        "min_pred_move_bps": 0.0,
+        "edge_cost_multiplier": 1.0
+      },
+      "status": "ok",
+      "run_dir": "/Users/jim/work/moneyfan/walkforward_sweeps/20260222_161955/v03_k1_thr0.70_pm0_ec1.0_noveto_nomem",
+      "metrics": {
+        "total_trades": 1,
+        "winning_trades": 1,
+        "losing_trades": 0,
+        "total_pnl": 0.013136274524405016,
+        "total_commission": 0.47422683224590406,
+        "total_slippage": 0.2845360993475424,
+        "max_drawdown": 0.0,
+        "peak_equity": 1000.0131362745244,
+        "trough_equity": 1000.0,
+        "profit_factor": "Infinity",
+        "sharpe_ratio": 42.2101030125173,
+        "final_equity": 1000.0131362745244,
+        "return_pct": 0.0013136274524372382,
+        "win_rate": 1.0,
+        "annualized_return": 0.023281633292527193,
+        "calmar_ratio": 0.0,
+        "turnover": 0.474226832245904,
+        "bars_evaluated": 60,
+        "common_timestamps": 60,
+        "symbols": [
+          "BTCUSDT",
+          "ETHUSDT"
+        ],
+        "seq_len": 64,
+        "top_k": 1,
+        "signal_threshold": 0.7,
+        "commission_bps": 5.0,
+        "slippage_bps": 3.0,
+        "use_mechanical_veto": false,
+        "carry_memory": false,
+        "min_pred_move_bps": 0.0,
+        "edge_cost_multiplier": 1.0
+      }
+    },
+    {
+      "variant": "v04_k1_thr0.75_pm0_ec1.0_noveto_nomem",
+      "params": {
+        "signal_threshold": 0.75,
+        "top_k": 1,
+        "use_mechanical_veto": false,
+        "carry_memory": false,
+        "min_pred_move_bps": 0.0,
+        "edge_cost_multiplier": 1.0
+      },
+      "status": "ok",
+      "run_dir": "/Users/jim/work/moneyfan/walkforward_sweeps/20260222_161955/v04_k1_thr0.75_pm0_ec1.0_noveto_nomem",
+      "metrics": {
+        "total_trades": 1,
+        "winning_trades": 1,
+        "losing_trades": 0,
+        "total_pnl": 0.013138547583838835,
+        "total_commission": 0.47430889095842593,
+        "total_slippage": 0.2845853345750555,
+        "max_drawdown": 0.0,
+        "peak_equity": 1000.0131385475838,
+        "trough_equity": 1000.0,
+        "profit_factor": "Infinity",
+        "sharpe_ratio": 42.210103016859726,
+        "final_equity": 1000.0131385475838,
+        "return_pct": 0.001313854758389077,
+        "win_rate": 1.0,
+        "annualized_return": 0.023285708420789142,
+        "calmar_ratio": 0.0,
+        "turnover": 0.4743088909584259,
+        "bars_evaluated": 60,
+        "common_timestamps": 60,
+        "symbols": [
+          "BTCUSDT",
+          "ETHUSDT"
+        ],
+        "seq_len": 64,
+        "top_k": 1,
+        "signal_threshold": 0.75,
+        "commission_bps": 5.0,
+        "slippage_bps": 3.0,
+        "use_mechanical_veto": false,
+        "carry_memory": false,
+        "min_pred_move_bps": 0.0,
+        "edge_cost_multiplier": 1.0
+      }
+    },
+    {
+      "variant": "v05_k1_thr0.80_pm0_ec1.0_noveto_nomem",
+      "params": {
+        "signal_threshold": 0.8,
+        "top_k": 1,
+        "use_mechanical_veto": false,
+        "carry_memory": false,
+        "min_pred_move_bps": 0.0,
+        "edge_cost_multiplier": 1.0
+      },
+      "status": "ok",
+      "run_dir": "/Users/jim/work/moneyfan/walkforward_sweeps/20260222_161955/v05_k1_thr0.80_pm0_ec1.0_noveto_nomem",
+      "metrics": {
+        "total_trades": 0,
+        "winning_trades": 0,
+        "losing_trades": 0,
+        "total_pnl": 0.0,
+        "total_commission": 0.0,
+        "total_slippage": 0.0,
+        "max_drawdown": 0.0,
+        "peak_equity": 1000.0,
+        "trough_equity": 1000.0,
+        "profit_factor": 0.0,
+        "sharpe_ratio": 0.0,
+        "final_equity": 1000.0,
+        "return_pct": 0.0,
+        "win_rate": 0.0,
+        "annualized_return": 0.0,
+        "calmar_ratio": 0.0,
+        "turnover": 0.0,
+        "bars_evaluated": 60,
+        "common_timestamps": 60,
+        "symbols": [
+          "BTCUSDT",
+          "ETHUSDT"
+        ],
+        "seq_len": 64,
+        "top_k": 1,
+        "signal_threshold": 0.8,
+        "commission_bps": 5.0,
+        "slippage_bps": 3.0,
+        "use_mechanical_veto": false,
+        "carry_memory": false,
+        "min_pred_move_bps": 0.0,
+        "edge_cost_multiplier": 1.0
+      }
+    }
+  ],
+  "ranked": [
+    {
+      "variant": "v02_k1_thr0.65_pm0_ec1.0_noveto_nomem",
+      "params": {
+        "signal_threshold": 0.65,
+        "top_k": 1,
+        "use_mechanical_veto": false,
+        "carry_memory": false,
+        "min_pred_move_bps": 0.0,
+        "edge_cost_multiplier": 1.0
+      },
+      "status": "ok",
+      "run_dir": "/Users/jim/work/moneyfan/walkforward_sweeps/20260222_161955/v02_k1_thr0.65_pm0_ec1.0_noveto_nomem",
+      "metrics": {
+        "total_trades": 1,
+        "winning_trades": 1,
+        "losing_trades": 0,
+        "total_pnl": 0.013140471404844277,
+        "total_commission": 0.47437834196902173,
+        "total_slippage": 0.284627005181413,
+        "max_drawdown": 0.0,
+        "peak_equity": 1000.0131404714049,
+        "trough_equity": 1000.0,
+        "profit_factor": "Infinity",
+        "sharpe_ratio": 42.2101030205338,
+        "final_equity": 1000.0131404714049,
+        "return_pct": 0.0013140471404771148,
+        "win_rate": 1.0,
+        "annualized_return": 0.023289157445703035,
+        "calmar_ratio": 0.0,
+        "turnover": 0.47437834196902173,
+        "bars_evaluated": 60,
+        "common_timestamps": 60,
+        "symbols": [
+          "BTCUSDT",
+          "ETHUSDT"
+        ],
+        "seq_len": 64,
+        "top_k": 1,
+        "signal_threshold": 0.65,
+        "commission_bps": 5.0,
+        "slippage_bps": 3.0,
+        "use_mechanical_veto": false,
+        "carry_memory": false,
+        "min_pred_move_bps": 0.0,
+        "edge_cost_multiplier": 1.0
+      }
+    },
+    {
+      "variant": "v04_k1_thr0.75_pm0_ec1.0_noveto_nomem",
+      "params": {
+        "signal_threshold": 0.75,
+        "top_k": 1,
+        "use_mechanical_veto": false,
+        "carry_memory": false,
+        "min_pred_move_bps": 0.0,
+        "edge_cost_multiplier": 1.0
+      },
+      "status": "ok",
+      "run_dir": "/Users/jim/work/moneyfan/walkforward_sweeps/20260222_161955/v04_k1_thr0.75_pm0_ec1.0_noveto_nomem",
+      "metrics": {
+        "total_trades": 1,
+        "winning_trades": 1,
+        "losing_trades": 0,
+        "total_pnl": 0.013138547583838835,
+        "total_commission": 0.47430889095842593,
+        "total_slippage": 0.2845853345750555,
+        "max_drawdown": 0.0,
+        "peak_equity": 1000.0131385475838,
+        "trough_equity": 1000.0,
+        "profit_factor": "Infinity",
+        "sharpe_ratio": 42.210103016859726,
+        "final_equity": 1000.0131385475838,
+        "return_pct": 0.001313854758389077,
+        "win_rate": 1.0,
+        "annualized_return": 0.023285708420789142,
+        "calmar_ratio": 0.0,
+        "turnover": 0.4743088909584259,
+        "bars_evaluated": 60,
+        "common_timestamps": 60,
+        "symbols": [
+          "BTCUSDT",
+          "ETHUSDT"
+        ],
+        "seq_len": 64,
+        "top_k": 1,
+        "signal_threshold": 0.75,
+        "commission_bps": 5.0,
+        "slippage_bps": 3.0,
+        "use_mechanical_veto": false,
+        "carry_memory": false,
+        "min_pred_move_bps": 0.0,
+        "edge_cost_multiplier": 1.0
+      }
+    },
+    {
+      "variant": "v01_k1_thr0.60_pm0_ec1.0_noveto_nomem",
+      "params": {
+        "signal_threshold": 0.6,
+        "top_k": 1,
+        "use_mechanical_veto": false,
+        "carry_memory": false,
+        "min_pred_move_bps": 0.0,
+        "edge_cost_multiplier": 1.0
+      },
+      "status": "ok",
+      "run_dir": "/Users/jim/work/moneyfan/walkforward_sweeps/20260222_161955/v01_k1_thr0.60_pm0_ec1.0_noveto_nomem",
+      "metrics": {
+        "total_trades": 1,
+        "winning_trades": 1,
+        "losing_trades": 0,
+        "total_pnl": 0.01313839289199812,
+        "total_commission": 0.47430330649675057,
+        "total_slippage": 0.28458198389805034,
+        "max_drawdown": 0.0,
+        "peak_equity": 1000.013138392892,
+        "trough_equity": 1000.0,
+        "profit_factor": "Infinity",
+        "sharpe_ratio": 42.21010301656425,
+        "final_equity": 1000.013138392892,
+        "return_pct": 0.0013138392891853812,
+        "win_rate": 1.0,
+        "annualized_return": 0.023285431093914566,
+        "calmar_ratio": 0.0,
+        "turnover": 0.47430330649675057,
+        "bars_evaluated": 60,
+        "common_timestamps": 60,
+        "symbols": [
+          "BTCUSDT",
+          "ETHUSDT"
+        ],
+        "seq_len": 64,
+        "top_k": 1,
+        "signal_threshold": 0.6,
+        "commission_bps": 5.0,
+        "slippage_bps": 3.0,
+        "use_mechanical_veto": false,
+        "carry_memory": false,
+        "min_pred_move_bps": 0.0,
+        "edge_cost_multiplier": 1.0
+      }
+    },
+    {
+      "variant": "v03_k1_thr0.70_pm0_ec1.0_noveto_nomem",
+      "params": {
+        "signal_threshold": 0.7,
+        "top_k": 1,
+        "use_mechanical_veto": false,
+        "carry_memory": false,
+        "min_pred_move_bps": 0.0,
+        "edge_cost_multiplier": 1.0
+      },
+      "status": "ok",
+      "run_dir": "/Users/jim/work/moneyfan/walkforward_sweeps/20260222_161955/v03_k1_thr0.70_pm0_ec1.0_noveto_nomem",
+      "metrics": {
+        "total_trades": 1,
+        "winning_trades": 1,
+        "losing_trades": 0,
+        "total_pnl": 0.013136274524405016,
+        "total_commission": 0.47422683224590406,
+        "total_slippage": 0.2845360993475424,
+        "max_drawdown": 0.0,
+        "peak_equity": 1000.0131362745244,
+        "trough_equity": 1000.0,
+        "profit_factor": "Infinity",
+        "sharpe_ratio": 42.2101030125173,
+        "final_equity": 1000.0131362745244,
+        "return_pct": 0.0013136274524372382,
+        "win_rate": 1.0,
+        "annualized_return": 0.023281633292527193,
+        "calmar_ratio": 0.0,
+        "turnover": 0.474226832245904,
+        "bars_evaluated": 60,
+        "common_timestamps": 60,
+        "symbols": [
+          "BTCUSDT",
+          "ETHUSDT"
+        ],
+        "seq_len": 64,
+        "top_k": 1,
+        "signal_threshold": 0.7,
+        "commission_bps": 5.0,
+        "slippage_bps": 3.0,
+        "use_mechanical_veto": false,
+        "carry_memory": false,
+        "min_pred_move_bps": 0.0,
+        "edge_cost_multiplier": 1.0
+      }
+    },
+    {
+      "variant": "v05_k1_thr0.80_pm0_ec1.0_noveto_nomem",
+      "params": {
+        "signal_threshold": 0.8,
+        "top_k": 1,
+        "use_mechanical_veto": false,
+        "carry_memory": false,
+        "min_pred_move_bps": 0.0,
+        "edge_cost_multiplier": 1.0
+      },
+      "status": "ok",
+      "run_dir": "/Users/jim/work/moneyfan/walkforward_sweeps/20260222_161955/v05_k1_thr0.80_pm0_ec1.0_noveto_nomem",
+      "metrics": {
+        "total_trades": 0,
+        "winning_trades": 0,
+        "losing_trades": 0,
+        "total_pnl": 0.0,
+        "total_commission": 0.0,
+        "total_slippage": 0.0,
+        "max_drawdown": 0.0,
+        "peak_equity": 1000.0,
+        "trough_equity": 1000.0,
+        "profit_factor": 0.0,
+        "sharpe_ratio": 0.0,
+        "final_equity": 1000.0,
+        "return_pct": 0.0,
+        "win_rate": 0.0,
+        "annualized_return": 0.0,
+        "calmar_ratio": 0.0,
+        "turnover": 0.0,
+        "bars_evaluated": 60,
+        "common_timestamps": 60,
+        "symbols": [
+          "BTCUSDT",
+          "ETHUSDT"
+        ],
+        "seq_len": 64,
+        "top_k": 1,
+        "signal_threshold": 0.8,
+        "commission_bps": 5.0,
+        "slippage_bps": 3.0,
+        "use_mechanical_veto": false,
+        "carry_memory": false,
+        "min_pred_move_bps": 0.0,
+        "edge_cost_multiplier": 1.0
+      }
+    }
+  ],
+  "best": {
+    "variant": "v02_k1_thr0.65_pm0_ec1.0_noveto_nomem",
+    "params": {
+      "signal_threshold": 0.65,
+      "top_k": 1,
+      "use_mechanical_veto": false,
+      "carry_memory": false,
+      "min_pred_move_bps": 0.0,
+      "edge_cost_multiplier": 1.0
+    },
+    "status": "ok",
+    "run_dir": "/Users/jim/work/moneyfan/walkforward_sweeps/20260222_161955/v02_k1_thr0.65_pm0_ec1.0_noveto_nomem",
+    "metrics": {
+      "total_trades": 1,
+      "winning_trades": 1,
+      "losing_trades": 0,
+      "total_pnl": 0.013140471404844277,
+      "total_commission": 0.47437834196902173,
+      "total_slippage": 0.284627005181413,
+      "max_drawdown": 0.0,
+      "peak_equity": 1000.0131404714049,
+      "trough_equity": 1000.0,
+      "profit_factor": "Infinity",
+      "sharpe_ratio": 42.2101030205338,
+      "final_equity": 1000.0131404714049,
+      "return_pct": 0.0013140471404771148,
+      "win_rate": 1.0,
+      "annualized_return": 0.023289157445703035,
+      "calmar_ratio": 0.0,
+      "turnover": 0.47437834196902173,
+      "bars_evaluated": 60,
+      "common_timestamps": 60,
+      "symbols": [
+        "BTCUSDT",
+        "ETHUSDT"
+      ],
+      "seq_len": 64,
+      "top_k": 1,
+      "signal_threshold": 0.65,
+      "commission_bps": 5.0,
+      "slippage_bps": 3.0,
+      "use_mechanical_veto": false,
+      "carry_memory": false,
+      "min_pred_move_bps": 0.0,
+      "edge_cost_multiplier": 1.0
+    }
+  }
+}

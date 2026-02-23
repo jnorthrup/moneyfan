@@ -1,0 +1,31 @@
+[
+  {
+    "timestamp": "2026-02-20 19:35:00",
+    "symbol": "BTCUSDT",
+    "direction": 1.0,
+    "confidence": 0.7845834493637085,
+    "pred_fwd_return": 0.1590917706489563,
+    "position_fraction": 0.6045359373092651,
+    "risk_tier": "normal",
+    "vetoed": false,
+    "veto_reason": null,
+    "score": 1.6410727870881365,
+    "entry_price": 67574.13,
+    "exit_price": 67684.21,
+    "raw_move_log": 0.0016277004033327103,
+    "stop_loss_pct": 0.007310289423912764,
+    "take_profit_pct": 0.1589840054512024,
+    "rr": 21.747976890100706,
+    "predicted_move_bps": 1589.840054512024,
+    "predicted_edge_bps": 754.0752730568814,
+    "roundtrip_cost_bps": 16.0,
+    "exposure": 0.4743088909584259,
+    "gross_ret": 0.0007720327731173202,
+    "commission_ret": 0.0004743088909584259,
+    "slippage_ret": 0.0002845853345750555,
+    "net_ret": 1.3138547583838836e-05,
+    "capital_weight": 1.0,
+    "pnl": 0.013138547583838835,
+    "equity_after": 1000.0131385475838
+  }
+]

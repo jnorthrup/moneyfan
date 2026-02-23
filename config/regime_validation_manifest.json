@@ -1,0 +1,67 @@
+{
+  "version": 1,
+  "name": "goals_regime_manifest_v1",
+  "description": "Canonical GOALS-aligned validation regime slices for simmer promotion gating.",
+  "slices": [
+    {
+      "name": "trend_anchor",
+      "regime": "trend",
+      "tags": ["trend", "anchor"],
+      "weight": 0.35,
+      "mandatory": true,
+      "symbols": "BTCUSDT,ETHUSDT",
+      "top_k": 1,
+      "signal_threshold": 0.55,
+      "hold_bars": 12,
+      "cooldown_bars": 12,
+      "no_mechanical_veto": true,
+      "max_bars": 900,
+      "max_steps": 240
+    },
+    {
+      "name": "chop_probe",
+      "regime": "chop",
+      "tags": ["chop", "mean_reversion"],
+      "weight": 0.25,
+      "mandatory": true,
+      "symbols": "BTCUSDT,ETHUSDT",
+      "top_k": 1,
+      "signal_threshold": 0.60,
+      "hold_bars": 12,
+      "cooldown_bars": 12,
+      "no_mechanical_veto": true,
+      "max_bars": 900,
+      "max_steps": 240
+    },
+    {
+      "name": "high_vol_probe",
+      "regime": "high_vol",
+      "tags": ["volatility", "stress"],
+      "weight": 0.25,
+      "mandatory": false,
+      "symbols": "BTCUSDT,ETHUSDT,SOLUSDT",
+      "top_k": 1,
+      "signal_threshold": 0.65,
+      "hold_bars": 12,
+      "cooldown_bars": 12,
+      "no_mechanical_veto": true,
+      "max_bars": 900,
+      "max_steps": 240
+    },
+    {
+      "name": "shock_guardrail",
+      "regime": "shock",
+      "tags": ["shock", "failure_case"],
+      "weight": 0.15,
+      "mandatory": true,
+      "symbols": "BTCUSDT,ETHUSDT,SOLUSDT",
+      "top_k": 1,
+      "signal_threshold": 0.70,
+      "hold_bars": 12,
+      "cooldown_bars": 12,
+      "no_mechanical_veto": true,
+      "max_bars": 900,
+      "max_steps": 240
+    }
+  ]
+}
