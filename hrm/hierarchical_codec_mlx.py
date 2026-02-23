@@ -85,6 +85,10 @@ class HRMConfig:
     optimizer_momentum: float = 0.95
     optimizer_nesterov: bool = True
     muon_ns_steps: int = 5
+    energy_discount_gamma: float = 0.99
+    energy_roundtrip_cost_bps: float = 16.0
+    energy_churn_penalty: float = 0.0
+    energy_target_clip: float = 0.25
 
     # Legacy aliases for callers that still use old field names
     @property
@@ -521,6 +525,7 @@ class MLXBasketTrainer:
     Two-phase training:
       pretrain_step : world-model loss — predict next bar's codec features (self-supervised)
       trade_step    : alpha loss — maximise conviction-weighted expected return (supervised)
+      energy_step   : energy-routing proxy loss — regress discounted net alpha score from trade outputs
 
     Optimizations:
       MLX lazy evaluation + fused graph execution.
@@ -578,8 +583,49 @@ class MLXBasketTrainer:
             alpha_loss = -mx.mean(final_pnl)
             return alpha_loss, next_memory
 
+        energy_discount_gamma = float(max(0.0, min(1.0, getattr(self.config, "energy_discount_gamma", 0.99))))
+        energy_roundtrip_cost = float(max(0.0, getattr(self.config, "energy_roundtrip_cost_bps", 16.0))) / 10000.0
+        energy_churn_penalty = float(max(0.0, getattr(self.config, "energy_churn_penalty", 0.0)))
+        energy_target_clip = float(max(1e-6, getattr(self.config, "energy_target_clip", 0.25)))
+
+        def energy_loss_fn(
+            model: "MLXHierarchicalCodec",
+            bar_codec_features: mx.array,
+            realized_returns: mx.array,
+            memory: Optional[Tuple] = None,
+        ) -> Tuple[mx.array, Tuple]:
+            """
+            Energy-routing proxy objective (training-only):
+            learn a scalar discounted net-alpha score from the existing trade heads.
+
+            No new runtime head is introduced yet to preserve checkpoint compatibility.
+            The scalar score is synthesized from the trade outputs and trained against a
+            discounted/costed realized-return proxy target.
+            """
+            output, next_memory = model.forward(bar_codec_features, memory=memory, mode="trade")
+            pred_fwd_return, signal_conviction, _stop_loss_pct, _take_profit_pct, position_fraction = _split_trade_outputs(output)
+
+            realized = realized_returns.reshape((-1, 1))
+            conviction = signal_conviction.reshape((-1, 1))
+            size = mx.clip(position_fraction.reshape((-1, 1)), 0.0, 1.0)
+
+            # Scalar routing score proxy: predicted discounted net alpha from trade outputs.
+            pred_alpha = mx.tanh(pred_fwd_return).reshape((-1, 1)) * conviction * size
+            pred_net_alpha = (pred_alpha * energy_discount_gamma) - ((energy_roundtrip_cost + energy_churn_penalty) * size)
+
+            # Target is a clipped discounted realized alpha proxy, costed on the same size proxy.
+            target_realized = mx.clip(realized, -energy_target_clip, energy_target_clip)
+            target_net_alpha = (target_realized * energy_discount_gamma) - ((energy_roundtrip_cost + energy_churn_penalty) * size)
+
+            # Energy = -net_alpha. Minimize energy regression error.
+            pred_energy = -pred_net_alpha
+            target_energy = -target_net_alpha
+            energy_loss = mx.mean(mx.square(pred_energy - target_energy))
+            return energy_loss, next_memory
+
         self._pretrain_loss_and_grad = mx.value_and_grad(pretrain_loss_fn)
         self._trade_loss_and_grad = mx.value_and_grad(trade_loss_fn)
+        self._energy_loss_and_grad = mx.value_and_grad(energy_loss_fn)
 
     def _build_optimizer(self) -> Any:
         if not HAS_MLX or optim is None:
@@ -674,6 +720,28 @@ class MLXBasketTrainer:
         if auto_eval:
             self._eval_training_state(alpha_loss, memory=next_memory)
         return alpha_loss, next_memory
+
+    def energy_step(
+        self,
+        bar_codec_features: mx.array,
+        realized_returns: mx.array,
+        memory: Optional[Tuple] = None,
+        auto_eval: bool = True,
+    ) -> Tuple[mx.array, Tuple]:
+        """
+        Energy-routing proxy training step with optimizer update.
+
+        Loss: MSE between predicted and realized discounted net-alpha energy proxies.
+        Returns: loss scalar, next memory state
+        """
+        (energy_loss, next_memory), grads = self._energy_loss_and_grad(
+            self.model, bar_codec_features, realized_returns, memory
+        )
+        if self.optimizer is not None:
+            self.optimizer.update(self.model, grads)
+        if auto_eval:
+            self._eval_training_state(energy_loss, memory=next_memory)
+        return energy_loss, next_memory
 
     def flush_updates(self, *values: mx.array, memory: Optional[Tuple] = None):
         """Force materialization of any queued optimizer/model updates."""

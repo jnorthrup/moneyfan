@@ -1,0 +1,504 @@
+[
+  {
+    "timestamp": "2026-02-20 16:50:00",
+    "equity": 1001.0381074563066,
+    "price": 67198.85,
+    "position": 1.0,
+    "selected_symbols": [
+      "BTCUSDT"
+    ]
+  },
+  {
+    "timestamp": "2026-02-20 16:55:00",
+    "equity": 1000.3997816019673,
+    "price": 67498.05,
+    "position": 1.0,
+    "selected_symbols": [
+      "BTCUSDT"
+    ]
+  },
+  {
+    "timestamp": "2026-02-20 17:00:00",
+    "equity": 1000.3997816019673,
+    "price": 67485.63,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 17:05:00",
+    "equity": 1000.3997816019673,
+    "price": 67539.78,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 17:10:00",
+    "equity": 1000.3997816019673,
+    "price": 67647.57,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 17:15:00",
+    "equity": 1000.3997816019673,
+    "price": 67564.22,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 17:20:00",
+    "equity": 1000.3997816019673,
+    "price": 67540.41,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 17:25:00",
+    "equity": 1000.3997816019673,
+    "price": 67528.73,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 17:30:00",
+    "equity": 1000.3997816019673,
+    "price": 67607.73,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 17:35:00",
+    "equity": 1000.3997816019673,
+    "price": 67557.83,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 17:40:00",
+    "equity": 1000.3997816019673,
+    "price": 67858.82,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 17:45:00",
+    "equity": 1000.3997816019673,
+    "price": 67800.35,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 17:50:00",
+    "equity": 1000.3997816019673,
+    "price": 67892.97,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 17:55:00",
+    "equity": 1000.3997816019673,
+    "price": 67694.03,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 18:00:00",
+    "equity": 1000.3997816019673,
+    "price": 67861.01,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 18:05:00",
+    "equity": 1000.3997816019673,
+    "price": 67966.64,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 18:10:00",
+    "equity": 1000.3997816019673,
+    "price": 67729.79,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 18:15:00",
+    "equity": 1000.3997816019673,
+    "price": 67798.9,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 18:20:00",
+    "equity": 1000.3997816019673,
+    "price": 67746.95,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 18:25:00",
+    "equity": 1000.3997816019673,
+    "price": 67738.19,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 18:30:00",
+    "equity": 999.9041085156604,
+    "price": 67697.02,
+    "position": 1.0,
+    "selected_symbols": [
+      "BTCUSDT"
+    ]
+  },
+  {
+    "timestamp": "2026-02-20 18:35:00",
+    "equity": 999.8981875624318,
+    "price": 67709.7,
+    "position": 1.0,
+    "selected_symbols": [
+      "BTCUSDT"
+    ]
+  },
+  {
+    "timestamp": "2026-02-20 18:40:00",
+    "equity": 999.184453672175,
+    "price": 1964.63,
+    "position": 1.0,
+    "selected_symbols": [
+      "ETHUSDT"
+    ]
+  },
+  {
+    "timestamp": "2026-02-20 18:45:00",
+    "equity": 998.8266346707339,
+    "price": 1965.17,
+    "position": 1.0,
+    "selected_symbols": [
+      "ETHUSDT"
+    ]
+  },
+  {
+    "timestamp": "2026-02-20 18:50:00",
+    "equity": 998.195881159802,
+    "price": 67608.03,
+    "position": 1.0,
+    "selected_symbols": [
+      "BTCUSDT"
+    ]
+  },
+  {
+    "timestamp": "2026-02-20 18:55:00",
+    "equity": 997.9801216188655,
+    "price": 67595.03,
+    "position": 1.0,
+    "selected_symbols": [
+      "BTCUSDT"
+    ]
+  },
+  {
+    "timestamp": "2026-02-20 19:00:00",
+    "equity": 997.3207960911103,
+    "price": 67662.32,
+    "position": 1.0,
+    "selected_symbols": [
+      "BTCUSDT"
+    ]
+  },
+  {
+    "timestamp": "2026-02-20 19:05:00",
+    "equity": 997.333804325581,
+    "price": 67644.34,
+    "position": 1.0,
+    "selected_symbols": [
+      "BTCUSDT"
+    ]
+  },
+  {
+    "timestamp": "2026-02-20 19:10:00",
+    "equity": 997.0238381634457,
+    "price": 67755.18,
+    "position": 1.0,
+    "selected_symbols": [
+      "BTCUSDT"
+    ]
+  },
+  {
+    "timestamp": "2026-02-20 19:15:00",
+    "equity": 996.0892190804709,
+    "price": 67802.94,
+    "position": 1.0,
+    "selected_symbols": [
+      "BTCUSDT"
+    ]
+  },
+  {
+    "timestamp": "2026-02-20 19:20:00",
+    "equity": 995.0682743738564,
+    "price": 67726.3,
+    "position": 1.0,
+    "selected_symbols": [
+      "BTCUSDT"
+    ]
+  },
+  {
+    "timestamp": "2026-02-20 19:25:00",
+    "equity": 994.2725070315947,
+    "price": 67632.82,
+    "position": 1.0,
+    "selected_symbols": [
+      "BTCUSDT"
+    ]
+  },
+  {
+    "timestamp": "2026-02-20 19:30:00",
+    "equity": 993.6486610071611,
+    "price": 67586.13,
+    "position": 1.0,
+    "selected_symbols": [
+      "BTCUSDT"
+    ]
+  },
+  {
+    "timestamp": "2026-02-20 19:35:00",
+    "equity": 993.6617138020432,
+    "price": 67574.13,
+    "position": 1.0,
+    "selected_symbols": [
+      "BTCUSDT"
+    ]
+  },
+  {
+    "timestamp": "2026-02-20 19:40:00",
+    "equity": 993.4020407386537,
+    "price": 67684.21,
+    "position": 1.0,
+    "selected_symbols": [
+      "BTCUSDT"
+    ]
+  },
+  {
+    "timestamp": "2026-02-20 19:45:00",
+    "equity": 992.5960771700989,
+    "price": 67742.09,
+    "position": 1.0,
+    "selected_symbols": [
+      "BTCUSDT"
+    ]
+  },
+  {
+    "timestamp": "2026-02-20 19:50:00",
+    "equity": 992.5960771700989,
+    "price": 67691.0,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 19:55:00",
+    "equity": 992.2962889605562,
+    "price": 67678.41,
+    "position": 1.0,
+    "selected_symbols": [
+      "BTCUSDT"
+    ]
+  },
+  {
+    "timestamp": "2026-02-20 20:00:00",
+    "equity": 991.3591306963674,
+    "price": 67726.14,
+    "position": 1.0,
+    "selected_symbols": [
+      "BTCUSDT"
+    ]
+  },
+  {
+    "timestamp": "2026-02-20 20:05:00",
+    "equity": 991.1297634694783,
+    "price": 67647.91,
+    "position": 1.0,
+    "selected_symbols": [
+      "BTCUSDT"
+    ]
+  },
+  {
+    "timestamp": "2026-02-20 20:10:00",
+    "equity": 990.440563273965,
+    "price": 67709.9,
+    "position": 1.0,
+    "selected_symbols": [
+      "BTCUSDT"
+    ]
+  },
+  {
+    "timestamp": "2026-02-20 20:15:00",
+    "equity": 990.0643528323008,
+    "price": 67677.63,
+    "position": 1.0,
+    "selected_symbols": [
+      "BTCUSDT"
+    ]
+  },
+  {
+    "timestamp": "2026-02-20 20:20:00",
+    "equity": 989.6566468710407,
+    "price": 67708.67,
+    "position": 1.0,
+    "selected_symbols": [
+      "BTCUSDT"
+    ]
+  },
+  {
+    "timestamp": "2026-02-20 20:25:00",
+    "equity": 989.029309216606,
+    "price": 67732.68,
+    "position": 1.0,
+    "selected_symbols": [
+      "BTCUSDT"
+    ]
+  },
+  {
+    "timestamp": "2026-02-20 20:30:00",
+    "equity": 988.8686227290561,
+    "price": 67709.9,
+    "position": 1.0,
+    "selected_symbols": [
+      "BTCUSDT"
+    ]
+  },
+  {
+    "timestamp": "2026-02-20 20:35:00",
+    "equity": 988.1266302185087,
+    "price": 67784.53,
+    "position": 1.0,
+    "selected_symbols": [
+      "BTCUSDT"
+    ]
+  },
+  {
+    "timestamp": "2026-02-20 20:40:00",
+    "equity": 987.941341618615,
+    "price": 67735.27,
+    "position": 1.0,
+    "selected_symbols": [
+      "BTCUSDT"
+    ]
+  },
+  {
+    "timestamp": "2026-02-20 20:45:00",
+    "equity": 987.4737645238166,
+    "price": 67803.5,
+    "position": 1.0,
+    "selected_symbols": [
+      "BTCUSDT"
+    ]
+  },
+  {
+    "timestamp": "2026-02-20 20:50:00",
+    "equity": 986.9999356095209,
+    "price": 67807.88,
+    "position": 1.0,
+    "selected_symbols": [
+      "BTCUSDT"
+    ]
+  },
+  {
+    "timestamp": "2026-02-20 20:55:00",
+    "equity": 985.8943192210272,
+    "price": 67808.4,
+    "position": 1.0,
+    "selected_symbols": [
+      "BTCUSDT"
+    ]
+  },
+  {
+    "timestamp": "2026-02-20 21:00:00",
+    "equity": 985.6741614601198,
+    "price": 67664.1,
+    "position": 1.0,
+    "selected_symbols": [
+      "BTCUSDT"
+    ]
+  },
+  {
+    "timestamp": "2026-02-20 21:05:00",
+    "equity": 985.3609333072893,
+    "price": 67725.77,
+    "position": 1.0,
+    "selected_symbols": [
+      "BTCUSDT"
+    ]
+  },
+  {
+    "timestamp": "2026-02-20 21:10:00",
+    "equity": 985.8853124067431,
+    "price": 67768.55,
+    "position": 1.0,
+    "selected_symbols": [
+      "BTCUSDT"
+    ]
+  },
+  {
+    "timestamp": "2026-02-20 21:15:00",
+    "equity": 985.1464805872664,
+    "price": 67989.37,
+    "position": 1.0,
+    "selected_symbols": [
+      "BTCUSDT"
+    ]
+  },
+  {
+    "timestamp": "2026-02-20 21:20:00",
+    "equity": 984.9377532516661,
+    "price": 67926.02,
+    "position": 1.0,
+    "selected_symbols": [
+      "BTCUSDT"
+    ]
+  },
+  {
+    "timestamp": "2026-02-20 21:25:00",
+    "equity": 984.5520336434765,
+    "price": 67985.5,
+    "position": 1.0,
+    "selected_symbols": [
+      "BTCUSDT"
+    ]
+  },
+  {
+    "timestamp": "2026-02-20 21:30:00",
+    "equity": 983.8928843532169,
+    "price": 68002.92,
+    "position": 1.0,
+    "selected_symbols": [
+      "BTCUSDT"
+    ]
+  },
+  {
+    "timestamp": "2026-02-20 21:35:00",
+    "equity": 983.8739918102984,
+    "price": 67954.74,
+    "position": 1.0,
+    "selected_symbols": [
+      "BTCUSDT"
+    ]
+  },
+  {
+    "timestamp": "2026-02-20 21:40:00",
+    "equity": 983.3454024284483,
+    "price": 68059.06,
+    "position": 1.0,
+    "selected_symbols": [
+      "BTCUSDT"
+    ]
+  },
+  {
+    "timestamp": "2026-02-20 21:45:00",
+    "equity": 983.2165958105476,
+    "price": 1967.05,
+    "position": 1.0,
+    "selected_symbols": [
+      "ETHUSDT"
+    ]
+  }
+]

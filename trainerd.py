@@ -17,8 +17,9 @@ import time
 import argparse
 import threading
 import queue
+from dataclasses import asdict
 from http.server import HTTPServer, SimpleHTTPRequestHandler
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qs
 from pathlib import Path
 
 # Add project root to path
@@ -33,6 +34,10 @@ latest_results = []
 latest_samples = []
 MAX_RESULTS_HISTORY = 50
 MAX_SAMPLES_HISTORY = 100
+event_stream_log = []
+next_event_seq = 1
+MAX_EVENT_STREAM_HISTORY = 1000
+event_stream_cond = threading.Condition()
 
 # Global active transfers registry
 active_transfers = {}
@@ -42,6 +47,136 @@ transfer_lock = threading.Lock()
 state_lock = threading.Lock()
 
 DRAWTHRU_DUCKDB_FILE = Path(__file__).resolve().parent / "data" / "binance" / "hrm_data.duckdb"
+OPENAPI_SPEC_FILE = Path(__file__).resolve().parent / "trainerd.openapi.yaml"
+
+
+RUNTIME_CONTROL_SCHEMA = {
+    "notional": {"type": "float", "min": 1e-6, "max": 1e12},
+    "pair_width": {"type": "int", "min": 1, "max": 512},
+    "bar_sequences_per_episode": {"type": "int", "min": 1, "max": 100000},
+    "epochs": {"type": "int", "min": 1, "max": 128},
+    "min_bar_window": {"type": "int", "min": 8, "max": 8192},
+    "max_bar_window": {"type": "int", "min": 8, "max": 8192},
+    "cache_size": {"type": "int", "min": 1, "max": 500000},
+    "candles_per_extent": {"type": "int", "min": -1, "max": 1000000},
+    "shock_z_threshold": {"type": "float", "min": 0.0, "max": 100.0},
+    "bar_shock_z_threshold": {"type": "float", "min": 0.0, "max": 100.0},
+    "max_adaptive_replays": {"type": "int", "min": 0, "max": 1024},
+    "use_mechanical_veto": {"type": "bool"},
+    "replay_coalescing": {"type": "bool"},
+    "replay_coalescing_chunk_size": {"type": "int", "min": 1, "max": 4096},
+}
+
+
+def _coerce_bool(value):
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in {"1", "true", "yes", "on"}:
+            return True
+        if lowered in {"0", "false", "no", "off"}:
+            return False
+    raise ValueError("expected boolean")
+
+
+def _coerce_control_value(field_name: str, raw_value):
+    spec = RUNTIME_CONTROL_SCHEMA[field_name]
+    expected = spec["type"]
+    if expected == "bool":
+        value = _coerce_bool(raw_value)
+    elif expected == "int":
+        if isinstance(raw_value, bool):
+            raise ValueError("expected integer")
+        value = int(raw_value)
+    elif expected == "float":
+        if isinstance(raw_value, bool):
+            raise ValueError("expected number")
+        value = float(raw_value)
+    else:
+        raise ValueError(f"unsupported control type: {expected}")
+
+    if "min" in spec and value < spec["min"]:
+        raise ValueError(f"must be >= {spec['min']}")
+    if "max" in spec and value > spec["max"]:
+        raise ValueError(f"must be <= {spec['max']}")
+    return value
+
+
+def _training_config_snapshot(config: EpisodeTrainingConfig):
+    cfg = asdict(config)
+    # Keep the payload small but include fields the realtime controls and telemetry need.
+    return {
+        "optimizer_name": cfg.get("optimizer_name"),
+        "learning_rate": cfg.get("learning_rate"),
+        "weight_decay": cfg.get("weight_decay"),
+        "notional": cfg.get("notional"),
+        "pair_width": cfg.get("pair_width"),
+        "bar_sequences_per_episode": cfg.get("bar_sequences_per_episode"),
+        "epochs": cfg.get("epochs"),
+        "min_bar_window": cfg.get("min_bar_window"),
+        "max_bar_window": cfg.get("max_bar_window"),
+        "cache_size": cfg.get("cache_size"),
+        "candles_per_extent": cfg.get("candles_per_extent"),
+        "shock_z_threshold": cfg.get("shock_z_threshold"),
+        "bar_shock_z_threshold": cfg.get("bar_shock_z_threshold"),
+        "max_adaptive_replays": cfg.get("max_adaptive_replays"),
+        "use_mechanical_veto": cfg.get("use_mechanical_veto"),
+        "replay_coalescing": cfg.get("replay_coalescing"),
+        "replay_coalescing_chunk_size": cfg.get("replay_coalescing_chunk_size"),
+        "runtime_control_fields": sorted(RUNTIME_CONTROL_SCHEMA.keys()),
+    }
+
+
+RUNTIME_CONTROL_DEFAULTS = _training_config_snapshot(EpisodeTrainingConfig())
+
+
+def _event_now_iso():
+    return time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime()) + f".{int((time.time()%1)*1000):03d}"
+
+
+def _append_stream_event(event_type: str, data):
+    global event_stream_log, next_event_seq
+    event = {
+        "seq": next_event_seq,
+        "type": event_type,
+        "timestamp": _event_now_iso(),
+        "data": data,
+    }
+    next_event_seq += 1
+    with event_stream_cond:
+        event_stream_log.append(event)
+        if len(event_stream_log) > MAX_EVENT_STREAM_HISTORY:
+            event_stream_log = event_stream_log[-MAX_EVENT_STREAM_HISTORY:]
+        event_stream_cond.notify_all()
+    return event
+
+
+def _read_stream_events(cursor=None, max_events=64):
+    with event_stream_cond:
+        if cursor is None:
+            events = event_stream_log[-max_events:]
+        else:
+            events = [e for e in event_stream_log if int(e.get("seq", 0)) >= cursor][:max_events]
+        next_cursor = (events[-1]["seq"] + 1) if events else next_event_seq
+        return list(events), next_cursor, next_event_seq
+
+
+def _wait_for_stream_events(cursor, timeout_ms=15000, max_events=64):
+    deadline = time.time() + (max(0, timeout_ms) / 1000.0)
+    with event_stream_cond:
+        while True:
+            events = [e for e in event_stream_log if int(e.get("seq", 0)) >= cursor][:max_events]
+            if events:
+                next_cursor = events[-1]["seq"] + 1
+                return list(events), next_cursor, False
+
+            remaining = deadline - time.time()
+            if remaining <= 0:
+                return [], next_event_seq, True
+            event_stream_cond.wait(timeout=remaining)
 
 
 def load_drawthru_snapshot():
@@ -155,7 +290,7 @@ def start_background_trainer(config: EpisodeTrainingConfig):
             time.sleep(0.1)
         
         print("[Trainer HTTP Daemon] Monitor thread active. Draining event queue.")
-        while trainer_instance.running:
+        while trainer_instance and (trainer_instance.running or not trainer_instance.event_queue.empty()):
             try:
                 event_type, data = trainer_instance.event_queue.get(timeout=1.0)
                 if event_type == 'episode_complete':
@@ -163,11 +298,13 @@ def start_background_trainer(config: EpisodeTrainingConfig):
                         latest_results.append(data)
                         if len(latest_results) > MAX_RESULTS_HISTORY:
                             latest_results = latest_results[-MAX_RESULTS_HISTORY:]
+                    _append_stream_event(event_type, data)
                 elif event_type == 'sample_event':
                     with state_lock:
                         latest_samples.append(data)
                         if len(latest_samples) > MAX_SAMPLES_HISTORY:
                             latest_samples = latest_samples[-MAX_SAMPLES_HISTORY:]
+                    _append_stream_event(event_type, data)
             except queue.Empty:
                 continue
             except Exception as e:
@@ -216,8 +353,14 @@ class TrainerHTTPHandler(SimpleHTTPRequestHandler):
         elif parsed_path.path == '/api/drawthru':
             self.serve_api_drawthru()
             return
-        elif parsed_path.path == '/api/vqa':
-            self.serve_api_vqa()
+        elif parsed_path.path == '/api/events':
+            self.serve_api_events(parsed_path)
+            return
+        elif parsed_path.path == '/api/ws':
+            self.serve_api_ws_info()
+            return
+        elif parsed_path.path == '/api/openapi.yaml':
+            self.serve_api_openapi_yaml()
             return
 
         # Fallback to serving static files from /console (handled by super)
@@ -225,46 +368,137 @@ class TrainerHTTPHandler(SimpleHTTPRequestHandler):
 
     def do_POST(self):
         parsed_path = urlparse(self.path)
-        if parsed_path.path == '/api/vqa':
-            self.serve_api_vqa()
+        if parsed_path.path == '/api/control':
+            self.serve_api_control()
             return
         super().do_POST()
 
-    def serve_api_vqa(self):
-        content_length = int(self.headers.get('Content-Length', 0))
-        post_data = self.rfile.read(content_length).decode('utf-8') if content_length > 0 else "{}"
-        
-        try:
-            req_data = json.loads(post_data)
-        except:
-            req_data = {}
-
-        question = req_data.get('question', '').lower()
-        
-        # Simple Pilot reasoning logic (Brainless for now, but extensible)
-        answer = "I'm monitoring the cockpit. Ask about win rate, PnL, or cache status."
-        
-        if "win rate" in question or "accuracy" in question:
-            with state_lock:
-                wr = latest_results[-1].get('hit_rate', 0.0) if latest_results else 0.0
-                answer = f"Our current direction accuracy is {wr:.1%}. Tactical layer is holding steady."
-        elif "pnl" in question or "profit" in question:
-            with state_lock:
-                pnl = sum([r.get('realized_pnl', 0.0) for r in latest_results])
-                answer = f"Total net realized PnL for this session is ${pnl:.2f}. Capital is nominal."
-        elif "cache" in question:
-            with state_lock:
-                size = len(trainer_instance.candle_cache.cache)
-                answer = f"Stochastic Drawthru Cache is at {size} entries. Environmental data is piping through."
-        elif "who" in question or "best" in question:
-            with state_lock:
-                hero = latest_results[-1].get('winning_agent', '--') if latest_results else "--"
-                answer = f"Expert {hero} is currently leading the mission conviction matrix."
-
-        self.send_response(200)
+    def _send_json(self, payload, status=200):
+        self.send_response(status)
         self.send_header('Content-Type', 'application/json')
         self.end_headers()
-        self.wfile.write(json.dumps({"answer": answer}).encode('utf-8'))
+        self.wfile.write(json.dumps(payload).encode('utf-8'))
+
+    def serve_api_openapi_yaml(self):
+        if not OPENAPI_SPEC_FILE.exists():
+            self._send_json({
+                "ok": False,
+                "error": "spec_not_found",
+                "message": f"OpenAPI spec file not found: {OPENAPI_SPEC_FILE}",
+            }, status=404)
+            return
+
+        try:
+            payload = OPENAPI_SPEC_FILE.read_bytes()
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/yaml')
+            self.end_headers()
+            self.wfile.write(payload)
+        except Exception as e:
+            self._send_json({
+                "ok": False,
+                "error": "spec_read_failed",
+                "message": str(e),
+            }, status=500)
+
+    def _stream_transport_info(self):
+        host = self.headers.get("Host", "localhost:8080")
+        return {
+            "longpoll_url": f"http://{host}/api/events",
+            "websocket_url": f"ws://{host}/api/ws",
+            "websocket_status": "reserved_not_implemented",
+            "recommended_poll_ms": 1000,
+            "default_longpoll_timeout_ms": 15000,
+            "max_longpoll_timeout_ms": 60000,
+        }
+
+    def serve_api_events(self, parsed_path):
+        query = parse_qs(parsed_path.query or "", keep_blank_values=False)
+
+        mode = (query.get("mode", ["snapshot"])[0] or "snapshot").strip().lower()
+        if mode not in {"snapshot", "longpoll"}:
+            self._send_json({
+                "ok": False,
+                "error": "invalid_mode",
+                "message": "mode must be one of: snapshot, longpoll",
+            }, status=400)
+            return
+
+        def _parse_int_param(name, default, min_v=None, max_v=None):
+            raw = query.get(name, [None])[0]
+            if raw is None or raw == "":
+                value = default
+            else:
+                try:
+                    value = int(raw)
+                except Exception:
+                    raise ValueError(f"{name} must be an integer")
+            if value is None:
+                return None
+            if min_v is not None and value < min_v:
+                value = min_v
+            if max_v is not None and value > max_v:
+                value = max_v
+            return value
+
+        try:
+            cursor = _parse_int_param("cursor", None, min_v=1) if "cursor" in query else None
+            max_events = _parse_int_param("max_events", 64, min_v=1, max_v=500)
+            timeout_ms = _parse_int_param("timeout_ms", 15000, min_v=0, max_v=60000)
+        except ValueError as e:
+            self._send_json({
+                "ok": False,
+                "error": "invalid_query",
+                "message": str(e),
+            }, status=400)
+            return
+
+        if mode == "longpoll":
+            wait_cursor = cursor if cursor is not None else _read_stream_events(cursor=None, max_events=1)[2]
+            events, next_cursor_out, timed_out = _wait_for_stream_events(
+                cursor=wait_cursor,
+                timeout_ms=timeout_ms,
+                max_events=max_events,
+            )
+            cursor_received = wait_cursor
+        else:
+            events, next_cursor_out, _stream_head = _read_stream_events(cursor=cursor, max_events=max_events)
+            timed_out = False
+            cursor_received = cursor
+
+        response = {
+            "ok": True,
+            "mode": mode,
+            "cursor_received": cursor_received,
+            "next_cursor": next_cursor_out,
+            "event_count": len(events),
+            "timed_out": timed_out,
+            "events": events,
+            "transports": self._stream_transport_info(),
+        }
+        self._send_json(response, status=200)
+
+    def serve_api_ws_info(self):
+        upgrade = (self.headers.get("Upgrade") or "").lower()
+        if upgrade == "websocket":
+            self._send_json({
+                "ok": False,
+                "error": "websocket_not_implemented",
+                "message": "WebSocket upgrade endpoint is reserved but not implemented in trainerd.py yet. Use /api/events in longpoll mode.",
+                "transports": self._stream_transport_info(),
+            }, status=501)
+            return
+
+        self.send_response(426)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Upgrade", "websocket")
+        self.end_headers()
+        self.wfile.write(json.dumps({
+            "ok": False,
+            "error": "upgrade_required",
+            "message": "Use a WebSocket client for /api/ws, or use /api/events?mode=longpoll for HTTP streaming.",
+            "transports": self._stream_transport_info(),
+        }).encode("utf-8"))
 
     def serve_api_state(self):
         self.send_response(200)
@@ -273,7 +507,11 @@ class TrainerHTTPHandler(SimpleHTTPRequestHandler):
 
         global trainer_instance
         if not trainer_instance:
-            self.wfile.write(json.dumps({"status": "booting"}).encode('utf-8'))
+            self.wfile.write(json.dumps({
+                "status": "booting",
+                "runtime_control_defaults": RUNTIME_CONTROL_DEFAULTS,
+                "stream_transports": self._stream_transport_info(),
+            }).encode('utf-8'))
             return
 
         with state_lock:
@@ -281,11 +519,9 @@ class TrainerHTTPHandler(SimpleHTTPRequestHandler):
             response_data = {
                 "status": "running" if trainer_instance.running else "stopped",
                 "session_start_time": trainer_instance.session_start_time,
-                "training_config": {
-                    "optimizer_name": getattr(trainer_instance.config, "optimizer_name", "adamw"),
-                    "learning_rate": getattr(trainer_instance.config, "learning_rate", None),
-                    "weight_decay": getattr(trainer_instance.config, "weight_decay", None),
-                },
+                "training_config": _training_config_snapshot(trainer_instance.config),
+                "runtime_control_defaults": RUNTIME_CONTROL_DEFAULTS,
+                "stream_transports": self._stream_transport_info(),
                 "history": latest_results, # Last N completed episodes
                 "samples": latest_samples, # Last N sampling events
             }
@@ -294,11 +530,101 @@ class TrainerHTTPHandler(SimpleHTTPRequestHandler):
             if latest_results:
                 response_data["latest_metrics"] = {
                     "total_trained": len(trainer_instance.results),
-                    "current_capital": latest_results[-1].get("final_capital", 0.0),
+                    "current_capital": latest_results[-1].get("final_capital", latest_results[-1].get("capital", 0.0)),
                     "total_realized_pnl": sum([r.get('realized_pnl', 0.0) for r in trainer_instance.results if 'realized_pnl' in r]),
                 }
 
         self.wfile.write(json.dumps(response_data).encode('utf-8'))
+
+    def serve_api_control(self):
+        global trainer_instance
+        if not trainer_instance:
+            self._send_json({
+                "ok": False,
+                "error": "trainer_not_ready",
+                "message": "Trainer instance has not started yet.",
+            }, status=503)
+            return
+
+        content_length = int(self.headers.get('Content-Length', 0))
+        post_data = self.rfile.read(content_length).decode('utf-8') if content_length > 0 else "{}"
+
+        try:
+            payload = json.loads(post_data)
+        except Exception:
+            payload = {}
+
+        if not isinstance(payload, dict):
+            self._send_json({
+                "ok": False,
+                "error": "invalid_payload",
+                "message": "Expected a JSON object or {\"updates\": {...}} payload.",
+            }, status=400)
+            return
+
+        updates = payload.get("updates", payload)
+        if not isinstance(updates, dict):
+            self._send_json({
+                "ok": False,
+                "error": "invalid_payload",
+                "message": "Expected a JSON object or {\"updates\": {...}} payload.",
+            }, status=400)
+            return
+
+        allowed_fields = set(RUNTIME_CONTROL_SCHEMA.keys())
+        errors = {}
+        staged = {}
+
+        for key, raw_value in updates.items():
+            if key not in allowed_fields:
+                errors[key] = "unsupported field"
+                continue
+            try:
+                staged[key] = _coerce_control_value(key, raw_value)
+            except Exception as e:
+                errors[key] = str(e)
+
+        # Cross-field validation against current config values.
+        with state_lock:
+            current_cfg = trainer_instance.config
+            min_window = int(staged.get("min_bar_window", getattr(current_cfg, "min_bar_window", 64)))
+            max_window = int(staged.get("max_bar_window", getattr(current_cfg, "max_bar_window", 256)))
+            if min_window > max_window:
+                errors["min_bar_window"] = "must be <= max_bar_window"
+                errors["max_bar_window"] = "must be >= min_bar_window"
+
+        if errors:
+            self._send_json({
+                "ok": False,
+                "error": "validation_failed",
+                "errors": errors,
+                "training_config": _training_config_snapshot(trainer_instance.config),
+            }, status=400)
+            return
+
+        warnings = []
+        applied = {}
+        with state_lock:
+            cfg = trainer_instance.config
+            for key, value in staged.items():
+                setattr(cfg, key, value)
+                applied[key] = value
+                if key == "cache_size":
+                    try:
+                        trainer_instance.candle_cache.max_size = int(value)
+                    except Exception:
+                        warnings.append("cache_size updated in config but cache runtime object was not updated")
+
+        if any(k in staged for k in ("optimizer_name", "learning_rate", "weight_decay")):
+            warnings.append("optimizer changes may require trainer reinitialization to take effect")
+
+        self._send_json({
+            "ok": True,
+            "applied": applied,
+            "warnings": warnings,
+            "training_config": _training_config_snapshot(trainer_instance.config),
+            "message": "Runtime controls applied to trainer daemon.",
+        }, status=200)
 
     def serve_api_cache(self):
         self.send_response(200)

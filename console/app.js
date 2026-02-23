@@ -118,8 +118,28 @@ function initDrawthruPreviewChart() {
         console.warn("Failed to init drawthru preview chart", e);
     }
 }
-let lastSessionStartTime = null;
-let typingInterval = null;
+let lastStateData = null;
+let lastDrawthruData = null;
+let settingsInitializedFromState = false;
+const SANE_RUNTIME_CONTROL_DEFAULTS = {
+    notional: 100.0,
+    pair_width: 30,
+    bar_sequences_per_episode: 100,
+    epochs: 1,
+    min_bar_window: 64,
+    max_bar_window: 256,
+    cache_size: 1000,
+    candles_per_extent: 1000,
+    shock_z_threshold: 2.0,
+    bar_shock_z_threshold: 3.0,
+    max_adaptive_replays: 3,
+    use_mechanical_veto: false,
+    replay_coalescing: false,
+    replay_coalescing_chunk_size: 8,
+    optimizer_name: "adamw",
+    learning_rate: 1e-4,
+    weight_decay: 1e-2,
+};
 
 // --- State Polling ---Loop
 async function pollState() {
@@ -127,8 +147,10 @@ async function pollState() {
         const res = await fetch('/api/state');
         if (res.ok) {
             const data = await res.json();
+            lastStateData = data;
             updateUI(data);
             updateCodecsUI(data);
+            syncRealtimeControlsFromState(data);
             updateMissionClock(data.session_start_time);
             pulseHeartbeat();
         }
@@ -155,6 +177,7 @@ async function pollDrawthru() {
         const res = await fetch('/api/drawthru');
         if (res.ok) {
             const data = await res.json();
+            lastDrawthruData = data;
             updateDrawthruUI(data);
         }
     } catch (err) {
@@ -202,6 +225,10 @@ function updateUI(data) {
         pnlEl.innerText = (pnl >= 0 ? "+" : "") + formatDollar(pnl);
         pnlEl.className = "metric-value highlight" + (pnl < 0 ? " negative" : "");
     }
+
+    updateTrainingTelemetry(data);
+    renderSampleLog(data.samples || []);
+    updateControlRuntimeSnapshot(data);
 
     // Determine the active equity curve
     if (data.history && data.history.length > 0) {
@@ -316,6 +343,7 @@ function updateDrawthruUI(data) {
             drawthruPreviewChartInstance.update();
         }
         topList.innerHTML = `<li class="empty-state">${data.error || data.db_path || 'DuckDB offline'}</li>`;
+        updateTelemetryDrawthru(data);
         return;
     }
 
@@ -344,6 +372,8 @@ function updateDrawthruUI(data) {
         drawthruPreviewChartInstance.data.datasets[0].data = bars.map(b => Number(b.close || 0));
         drawthruPreviewChartInstance.update();
     }
+
+    updateTelemetryDrawthru(data);
 }
 
 function renderTransfers(transfers) {
@@ -403,72 +433,340 @@ function setOffline() {
     document.getElementById('statusIndicator').className = "status-indicator";
     document.getElementById('cacheStatus').className = "badge";
     document.getElementById('cacheStatus').innerText = "Offline";
+    setControlStatus("Disconnected from daemon.", "error");
 }
 
-// VQA Logic
-async function submitVQA() {
-    const inputEl = document.getElementById('vqaInput');
-    const msg = inputEl.value.trim();
-    if (!msg) return;
+function setControlStatus(message, kind = "neutral") {
+    const el = document.getElementById('controlStatus');
+    if (!el) return;
+    el.textContent = message;
+    el.className = `control-status ${kind}`;
+}
 
-    appendVQAMessage('user', msg);
-    inputEl.value = "";
+function formatPctSigned(val) {
+    if (val === undefined || val === null || Number.isNaN(Number(val))) return "--";
+    const n = Number(val) * 100;
+    const sign = n > 0 ? "+" : "";
+    return `${sign}${n.toFixed(2)}%`;
+}
 
-    // Show thinking indicator
-    const thinkingId = appendVQAMessage('system', "PROCESSING_QUERY...", true);
+function fmtFixed(val, digits = 4, fallback = "--") {
+    const n = Number(val);
+    return Number.isFinite(n) ? n.toFixed(digits) : fallback;
+}
 
-    try {
-        const res = await fetch('/api/vqa', {
-            method: 'POST',
-            body: JSON.stringify({ question: msg, context: 'cockpit_view' }),
-            headers: { 'Content-Type': 'application/json' }
-        });
-        if (res.ok) {
-            const data = await res.json();
-            removeMessage(thinkingId);
-            simulateTyping('system', data.answer);
+function escapeHtml(str) {
+    return String(str ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
+
+function findLatestCurveResult(history) {
+    if (!Array.isArray(history)) return null;
+    for (let i = history.length - 1; i >= 0; i--) {
+        const row = history[i];
+        if (Array.isArray(row?.equity_curve) && row.equity_curve.length > 0) {
+            return row;
         }
-    } catch (err) {
-        removeMessage(thinkingId);
-        appendVQAMessage('system', "Comms error: Pilot unavailable.");
+    }
+    return null;
+}
+
+function computeDrawdownStats(equityCurve) {
+    if (!Array.isArray(equityCurve) || equityCurve.length === 0) {
+        return { currentDrawdown: 0, maxDrawdown: 0 };
+    }
+    let peak = Number(equityCurve[0]) || 0;
+    let last = peak;
+    let maxDd = 0;
+    equityCurve.forEach((pt) => {
+        const v = Number(pt);
+        if (!Number.isFinite(v)) return;
+        if (v > peak) peak = v;
+        last = v;
+        if (peak > 0) {
+            const dd = (v - peak) / peak;
+            if (dd < maxDd) maxDd = dd;
+        }
+    });
+    const currentDd = peak > 0 ? (last - peak) / peak : 0;
+    return { currentDrawdown: currentDd, maxDrawdown: maxDd };
+}
+
+function updateTrainingTelemetry(data) {
+    const logRowsEl = document.getElementById('telemetryAgentLogRows');
+    const lossKpiEl = document.getElementById('telemetryLossKpi');
+    const currentDdEl = document.getElementById('telemetryCurrentDd');
+    const maxDdEl = document.getElementById('telemetryMaxDd');
+    const vetoEl = document.getElementById('telemetryVetoKpi');
+    const replayEl = document.getElementById('telemetryReplayKpi');
+    const optEl = document.getElementById('telemetryOptimizerKpi');
+    if (!logRowsEl) return;
+
+    const history = Array.isArray(data?.history) ? data.history : [];
+    if (!history.length) {
+        logRowsEl.innerHTML = '<tr><td colspan="5" class="empty-state">Waiting for training results...</td></tr>';
+        if (lossKpiEl) lossKpiEl.textContent = '0.0000';
+        if (currentDdEl) currentDdEl.textContent = '0.00%';
+        if (maxDdEl) maxDdEl.textContent = '0.00%';
+        if (vetoEl) vetoEl.textContent = '0';
+        if (replayEl) replayEl.textContent = '0';
+        if (optEl) optEl.textContent = data?.training_config?.optimizer_name || '--';
+        return;
+    }
+
+    const latest = history[history.length - 1] || {};
+    const latestCurveResult = findLatestCurveResult(history);
+    const ddStats = computeDrawdownStats(latestCurveResult?.equity_curve);
+
+    if (lossKpiEl) lossKpiEl.textContent = fmtFixed(latest.predictor_loss ?? 0, 4, "0.0000");
+    if (currentDdEl) currentDdEl.textContent = formatPctSigned(ddStats.currentDrawdown);
+    if (maxDdEl) maxDdEl.textContent = formatPctSigned(ddStats.maxDrawdown);
+    if (vetoEl) vetoEl.textContent = String(latest.veto_count ?? 0);
+    if (replayEl) replayEl.textContent = String(latest.replay_eval_count ?? latest.optimizer_replays ?? 0);
+    if (optEl) {
+        optEl.textContent = latest.optimizer_name || data?.training_config?.optimizer_name || '--';
+    }
+
+    const recent = history.slice(-12).reverse();
+    logRowsEl.innerHTML = recent.map((row) => {
+        const ep = Number.isFinite(Number(row.episode_id)) ? Number(row.episode_id) : "--";
+        const epochLabel = row.total_epochs && row.epoch
+            ? `${ep}.${row.epoch}/${row.total_epochs}`
+            : String(ep);
+        const pnl = Number(row.realized_pnl ?? 0);
+        const pnlText = `${pnl >= 0 ? "+" : ""}${formatDollar(pnl)}`;
+        const lossText = fmtFixed(row.predictor_loss ?? 0, 4, "0.0000");
+        const dd = Array.isArray(row.equity_curve) ? computeDrawdownStats(row.equity_curve).maxDrawdown : null;
+        const ddText = dd === null ? '--' : formatPctSigned(dd);
+        const pnlClass = pnl < 0 ? 'negative' : 'positive';
+        return `
+            <tr>
+                <td>${escapeHtml(epochLabel)}</td>
+                <td title="${escapeHtml(row.winning_agent || '--')}">${escapeHtml((row.winning_agent || '--').replace('___class__', ''))}</td>
+                <td class="${pnlClass}">${escapeHtml(pnlText)}</td>
+                <td>${escapeHtml(lossText)}</td>
+                <td>${escapeHtml(ddText)}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function updateTelemetryDrawthru(data) {
+    const metaEl = document.getElementById('telemetryDbWindowMeta');
+    const rowsEl = document.getElementById('telemetryDbWindowRows');
+    if (!rowsEl) return;
+
+    const bars = Array.isArray(data?.preview_bars) ? data.preview_bars : [];
+    if (!data || data.status !== 'ok' || bars.length === 0) {
+        if (metaEl) metaEl.textContent = data?.error || data?.db_path || 'Waiting for drawthru snapshot...';
+        rowsEl.innerHTML = '<tr><td colspan="5" class="empty-state">Waiting for DuckDB preview bars...</td></tr>';
+        return;
+    }
+
+    if (metaEl) {
+        metaEl.textContent = `${data.preview_symbol || '--'} • ${data.table || '--'} • ${bars.length} bars`;
+    }
+
+    const recentBars = bars.slice(-12).reverse();
+    rowsEl.innerHTML = recentBars.map((b) => `
+        <tr>
+            <td>${escapeHtml((b.timestamp || '--').replace('T', ' ').slice(11, 19))}</td>
+            <td>${escapeHtml(fmtFixed(b.open, 4))}</td>
+            <td>${escapeHtml(fmtFixed(b.high, 4))}</td>
+            <td>${escapeHtml(fmtFixed(b.low, 4))}</td>
+            <td>${escapeHtml(fmtFixed(b.close, 4))}</td>
+        </tr>
+    `).join('');
+}
+
+function renderSampleLog(samples) {
+    const body = document.getElementById('sampleLog');
+    if (!body) return;
+    if (!Array.isArray(samples) || samples.length === 0) {
+        body.innerHTML = '<tr><td colspan="4" class="empty-state">Waiting for sampling events...</td></tr>';
+        return;
+    }
+
+    const recent = samples.slice(-30).reverse();
+    body.innerHTML = recent.map((s) => {
+        const symbol = s.symbol || (Array.isArray(s.symbols) ? s.symbols.join(',') : '--');
+        const windowLabel = s.window || s.bar_window || s.bar_window_len || '--';
+        const lenLabel = s.len || s.length || s.extent_len || '--';
+        const ts = (s.timestamp || s.ts || '').toString();
+        const timeLabel = ts ? ts.replace('T', ' ').slice(0, 19) : '--';
+        return `
+            <tr>
+                <td>${escapeHtml(symbol)}</td>
+                <td>${escapeHtml(windowLabel)}</td>
+                <td>${escapeHtml(lenLabel)}</td>
+                <td>${escapeHtml(timeLabel)}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function updateControlRuntimeSnapshot(data) {
+    const cfg = data?.training_config || {};
+    const setText = (id, value) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = value;
+    };
+    setText('ctlSnapshotOptimizer', cfg.optimizer_name || '--');
+    setText('ctlSnapshotLr', Number.isFinite(Number(cfg.learning_rate)) ? Number(cfg.learning_rate).toExponential(2) : '--');
+    setText('ctlSnapshotWd', Number.isFinite(Number(cfg.weight_decay)) ? Number(cfg.weight_decay).toExponential(2) : '--');
+    setText('ctlSnapshotState', (data?.status || '--').toUpperCase());
+}
+
+function populateRealtimeControls(config, options = {}) {
+    const markInitialized = options.markInitialized !== false;
+    if (!config) return;
+    document.querySelectorAll('[data-control-key]').forEach((input) => {
+        const key = input.getAttribute('data-control-key');
+        if (!key || !(key in config)) return;
+        const value = config[key];
+        if (input.type === 'checkbox') {
+            input.checked = Boolean(value);
+        } else if (value !== undefined && value !== null) {
+            input.value = String(value);
+        }
+    });
+    if (markInitialized) {
+        settingsInitializedFromState = true;
     }
 }
 
-function simulateTyping(role, text) {
-    const historyEl = document.getElementById('vqaHistory');
-    const div = document.createElement('div');
-    div.className = `vqa-msg ${role}`;
-    div.innerText = "PILOT_DECRYPTING...";
-    historyEl.appendChild(div);
-    historyEl.scrollTop = historyEl.scrollHeight;
+function syncRealtimeControlsFromState(data) {
+    if (!data) return;
+    const config = data.training_config || data.runtime_control_defaults;
+    if (!config) return;
+    if (!settingsInitializedFromState) {
+        populateRealtimeControls(config);
+        setControlStatus("Runtime controls synced from daemon. Edit values and click Apply.", "neutral");
+    }
+}
 
-    let i = 0;
-    const interval = setInterval(() => {
-        div.innerText = "Pilot: " + text.slice(0, i) + "█";
-        i++;
-        historyEl.scrollTop = historyEl.scrollHeight;
-        if (i > text.length) {
-            clearInterval(interval);
-            div.innerText = "Pilot: " + text;
+function loadSaneDefaultsIntoControls() {
+    const daemonDefaults = lastStateData?.runtime_control_defaults;
+    populateRealtimeControls(daemonDefaults || SANE_RUNTIME_CONTROL_DEFAULTS);
+    setControlStatus("Loaded sane default runtime controls. Click Apply to push them to the daemon.", "neutral");
+}
+
+function collectRealtimeControlUpdates() {
+    const updates = {};
+    const base = lastStateData?.training_config || {};
+
+    document.querySelectorAll('[data-control-key]').forEach((input) => {
+        const key = input.getAttribute('data-control-key');
+        if (!key) return;
+
+        let value;
+        if (input.type === 'checkbox') {
+            value = Boolean(input.checked);
+        } else if (input.value === '') {
+            return;
+        } else if (input.type === 'number') {
+            const n = Number(input.value);
+            if (!Number.isFinite(n)) return;
+            value = Number.isInteger(n) ? n : n;
+        } else {
+            value = input.value;
         }
-    }, 20);
+
+        if (Object.prototype.hasOwnProperty.call(base, key) && base[key] === value) {
+            return;
+        }
+        updates[key] = value;
+    });
+
+    return updates;
 }
 
-function removeMessage(id) {
-    const el = document.getElementById(id);
-    if (el) el.remove();
+async function submitRealtimeControls(event) {
+    event.preventDefault();
+
+    const applyBtn = document.getElementById('applyControlsBtn');
+    const updates = collectRealtimeControlUpdates();
+    if (!updates || Object.keys(updates).length === 0) {
+        setControlStatus("No runtime control changes to apply.", "neutral");
+        return;
+    }
+
+    if (applyBtn) applyBtn.disabled = true;
+    setControlStatus("Applying runtime controls to trainer daemon...", "neutral");
+
+    try {
+        const res = await fetch('/api/control', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ updates }),
+        });
+        const payload = await res.json().catch(() => ({}));
+        if (!res.ok || payload.ok === false) {
+            const errText = payload?.errors
+                ? Object.entries(payload.errors).map(([k, v]) => `${k}: ${v}`).join(' | ')
+                : (payload?.message || `HTTP ${res.status}`);
+            setControlStatus(`Control apply failed: ${errText}`, "error");
+            if (payload?.training_config) {
+                lastStateData = { ...(lastStateData || {}), training_config: payload.training_config };
+            }
+            return;
+        }
+
+        if (payload.training_config) {
+            lastStateData = { ...(lastStateData || {}), training_config: payload.training_config };
+            populateRealtimeControls(payload.training_config);
+        }
+        const warnings = Array.isArray(payload.warnings) && payload.warnings.length
+            ? ` Warnings: ${payload.warnings.join(' ')}`
+            : '';
+        const appliedKeys = Object.keys(payload.applied || updates).join(', ');
+        setControlStatus(`Applied: ${appliedKeys}.${warnings}`, payload.warnings?.length ? "neutral" : "success");
+
+        if (lastStateData) {
+            updateControlRuntimeSnapshot(lastStateData);
+        }
+    } catch (err) {
+        console.error("Failed to apply realtime controls", err);
+        setControlStatus("Control apply failed: daemon unavailable.", "error");
+    } finally {
+        if (applyBtn) applyBtn.disabled = false;
+    }
 }
 
-function appendVQAMessage(role, text, isThinking = false) {
-    const historyEl = document.getElementById('vqaHistory');
-    const div = document.createElement('div');
-    const id = "msg-" + Date.now();
-    div.id = id;
-    div.className = `vqa-msg ${role} ${isThinking ? 'thinking' : ''}`;
-    div.innerText = (role === 'system' ? "Pilot: " : "") + text;
-    historyEl.appendChild(div);
-    historyEl.scrollTop = historyEl.scrollHeight;
-    return id;
+function refreshRealtimeControlsFromDaemon() {
+    if (lastStateData?.training_config) {
+        populateRealtimeControls(lastStateData.training_config);
+        setControlStatus("Controls refreshed from latest daemon state snapshot.", "neutral");
+        return;
+    }
+    if (lastStateData?.runtime_control_defaults) {
+        populateRealtimeControls(lastStateData.runtime_control_defaults);
+        setControlStatus("Loaded daemon defaults while trainer is booting.", "neutral");
+        return;
+    }
+    pollState();
+}
+
+function initRealtimeControls() {
+    const form = document.getElementById('realtimeControlsForm');
+    if (form) {
+        form.addEventListener('submit', submitRealtimeControls);
+    }
+    const refreshBtn = document.getElementById('refreshControlsBtn');
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', refreshRealtimeControlsFromDaemon);
+    }
+    const saneDefaultsBtn = document.getElementById('saneDefaultsBtn');
+    if (saneDefaultsBtn) {
+        saneDefaultsBtn.addEventListener('click', loadSaneDefaultsIntoControls);
+    }
+    if (!settingsInitializedFromState) {
+        populateRealtimeControls(SANE_RUNTIME_CONTROL_DEFAULTS, { markInitialized: false });
+    }
 }
 
 function updateMissionClock(startTime) {
@@ -492,12 +790,6 @@ function pulseHeartbeat() {
         pulse.style.transform = 'scale(1)';
     }, 200);
 }
-
-document.getElementById('vqaSubmit').addEventListener('click', submitVQA);
-document.getElementById('vqaInput').addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') submitVQA();
-});
-
 
 // Tab Switching Logic
 document.querySelectorAll('.nav-item').forEach(item => {
@@ -525,6 +817,10 @@ document.querySelectorAll('.nav-item').forEach(item => {
 // Init
 initChart();
 initDrawthruPreviewChart();
+initRealtimeControls();
+pollState();
+pollCache();
+pollDrawthru();
 setInterval(() => {
     pollState();
     pollCache();
@@ -546,7 +842,7 @@ function updateCodecsUI(data) {
     }
 
     if (Object.keys(scores).length === 0) {
-        radar.innerHTML = '<div class="empty-state">No neural data available</div>';
+        radar.innerHTML = '<div class="empty-state">No codec data available</div>';
         return;
     }
 

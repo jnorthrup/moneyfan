@@ -1,0 +1,16 @@
+{
+  "run_id": "baseline_rep01",
+  "seed": 123,
+  "config_overrides": {},
+  "summary": {
+    "episodes": 4,
+    "avg_realized_pnl": 0.8742499647046351,
+    "median_realized_pnl": 0.8286238977728431,
+    "std_realized_pnl": 0.6320802392726416,
+    "avg_hit_rate": 0.5208333333333333,
+    "avg_total_trades": 7.0,
+    "avg_veto_count": 0.0,
+    "avg_optimizer_replays": 1.0
+  },
+  "run_dir": "/Users/jim/work/moneyfan/experiments/paper_tune_20260222_153737/baseline_rep01"
+}

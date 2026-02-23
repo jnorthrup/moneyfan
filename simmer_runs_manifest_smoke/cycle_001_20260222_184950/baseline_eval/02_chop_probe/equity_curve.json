@@ -1,0 +1,1312 @@
+[
+  {
+    "timestamp": "2026-02-20 06:20:00",
+    "equity": 1000.0,
+    "price": 67756.17,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 06:25:00",
+    "equity": 1000.0,
+    "price": 67799.94,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 06:30:00",
+    "equity": 1000.0,
+    "price": 67867.62,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 06:35:00",
+    "equity": 1000.0,
+    "price": 67869.67,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 06:40:00",
+    "equity": 1000.0,
+    "price": 67831.04,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 06:45:00",
+    "equity": 1000.0,
+    "price": 67828.46,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 06:50:00",
+    "equity": 1000.0,
+    "price": 67869.67,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 06:55:00",
+    "equity": 1000.0,
+    "price": 67885.53,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 07:00:00",
+    "equity": 1000.0,
+    "price": 67955.83,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 07:05:00",
+    "equity": 1000.0,
+    "price": 67913.44,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 07:10:00",
+    "equity": 1000.0,
+    "price": 67926.6,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 07:15:00",
+    "equity": 1000.0,
+    "price": 67927.9,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 07:20:00",
+    "equity": 1000.0,
+    "price": 67913.44,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 07:25:00",
+    "equity": 1000.0,
+    "price": 67919.98,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 07:30:00",
+    "equity": 1000.0,
+    "price": 67843.32,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 07:35:00",
+    "equity": 1000.0,
+    "price": 67863.48,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 07:40:00",
+    "equity": 1000.0,
+    "price": 67851.03,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 07:45:00",
+    "equity": 999.6011763426212,
+    "price": 67843.32,
+    "position": 1.0,
+    "selected_symbols": [
+      "BTCUSDT"
+    ]
+  },
+  {
+    "timestamp": "2026-02-20 07:50:00",
+    "equity": 999.6011763426212,
+    "price": 67883.1,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 07:55:00",
+    "equity": 999.6011763426212,
+    "price": 67911.49,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 08:00:00",
+    "equity": 999.6011763426212,
+    "price": 67874.43,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 08:05:00",
+    "equity": 999.6011763426212,
+    "price": 67805.56,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 08:10:00",
+    "equity": 999.6011763426212,
+    "price": 67911.49,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 08:15:00",
+    "equity": 999.6011763426212,
+    "price": 67874.43,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 08:20:00",
+    "equity": 999.6011763426212,
+    "price": 67844.81,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 08:25:00",
+    "equity": 999.6011763426212,
+    "price": 67920.29,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 08:30:00",
+    "equity": 999.6011763426212,
+    "price": 68151.24,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 08:35:00",
+    "equity": 999.6011763426212,
+    "price": 68173.07,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 08:40:00",
+    "equity": 999.6011763426212,
+    "price": 68161.34,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 08:45:00",
+    "equity": 999.2715123935734,
+    "price": 68151.24,
+    "position": 1.0,
+    "selected_symbols": [
+      "BTCUSDT"
+    ]
+  },
+  {
+    "timestamp": "2026-02-20 08:50:00",
+    "equity": 999.2715123935734,
+    "price": 68221.11,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 08:55:00",
+    "equity": 999.2715123935734,
+    "price": 68126.03,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 09:00:00",
+    "equity": 999.2715123935734,
+    "price": 68131.72,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 09:05:00",
+    "equity": 999.2715123935734,
+    "price": 68156.99,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 09:10:00",
+    "equity": 999.2715123935734,
+    "price": 68126.03,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 09:15:00",
+    "equity": 999.2715123935734,
+    "price": 68196.1,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 09:20:00",
+    "equity": 999.2715123935734,
+    "price": 68165.14,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 09:25:00",
+    "equity": 999.2715123935734,
+    "price": 68200.97,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 09:30:00",
+    "equity": 999.2715123935734,
+    "price": 68187.18,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 09:35:00",
+    "equity": 999.2715123935734,
+    "price": 68178.51,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 09:40:00",
+    "equity": 999.2715123935734,
+    "price": 68200.97,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 09:45:00",
+    "equity": 997.2405035367757,
+    "price": 68251.26,
+    "position": 1.0,
+    "selected_symbols": [
+      "BTCUSDT"
+    ]
+  },
+  {
+    "timestamp": "2026-02-20 09:50:00",
+    "equity": 997.2405035367757,
+    "price": 68225.03,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 09:55:00",
+    "equity": 997.2405035367757,
+    "price": 68191.6,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 10:00:00",
+    "equity": 997.2405035367757,
+    "price": 68020.31,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 10:05:00",
+    "equity": 997.2405035367757,
+    "price": 68225.03,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 10:10:00",
+    "equity": 997.2405035367757,
+    "price": 67942.45,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 10:15:00",
+    "equity": 997.2405035367757,
+    "price": 67964.63,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 10:20:00",
+    "equity": 997.2405035367757,
+    "price": 67850.94,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 10:25:00",
+    "equity": 997.2405035367757,
+    "price": 67823.6,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 10:30:00",
+    "equity": 997.2405035367757,
+    "price": 67964.63,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 10:35:00",
+    "equity": 997.2405035367757,
+    "price": 67877.99,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 10:40:00",
+    "equity": 997.2405035367757,
+    "price": 67811.8,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 10:45:00",
+    "equity": 997.2405035367757,
+    "price": 67713.52,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 10:50:00",
+    "equity": 997.2405035367757,
+    "price": 67468.87,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 10:55:00",
+    "equity": 997.2405035367757,
+    "price": 67562.78,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 11:00:00",
+    "equity": 997.2405035367757,
+    "price": 67522.14,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 11:05:00",
+    "equity": 997.2405035367757,
+    "price": 67468.87,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 11:10:00",
+    "equity": 997.2405035367757,
+    "price": 67430.7,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 11:15:00",
+    "equity": 997.2405035367757,
+    "price": 67438.53,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 11:20:00",
+    "equity": 997.2405035367757,
+    "price": 67530.69,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 11:25:00",
+    "equity": 997.2405035367757,
+    "price": 67383.93,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 11:30:00",
+    "equity": 997.2405035367757,
+    "price": 67438.53,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 11:35:00",
+    "equity": 997.2405035367757,
+    "price": 67319.73,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 11:40:00",
+    "equity": 997.2405035367757,
+    "price": 67368.52,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 11:45:00",
+    "equity": 997.2405035367757,
+    "price": 67420.05,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 11:50:00",
+    "equity": 997.2405035367757,
+    "price": 67477.56,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 11:55:00",
+    "equity": 997.2405035367757,
+    "price": 67368.52,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 12:00:00",
+    "equity": 997.2405035367757,
+    "price": 67420.05,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 12:05:00",
+    "equity": 997.2405035367757,
+    "price": 67500.29,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 12:10:00",
+    "equity": 997.2405035367757,
+    "price": 67230.88,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 12:15:00",
+    "equity": 997.2405035367757,
+    "price": 67283.2,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 12:20:00",
+    "equity": 997.2405035367757,
+    "price": 67147.92,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 12:25:00",
+    "equity": 997.2405035367757,
+    "price": 67234.36,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 12:30:00",
+    "equity": 997.2405035367757,
+    "price": 67283.2,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 12:35:00",
+    "equity": 997.2405035367757,
+    "price": 67217.55,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 12:40:00",
+    "equity": 997.2405035367757,
+    "price": 66844.7,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 12:45:00",
+    "equity": 997.2405035367757,
+    "price": 66518.8,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 12:50:00",
+    "equity": 997.2405035367757,
+    "price": 66611.69,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 12:55:00",
+    "equity": 997.2405035367757,
+    "price": 66844.7,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 13:00:00",
+    "equity": 997.2405035367757,
+    "price": 66868.03,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 13:05:00",
+    "equity": 997.2405035367757,
+    "price": 66828.93,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 13:10:00",
+    "equity": 997.2405035367757,
+    "price": 66978.1,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 13:15:00",
+    "equity": 997.2405035367757,
+    "price": 66987.44,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 13:20:00",
+    "equity": 997.2405035367757,
+    "price": 66828.93,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 13:25:00",
+    "equity": 997.2405035367757,
+    "price": 66810.25,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 13:30:00",
+    "equity": 997.2405035367757,
+    "price": 67062.34,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 13:35:00",
+    "equity": 997.2405035367757,
+    "price": 67006.37,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 13:40:00",
+    "equity": 997.2405035367757,
+    "price": 67059.1,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 13:45:00",
+    "equity": 997.2405035367757,
+    "price": 67119.83,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 13:50:00",
+    "equity": 997.2405035367757,
+    "price": 67006.37,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 13:55:00",
+    "equity": 997.2405035367757,
+    "price": 66952.85,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 14:00:00",
+    "equity": 997.2405035367757,
+    "price": 67064.37,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 14:05:00",
+    "equity": 997.2405035367757,
+    "price": 67066.36,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 14:10:00",
+    "equity": 997.2405035367757,
+    "price": 67402.72,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 14:15:00",
+    "equity": 997.2405035367757,
+    "price": 67064.37,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 14:20:00",
+    "equity": 997.2405035367757,
+    "price": 66924.72,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 14:25:00",
+    "equity": 997.2405035367757,
+    "price": 67117.12,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 14:30:00",
+    "equity": 997.2405035367757,
+    "price": 67357.18,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 14:35:00",
+    "equity": 997.2405035367757,
+    "price": 67471.36,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 14:40:00",
+    "equity": 997.2405035367757,
+    "price": 67117.12,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 14:45:00",
+    "equity": 997.2405035367757,
+    "price": 67139.86,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 14:50:00",
+    "equity": 997.2405035367757,
+    "price": 67228.65,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 14:55:00",
+    "equity": 997.2405035367757,
+    "price": 67259.84,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 15:00:00",
+    "equity": 997.2405035367757,
+    "price": 67416.12,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 15:05:00",
+    "equity": 997.2405035367757,
+    "price": 67577.64,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 15:10:00",
+    "equity": 997.2405035367757,
+    "price": 67726.36,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 15:15:00",
+    "equity": 997.2405035367757,
+    "price": 67739.73,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 15:20:00",
+    "equity": 997.2405035367757,
+    "price": 67742.35,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 15:25:00",
+    "equity": 997.2405035367757,
+    "price": 67589.14,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 15:30:00",
+    "equity": 997.2405035367757,
+    "price": 67706.03,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 15:35:00",
+    "equity": 997.2405035367757,
+    "price": 67321.94,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 15:40:00",
+    "equity": 997.2405035367757,
+    "price": 67398.12,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 15:45:00",
+    "equity": 997.2405035367757,
+    "price": 67529.33,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 15:50:00",
+    "equity": 997.2405035367757,
+    "price": 67519.6,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 15:55:00",
+    "equity": 997.2405035367757,
+    "price": 67686.49,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 16:00:00",
+    "equity": 997.2405035367757,
+    "price": 67677.4,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 16:05:00",
+    "equity": 997.2405035367757,
+    "price": 67800.76,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 16:10:00",
+    "equity": 997.2405035367757,
+    "price": 67667.47,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 16:15:00",
+    "equity": 997.2405035367757,
+    "price": 67289.59,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 16:20:00",
+    "equity": 997.2405035367757,
+    "price": 67107.59,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 16:25:00",
+    "equity": 997.2405035367757,
+    "price": 67112.06,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 16:30:00",
+    "equity": 997.2405035367757,
+    "price": 67059.24,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 16:35:00",
+    "equity": 997.2405035367757,
+    "price": 67132.31,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 16:40:00",
+    "equity": 997.2405035367757,
+    "price": 67051.12,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 16:45:00",
+    "equity": 997.2405035367757,
+    "price": 67237.79,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 16:50:00",
+    "equity": 997.2405035367757,
+    "price": 67198.85,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 16:55:00",
+    "equity": 997.2405035367757,
+    "price": 67498.05,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 17:00:00",
+    "equity": 997.2405035367757,
+    "price": 67485.63,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 17:05:00",
+    "equity": 997.2405035367757,
+    "price": 67539.78,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 17:10:00",
+    "equity": 997.2405035367757,
+    "price": 67647.57,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 17:15:00",
+    "equity": 997.2405035367757,
+    "price": 67564.22,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 17:20:00",
+    "equity": 997.2405035367757,
+    "price": 67540.41,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 17:25:00",
+    "equity": 997.2405035367757,
+    "price": 67528.73,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 17:30:00",
+    "equity": 997.2405035367757,
+    "price": 67607.73,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 17:35:00",
+    "equity": 997.2405035367757,
+    "price": 67557.83,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 17:40:00",
+    "equity": 997.2405035367757,
+    "price": 67858.82,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 17:45:00",
+    "equity": 997.2405035367757,
+    "price": 67800.35,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 17:50:00",
+    "equity": 997.2405035367757,
+    "price": 67892.97,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 17:55:00",
+    "equity": 997.2405035367757,
+    "price": 67694.03,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 18:00:00",
+    "equity": 997.2405035367757,
+    "price": 67861.01,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 18:05:00",
+    "equity": 997.2405035367757,
+    "price": 67966.64,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 18:10:00",
+    "equity": 997.2405035367757,
+    "price": 67729.79,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 18:15:00",
+    "equity": 997.2405035367757,
+    "price": 67798.9,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 18:20:00",
+    "equity": 997.2405035367757,
+    "price": 67746.95,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 18:25:00",
+    "equity": 997.2405035367757,
+    "price": 67738.19,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 18:30:00",
+    "equity": 997.2405035367757,
+    "price": 67697.02,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 18:35:00",
+    "equity": 997.2405035367757,
+    "price": 67709.7,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 18:40:00",
+    "equity": 997.2405035367757,
+    "price": 67816.98,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 18:45:00",
+    "equity": 997.2405035367757,
+    "price": 67742.09,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 18:50:00",
+    "equity": 997.2405035367757,
+    "price": 67608.03,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 18:55:00",
+    "equity": 997.2405035367757,
+    "price": 67595.03,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 19:00:00",
+    "equity": 997.2405035367757,
+    "price": 67662.32,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 19:05:00",
+    "equity": 997.2405035367757,
+    "price": 67644.34,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 19:10:00",
+    "equity": 997.2405035367757,
+    "price": 67755.18,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 19:15:00",
+    "equity": 997.2405035367757,
+    "price": 67802.94,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 19:20:00",
+    "equity": 997.2405035367757,
+    "price": 67726.3,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 19:25:00",
+    "equity": 997.2405035367757,
+    "price": 67632.82,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 19:30:00",
+    "equity": 997.2405035367757,
+    "price": 67586.13,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 19:35:00",
+    "equity": 997.9541576416842,
+    "price": 67574.13,
+    "position": 1.0,
+    "selected_symbols": [
+      "BTCUSDT"
+    ]
+  },
+  {
+    "timestamp": "2026-02-20 19:40:00",
+    "equity": 997.9541576416842,
+    "price": 67684.21,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 19:45:00",
+    "equity": 997.9541576416842,
+    "price": 67742.09,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 19:50:00",
+    "equity": 997.9541576416842,
+    "price": 67691.0,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 19:55:00",
+    "equity": 997.9541576416842,
+    "price": 67678.41,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 20:00:00",
+    "equity": 997.9541576416842,
+    "price": 67726.14,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 20:05:00",
+    "equity": 997.9541576416842,
+    "price": 67647.91,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 20:10:00",
+    "equity": 997.9541576416842,
+    "price": 67709.9,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 20:15:00",
+    "equity": 997.9541576416842,
+    "price": 67677.63,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 20:20:00",
+    "equity": 997.9541576416842,
+    "price": 67708.67,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 20:25:00",
+    "equity": 997.9541576416842,
+    "price": 67732.68,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 20:30:00",
+    "equity": 997.9541576416842,
+    "price": 67709.9,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 20:35:00",
+    "equity": 997.9541576416842,
+    "price": 67784.53,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 20:40:00",
+    "equity": 997.9541576416842,
+    "price": 67735.27,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 20:45:00",
+    "equity": 997.9541576416842,
+    "price": 67803.5,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 20:50:00",
+    "equity": 997.9541576416842,
+    "price": 67807.88,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 20:55:00",
+    "equity": 997.9541576416842,
+    "price": 67808.4,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 21:00:00",
+    "equity": 997.9541576416842,
+    "price": 67664.1,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 21:05:00",
+    "equity": 997.9541576416842,
+    "price": 67725.77,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 21:10:00",
+    "equity": 997.9541576416842,
+    "price": 67768.55,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 21:15:00",
+    "equity": 997.9541576416842,
+    "price": 67989.37,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 21:20:00",
+    "equity": 997.9541576416842,
+    "price": 67926.02,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 21:25:00",
+    "equity": 997.9541576416842,
+    "price": 67985.5,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 21:30:00",
+    "equity": 997.9541576416842,
+    "price": 68002.92,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 21:35:00",
+    "equity": 997.9541576416842,
+    "price": 67954.74,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 21:40:00",
+    "equity": 997.9541576416842,
+    "price": 68059.06,
+    "position": 0.0,
+    "selected_symbols": []
+  },
+  {
+    "timestamp": "2026-02-20 21:45:00",
+    "equity": 997.9541576416842,
+    "price": 68040.87,
+    "position": 0.0,
+    "selected_symbols": []
+  }
+]

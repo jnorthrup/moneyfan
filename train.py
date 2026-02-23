@@ -25,7 +25,7 @@ import threading
 import queue
 from pathlib import Path
 from datetime import datetime
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 from typing import Dict, List, Optional, Tuple, Any
 import numpy as np
 import pandas as pd
@@ -107,6 +107,352 @@ class EpisodeTrainingConfig:
     replay_coalescing_chunk_size: int = 8
     ob_decay_mode: str = "exponential"
     ob_hyperbolic_tau: float = 32.0
+    trade_update_prob: float = 0.10
+    trade_update_min_abs_return: float = 0.0
+    energy_update_prob: float = 0.0
+    energy_update_min_abs_return: float = 0.0
+    pretrain_only: bool = False
+    reseed_pairs_by_episode: bool = True
+    min_extent_days: int = 0
+    max_extent_days: int = 0
+    min_extent_rows: int = 256
+    strict_calendar_extent: bool = False
+    energy_discount_gamma: float = 0.99
+    energy_roundtrip_cost_bps: float = 16.0
+    energy_churn_penalty: float = 0.0
+    energy_target_clip: float = 0.25
+    objective_world_model_weight: float = 1.0
+    objective_trade_head_weight: float = 1.0
+    objective_energy_routing_weight: float = 0.0
+    objective_cost_turnover_weight: float = 0.0
+    objective_regime_weight_scale: float = 1.0
+
+
+OBJECTIVE_TELEMETRY_VERSION = 1
+
+
+def _safe_float(value: Any, default: float = 0.0) -> float:
+    try:
+        if value is None:
+            return float(default)
+        return float(value)
+    except (TypeError, ValueError):
+        return float(default)
+
+
+def _safe_int(value: Any, default: int = 0) -> int:
+    try:
+        if value is None:
+            return int(default)
+        return int(value)
+    except (TypeError, ValueError):
+        return int(default)
+
+
+def objective_weight_config_from_config(config: Optional[EpisodeTrainingConfig]) -> Dict[str, float]:
+    """
+    Extract and normalize profit-oriented objective weight controls for auditing.
+    """
+    return {
+        "world_model_weight": _safe_float(getattr(config, "objective_world_model_weight", 1.0), 1.0),
+        "trade_head_weight": _safe_float(getattr(config, "objective_trade_head_weight", 1.0), 1.0),
+        "energy_routing_weight": _safe_float(getattr(config, "objective_energy_routing_weight", 0.0), 0.0),
+        "cost_turnover_weight": _safe_float(getattr(config, "objective_cost_turnover_weight", 0.0), 0.0),
+        "regime_weight_scale": _safe_float(getattr(config, "objective_regime_weight_scale", 1.0), 1.0),
+    }
+
+
+def build_episode_objective_telemetry(
+    episode_metrics: Dict[str, Any],
+    config: Optional[EpisodeTrainingConfig] = None,
+) -> Dict[str, Any]:
+    """
+    Build an auditable decomposition of the training objective from episode metrics.
+
+    Notes:
+      - `world_model_term` and `trade_head_term` are direct telemetry from current
+        autograd losses already emitted by training.
+      - `cost_turnover_term` and `regime_weighting_term` are proxy terms for now.
+        They provide visibility for profit-oriented control design before the full
+        composite objective is fused into the MLX loss graph.
+    """
+    world_model_term = _safe_float(episode_metrics.get("predictor_loss"), 0.0)
+    trade_head_term = _safe_float(
+        episode_metrics.get("trade_train_loss_mean", episode_metrics.get("trade_train_loss_last", 0.0)),
+        0.0,
+    )
+    energy_routing_term = _safe_float(
+        episode_metrics.get("energy_train_loss_mean", episode_metrics.get("energy_train_loss_last", 0.0)),
+        0.0,
+    )
+    total_trades = max(_safe_int(episode_metrics.get("total_trades"), 0), 0)
+    trade_train_eval_count = max(_safe_int(episode_metrics.get("trade_train_eval_count"), 0), 0)
+    pretrain_eval_count = max(_safe_int(episode_metrics.get("pretrain_eval_count"), 0), 0)
+    outlier_extents = max(_safe_int(episode_metrics.get("outlier_extents"), 0), 0)
+    optimizer_replays = max(_safe_int(episode_metrics.get("optimizer_replays"), 0), 0)
+
+    fallback_denom = 1
+    if config is not None:
+        fallback_denom = max(int(config.bar_sequences_per_episode) * max(int(config.epochs), 1), 1)
+    turnover_denom = max(trade_train_eval_count + pretrain_eval_count, fallback_denom, 1)
+    cost_turnover_term = float(total_trades) / float(turnover_denom)
+
+    # Proxy multiplier for regime-aware weighting pressure (shock/replay density).
+    regime_events = outlier_extents + optimizer_replays
+    regime_event_denom = max(pretrain_eval_count, fallback_denom, 1)
+    regime_weighting_term = 1.0 + (float(regime_events) / float(regime_event_denom))
+
+    additive_proxy = world_model_term + trade_head_term + energy_routing_term + cost_turnover_term
+    regime_adjusted_proxy = additive_proxy * regime_weighting_term
+    objective_weights = objective_weight_config_from_config(config)
+    weighted_additive_proxy = (
+        objective_weights["world_model_weight"] * world_model_term
+        + objective_weights["trade_head_weight"] * trade_head_term
+        + objective_weights["energy_routing_weight"] * energy_routing_term
+        + objective_weights["cost_turnover_weight"] * cost_turnover_term
+    )
+    weighted_regime_multiplier = 1.0 + (
+        (regime_weighting_term - 1.0) * objective_weights["regime_weight_scale"]
+    )
+    weighted_regime_adjusted_proxy = weighted_additive_proxy * weighted_regime_multiplier
+
+    return {
+        "version": OBJECTIVE_TELEMETRY_VERSION,
+        "objective_weight_config": objective_weights,
+        "components": {
+            "world_model_term": {
+                "value": world_model_term,
+                "kind": "loss",
+                "is_proxy": False,
+                "source_fields": ["predictor_loss"],
+            },
+            "trade_head_term": {
+                "value": trade_head_term,
+                "kind": "loss",
+                "is_proxy": False,
+                "source_fields": ["trade_train_loss_mean", "trade_train_loss_last"],
+            },
+            "energy_routing_term": {
+                "value": energy_routing_term,
+                "kind": "loss",
+                "is_proxy": False,
+                "source_fields": ["energy_train_loss_mean", "energy_train_loss_last"],
+            },
+            "cost_turnover_term": {
+                "value": cost_turnover_term,
+                "kind": "penalty_proxy",
+                "is_proxy": True,
+                "source_fields": ["total_trades", "trade_train_eval_count", "pretrain_eval_count"],
+            },
+            "regime_weighting_term": {
+                "value": regime_weighting_term,
+                "kind": "multiplier_proxy",
+                "is_proxy": True,
+                "source_fields": ["outlier_extents", "optimizer_replays", "pretrain_eval_count"],
+            },
+        },
+        "counts": {
+            "total_trades": total_trades,
+            "trade_train_eval_count": trade_train_eval_count,
+            "pretrain_eval_count": pretrain_eval_count,
+            "outlier_extents": outlier_extents,
+            "optimizer_replays": optimizer_replays,
+        },
+        "weighted_components": {
+            "world_model_term": float(objective_weights["world_model_weight"] * world_model_term),
+            "trade_head_term": float(objective_weights["trade_head_weight"] * trade_head_term),
+            "energy_routing_term": float(objective_weights["energy_routing_weight"] * energy_routing_term),
+            "cost_turnover_term": float(objective_weights["cost_turnover_weight"] * cost_turnover_term),
+            "regime_weighting_term": float(weighted_regime_multiplier),
+        },
+        "composite_proxy_unweighted": float(additive_proxy),
+        "composite_proxy_regime_adjusted": float(regime_adjusted_proxy),
+        "composite_proxy_weighted": float(weighted_additive_proxy),
+        "composite_proxy_weighted_regime_adjusted": float(weighted_regime_adjusted_proxy),
+        "notes": {
+            "cost_turnover_term": "Proxy until explicit differentiable transaction-cost / turnover term is fused into MLX trade loss.",
+            "regime_weighting_term": "Proxy multiplier until regime-weighted autograd objective is explicitly implemented.",
+        },
+    }
+
+
+def attach_episode_objective_telemetry(
+    episode_metrics: Dict[str, Any],
+    config: Optional[EpisodeTrainingConfig] = None,
+) -> Dict[str, Any]:
+    enriched = dict(episode_metrics)
+    enriched["objective_telemetry"] = build_episode_objective_telemetry(enriched, config=config)
+    return enriched
+
+
+def summarize_training_objective_telemetry(
+    episode_results: List[Dict[str, Any]],
+    config: Optional[EpisodeTrainingConfig] = None,
+) -> Dict[str, Any]:
+    """
+    Aggregate per-episode objective telemetry into a training-session summary.
+    """
+    normalized = [attach_episode_objective_telemetry(r, config=config) for r in (episode_results or [])]
+    component_names = [
+        "world_model_term",
+        "trade_head_term",
+        "energy_routing_term",
+        "cost_turnover_term",
+        "regime_weighting_term",
+    ]
+    components: Dict[str, Dict[str, float]] = {}
+    for name in component_names:
+        values = [
+            _safe_float(r.get("objective_telemetry", {}).get("components", {}).get(name, {}).get("value"), 0.0)
+            for r in normalized
+        ]
+        if values:
+            components[name] = {
+                "mean": float(np.mean(values)),
+                "min": float(np.min(values)),
+                "max": float(np.max(values)),
+            }
+        else:
+            components[name] = {"mean": 0.0, "min": 0.0, "max": 0.0}
+
+    composite_unweighted = [
+        _safe_float(r.get("objective_telemetry", {}).get("composite_proxy_unweighted"), 0.0)
+        for r in normalized
+    ]
+    composite_regime_adjusted = [
+        _safe_float(r.get("objective_telemetry", {}).get("composite_proxy_regime_adjusted"), 0.0)
+        for r in normalized
+    ]
+    return {
+        "version": OBJECTIVE_TELEMETRY_VERSION,
+        "episode_count": int(len(normalized)),
+        "objective_weight_config": objective_weight_config_from_config(config),
+        "components": components,
+        "composite_proxy_unweighted_mean": float(np.mean(composite_unweighted)) if composite_unweighted else 0.0,
+        "composite_proxy_regime_adjusted_mean": (
+            float(np.mean(composite_regime_adjusted)) if composite_regime_adjusted else 0.0
+        ),
+        "scope": "training_episode_results",
+        "notes": "world_model/trade_head are direct losses; cost_turnover/regime terms are proxies pending full autograd fusion.",
+    }
+
+
+def sample_stochastic_calendar_extent_df(
+    df: pd.DataFrame,
+    min_days: int,
+    max_days: int,
+    min_rows: int = 256,
+    strict_min_days: bool = False,
+) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+    """
+    Sample a stochastic calendar extent from a candle dataframe.
+
+    This is the missing stochastic-weeks/months training distribution control:
+    it slices by timestamp span (days) instead of only truncating the most recent N rows.
+    """
+    meta: Dict[str, Any] = {
+        "mode": "disabled",
+        "applied": False,
+        "span_days_requested": 0,
+        "span_days_actual": 0.0,
+        "extent_start": None,
+        "extent_end": None,
+        "rows_before": int(len(df)),
+        "rows_after": int(len(df)),
+        "available_span_days_total": 0.0,
+        "span_days_target_met": False,
+        "fallback_reason": None,
+    }
+    if df is None or df.empty:
+        meta["fallback_reason"] = "empty_df"
+        return df, meta
+    if "timestamp" not in df.columns:
+        meta["fallback_reason"] = "missing_timestamp"
+        return df, meta
+
+    min_days_i = max(0, int(min_days))
+    max_days_i = max(0, int(max_days))
+    if max_days_i <= 0:
+        meta["fallback_reason"] = "disabled"
+        return df, meta
+    if min_days_i <= 0:
+        min_days_i = 1
+    if max_days_i < min_days_i:
+        max_days_i = min_days_i
+
+    ts = pd.to_datetime(df["timestamp"], errors="coerce", utc=True)
+    valid_mask = ts.notna()
+    if not bool(valid_mask.any()):
+        meta["fallback_reason"] = "no_valid_timestamps"
+        return df, meta
+
+    df_valid = df.loc[valid_mask].copy()
+    ts_valid = ts.loc[valid_mask]
+    if df_valid.empty:
+        meta["fallback_reason"] = "valid_timestamp_rows_empty"
+        return df, meta
+
+    earliest_all = ts_valid.min()
+    latest_all = ts_valid.max()
+    available_span_days_total = 0.0
+    if pd.notna(earliest_all) and pd.notna(latest_all):
+        available_span_days_total = float((latest_all - earliest_all).total_seconds() / 86400.0)
+    meta["available_span_days_total"] = available_span_days_total
+    if available_span_days_total + 1e-9 < float(min_days_i):
+        meta["mode"] = "calendar_days"
+        meta["span_days_requested"] = int(min_days_i)
+        meta["fallback_reason"] = f"available_span_below_min_days:{available_span_days_total:.3f}<{min_days_i}"
+        if strict_min_days:
+            return df, meta
+
+    span_days_requested = int(np.random.randint(min_days_i, max_days_i + 1))
+    meta["mode"] = "calendar_days"
+    meta["span_days_requested"] = span_days_requested
+
+    # Prefer endpoints with at least `min_days` history behind them when possible.
+    earliest = ts_valid.min()
+    eligible_end = ts_valid >= (earliest + pd.Timedelta(days=min_days_i))
+    if bool(eligible_end.any()):
+        end_candidates = ts_valid[eligible_end]
+    else:
+        end_candidates = ts_valid
+        meta["fallback_reason"] = "insufficient_history_for_min_days"
+
+    end_idx = int(np.random.randint(0, len(end_candidates)))
+    end_ts = end_candidates.iloc[end_idx]
+    start_ts = end_ts - pd.Timedelta(days=span_days_requested)
+
+    sampled_mask = (ts_valid >= start_ts) & (ts_valid <= end_ts)
+    sampled_df = df_valid.loc[sampled_mask].copy()
+    if sampled_df.empty:
+        meta["fallback_reason"] = "sample_empty"
+        return df, meta
+
+    min_rows_i = max(1, int(min_rows))
+    if len(sampled_df) < min_rows_i:
+        meta["fallback_reason"] = f"sample_rows_below_min:{len(sampled_df)}<{min_rows_i}"
+        return df, meta
+
+    sampled_ts = pd.to_datetime(sampled_df["timestamp"], errors="coerce", utc=True)
+    actual_start = sampled_ts.min()
+    actual_end = sampled_ts.max()
+    actual_span_days = 0.0
+    if pd.notna(actual_start) and pd.notna(actual_end):
+        actual_span_days = float((actual_end - actual_start).total_seconds() / 86400.0)
+    target_met = bool(actual_span_days + 0.5 >= float(span_days_requested))
+
+    meta.update(
+        {
+            "applied": True,
+            "extent_start": str(actual_start.isoformat()) if pd.notna(actual_start) else None,
+            "extent_end": str(actual_end.isoformat()) if pd.notna(actual_end) else None,
+            "span_days_actual": actual_span_days,
+            "span_days_target_met": target_met,
+            "rows_after": int(len(sampled_df)),
+            "fallback_reason": None if meta.get("fallback_reason") == "disabled" else meta.get("fallback_reason"),
+        }
+    )
+    return sampled_df, meta
 
 
 class CandleCache:
@@ -280,10 +626,12 @@ class CandlePipeline:
         num_experts = min(len(self.experts), n_codec_outputs)
 
         # ── Instrument predictor matrix ────────────────────────────────────
-        # First pass: discover instrument key ordering from bar 0
-        # We collect instrument values per bar → [T, n_instruments]
+        # We collect instrument values per bar → [T, n_instruments].
+        # Important: key discovery must be UNION-based across the full stream,
+        # otherwise late-populating indicators (e.g. longer lookbacks) cause
+        # feature-width drift between calibration and live inference.
         instrument_rows: list = []          # list of dicts, one per bar
-        instrument_keys: list = []          # canonical ordered key list (set on first non-empty bar)
+        instrument_key_set = set(self.instrument_keys)  # persistent schema warm-start
         symbol_change_flag = np.zeros((T, 1), dtype=np.float32)
 
         symbol_id_map = {
@@ -394,9 +742,8 @@ class CandlePipeline:
 
             instrument_rows.append(bar_instruments)
 
-            # Build canonical key ordering from first bar that populates instruments
-            if not instrument_keys and bar_instruments:
-                instrument_keys = sorted(bar_instruments.keys())
+            if bar_instruments:
+                instrument_key_set.update(bar_instruments.keys())
 
             prev_symbol = current_symbol
 
@@ -429,6 +776,7 @@ class CandlePipeline:
         ).astype(np.float32)
 
         # ── Assemble instrument matrix ─────────────────────────────────────
+        instrument_keys = sorted(instrument_key_set)
         if instrument_keys:
             n_inst = len(instrument_keys)
             inst_matrix = np.zeros((T, n_inst), dtype=np.float32)
@@ -475,6 +823,10 @@ class EpochEpisodeTrainer:
             optimizer_momentum=config.optimizer_momentum,
             optimizer_nesterov=config.optimizer_nesterov,
             muon_ns_steps=config.muon_ns_steps,
+            energy_discount_gamma=config.energy_discount_gamma,
+            energy_roundtrip_cost_bps=config.energy_roundtrip_cost_bps,
+            energy_churn_penalty=config.energy_churn_penalty,
+            energy_target_clip=config.energy_target_clip,
         ) if HAS_MLX else None
 
         # Persistent HRM model and trainer - initialized once, trained continuously
@@ -613,17 +965,90 @@ class EpochEpisodeTrainer:
             return {'episode_id': episode_id, 'error': 'MLX not available'}
 
         df = self.candle_pipeline.load_candles(episode_pairs, None, None)
+        extent_meta: Dict[str, Any] = {
+            "mode": "none",
+            "applied": False,
+            "span_days_requested": 0,
+            "span_days_actual": 0.0,
+            "available_span_days_total": 0.0,
+            "span_days_target_met": False,
+            "extent_start": None,
+            "extent_end": None,
+            "rows_before": int(len(df)) if isinstance(df, pd.DataFrame) else 0,
+            "rows_after": int(len(df)) if isinstance(df, pd.DataFrame) else 0,
+            "fallback_reason": None,
+        }
 
         if df.empty:
             return {'episode_id': episode_id, 'error': 'No data loaded'}
 
-        if not df.empty and self.config.candles_per_extent != -1:
+        # Calendar-span stochastic sampling (weeks/months) takes precedence over tail truncation.
+        if (
+            not df.empty
+            and cached_codec_features is None
+            and int(getattr(self.config, "max_extent_days", 0) or 0) > 0
+        ):
+            df, extent_meta = sample_stochastic_calendar_extent_df(
+                df,
+                int(getattr(self.config, "min_extent_days", 0) or 0),
+                int(getattr(self.config, "max_extent_days", 0) or 0),
+                min_rows=int(getattr(self.config, "min_extent_rows", 256) or 256),
+                strict_min_days=bool(getattr(self.config, "strict_calendar_extent", False)),
+            )
+            if (
+                bool(getattr(self.config, "strict_calendar_extent", False))
+                and not bool(extent_meta.get("applied", False))
+                and str(extent_meta.get("fallback_reason", "")).startswith("available_span_below_min_days:")
+            ):
+                return {
+                    'episode_id': episode_id,
+                    'error': (
+                        "Calendar extent requirement unmet by corpus: "
+                        f"{extent_meta.get('fallback_reason')}"
+                    ),
+                    'symbols': episode_pairs,
+                    'extent_sampling_mode': extent_meta.get("mode"),
+                    'extent_sampling_applied': bool(extent_meta.get("applied", False)),
+                    'extent_span_days_requested': int(extent_meta.get("span_days_requested", 0) or 0),
+                    'extent_span_days_actual': float(extent_meta.get("span_days_actual", 0.0) or 0.0),
+                    'extent_available_span_days_total': float(extent_meta.get("available_span_days_total", 0.0) or 0.0),
+                    'extent_span_days_target_met': bool(extent_meta.get("span_days_target_met", False)),
+                    'extent_fallback_reason': extent_meta.get("fallback_reason"),
+                }
+        elif not df.empty and self.config.candles_per_extent != -1:
+            before_rows = int(len(df))
             df = df.iloc[-self.config.candles_per_extent:]
+            extent_meta = {
+                "mode": "tail_rows",
+                "applied": True,
+                "span_days_requested": 0,
+                "span_days_actual": 0.0,
+                "available_span_days_total": 0.0,
+                "span_days_target_met": True,
+                "extent_start": None,
+                "extent_end": None,
+                "rows_before": before_rows,
+                "rows_after": int(len(df)),
+                "fallback_reason": None,
+            }
 
         # Use cached codec features during Pareto replay, skip expensive recompute
         if cached_codec_features is not None:
             codec_features = cached_codec_features
             cached_msg = f" [cached {codec_features.shape}]"
+            extent_meta = {
+                "mode": "cached_codec_features",
+                "applied": True,
+                "span_days_requested": 0,
+                "span_days_actual": 0.0,
+                "available_span_days_total": 0.0,
+                "span_days_target_met": True,
+                "extent_start": None,
+                "extent_end": None,
+                "rows_before": 0,
+                "rows_after": int(codec_features.shape[0]) if hasattr(codec_features, "shape") else 0,
+                "fallback_reason": None,
+            }
         else:
             codec_features = self.candle_pipeline.compute_signals(df, self.model_config.n_signals)
             cached_msg = ""
@@ -659,6 +1084,10 @@ class EpochEpisodeTrainer:
         replay_eval_count = 0
         replay_coalesced_batches = 0
         replay_coalesced_steps = 0
+        trade_train_eval_count = 0
+        trade_train_losses: List[float] = []
+        energy_train_eval_count = 0
+        energy_train_losses: List[float] = []
 
         # Accumulate per-codec conviction from the precomputed feature matrix
         # codec_features[:, 0:24] = signed signal convictions per expert per bar
@@ -708,6 +1137,14 @@ class EpochEpisodeTrainer:
 
                 batch_np = codec_features[start_idx:start_idx + bar_window_len]
                 batch_np = batch_np.reshape(1, bar_window_len, -1)
+                end_idx = min(start_idx + bar_window_len - 1, len(close_bar_returns) - 1)
+                window_log_return = float(np.nansum(close_bar_returns[start_idx:end_idx + 1]))
+                raw_move = window_log_return
+                active_symbol = (
+                    str(feature_row_symbols[end_idx])
+                    if end_idx < len(feature_row_symbols)
+                    else (str(selected_range.get('symbol')) if selected_range else (episode_pairs[0] if episode_pairs else "UNKNOWN"))
+                )
 
                 # HRM world-model training step (thread-safe, skip if previously failed)
                 if not hasattr(self, '_mlx_disabled') or not self._mlx_disabled:
@@ -780,6 +1217,49 @@ class EpochEpisodeTrainer:
                 else:
                     bar_window_losses.append(0.0)
 
+                # Back-burner "simmering" alpha updates: low-rate trade-head training
+                # so the trade heads learn realized-return alignment without dominating
+                # the world-model objective.
+                if (
+                    HAS_MLX
+                    and not getattr(self, '_mlx_disabled', False)
+                    and float(self.config.trade_update_prob) > 0.0
+                    and abs(raw_move) >= float(self.config.trade_update_min_abs_return)
+                    and np.random.random() < float(self.config.trade_update_prob)
+                ):
+                    try:
+                        realized_returns_mx = mx.array(np.array([raw_move], dtype=np.float32))
+                        alpha_loss, hrm_memory = trainer.trade_step(
+                            batch_mx,
+                            realized_returns_mx,
+                            memory=hrm_memory,
+                        )
+                        trade_train_eval_count += 1
+                        trade_train_losses.append(float(alpha_loss.item()))
+                    except Exception as e:
+                        print(f"Trade-step skipped on episode {episode_id}: {type(e).__name__}: {e}")
+
+                # Energy-routing autograd updates (training-only proxy):
+                # teach the existing trade outputs to synthesize a discounted net-alpha score.
+                if (
+                    HAS_MLX
+                    and not getattr(self, '_mlx_disabled', False)
+                    and float(self.config.energy_update_prob) > 0.0
+                    and abs(raw_move) >= float(self.config.energy_update_min_abs_return)
+                    and np.random.random() < float(self.config.energy_update_prob)
+                ):
+                    try:
+                        realized_returns_mx = mx.array(np.array([raw_move], dtype=np.float32))
+                        energy_loss, hrm_memory = trainer.energy_step(
+                            batch_mx,
+                            realized_returns_mx,
+                            memory=hrm_memory,
+                        )
+                        energy_train_eval_count += 1
+                        energy_train_losses.append(float(energy_loss.item()))
+                    except Exception as e:
+                        print(f"Energy-step skipped on episode {episode_id}: {type(e).__name__}: {e}")
+
                 # Trade signal execution (HRM meta-allocator action)
                 if HAS_MLX and not getattr(self, '_mlx_disabled', False):
                     # Only execute a trade on some steps to simulate a sparse allocator
@@ -788,18 +1268,10 @@ class EpochEpisodeTrainer:
                         output_mx, _ = trainer.model.forward(batch_mx, memory=hrm_memory, mode="trade")
                         mx.eval(output_mx)
                         output_np = np.array(output_mx[0, :]) # Output is [B, 5] since it already pools the final sequence step
-                        end_idx = min(start_idx + bar_window_len - 1, len(close_bar_returns) - 1)
-                        active_symbol = (
-                            str(feature_row_symbols[end_idx])
-                            if end_idx < len(feature_row_symbols)
-                            else (str(selected_range.get('symbol')) if selected_range else (episode_pairs[0] if episode_pairs else "UNKNOWN"))
-                        )
                         trade_intent = self._build_trade_intent(active_symbol, output_np)
                         running_peak = max(notional_curve) if notional_curve else notional
                         drawdown_pct = (notional - running_peak) / max(running_peak, 1e-8)
                         veto_decision = self._mechanical_veto(trade_intent, drawdown_pct)
-                        window_log_return = float(np.nansum(close_bar_returns[start_idx:end_idx + 1]))
-                        raw_move = window_log_return
 
                         if veto_decision.vetoed:
                             veto_count += 1
@@ -845,8 +1317,7 @@ class EpochEpisodeTrainer:
                 else:
                     # Fallback random execution if MLX crashes/disabled
                     if np.random.random() > 0.5:
-                        end_idx = min(start_idx + bar_window_len - 1, len(close_bar_returns) - 1)
-                        candle_return = float(np.nansum(close_bar_returns[start_idx:end_idx + 1]))
+                        candle_return = raw_move
 
                         position = np.sign(np.random.randn())
                         ret = position * abs(candle_return)
@@ -876,13 +1347,14 @@ class EpochEpisodeTrainer:
                     for i, name in enumerate(codec_names)
                 }
 
-                self.event_queue.put(('episode_complete', {
+                episode_event = {
                     'episode_id': episode_id,
                     'epoch': epoch + 1,
                     'total_epochs': self.config.epochs,
                     'capital': notional,
                     'realized_pnl': notional - self.config.notional,
                     'hit_rate': profitable_trades / max(total_trade_signals, 1),
+                    'total_trades': total_trade_signals,
                     'symbols': episode_pairs,
                     'winning_agent': winning_agent,
                     'codec_scores': codec_scores,
@@ -897,7 +1369,25 @@ class EpochEpisodeTrainer:
                     'replay_coalesced_batches': replay_coalesced_batches,
                     'replay_coalesced_steps': replay_coalesced_steps,
                     'optimizer_name': self.config.optimizer_name,
-                }))
+                    'trade_train_eval_count': trade_train_eval_count,
+                    'trade_train_loss_mean': float(np.mean(trade_train_losses)) if trade_train_losses else 0.0,
+                    'trade_train_loss_last': float(trade_train_losses[-1]) if trade_train_losses else 0.0,
+                    'energy_train_eval_count': energy_train_eval_count,
+                    'energy_train_loss_mean': float(np.mean(energy_train_losses)) if energy_train_losses else 0.0,
+                    'energy_train_loss_last': float(energy_train_losses[-1]) if energy_train_losses else 0.0,
+                    'extent_sampling_mode': extent_meta.get("mode"),
+                    'extent_sampling_applied': bool(extent_meta.get("applied", False)),
+                    'extent_span_days_requested': int(extent_meta.get("span_days_requested", 0) or 0),
+                    'extent_span_days_actual': float(extent_meta.get("span_days_actual", 0.0) or 0.0),
+                    'extent_available_span_days_total': float(extent_meta.get("available_span_days_total", 0.0) or 0.0),
+                    'extent_span_days_target_met': bool(extent_meta.get("span_days_target_met", False)),
+                    'extent_start': extent_meta.get("extent_start"),
+                    'extent_end': extent_meta.get("extent_end"),
+                    'extent_rows_before': int(extent_meta.get("rows_before", 0) or 0),
+                    'extent_rows_after': int(extent_meta.get("rows_after", 0) or 0),
+                    'extent_fallback_reason': extent_meta.get("fallback_reason"),
+                }
+                self.event_queue.put(('episode_complete', attach_episode_objective_telemetry(episode_event, self.config)))
 
         # Final per-codec leaderboard
         top_idx = int(np.argmax(codec_conviction_sum))
@@ -929,14 +1419,30 @@ class EpochEpisodeTrainer:
             'replay_coalesced_steps': replay_coalesced_steps,
             'replay_coalescing_enabled': self.config.replay_coalescing,
             'optimizer_name': self.config.optimizer_name,
+            'trade_train_eval_count': trade_train_eval_count,
+            'trade_train_loss_mean': float(np.mean(trade_train_losses)) if trade_train_losses else 0.0,
+            'trade_train_loss_last': float(trade_train_losses[-1]) if trade_train_losses else 0.0,
+            'energy_train_eval_count': energy_train_eval_count,
+            'energy_train_loss_mean': float(np.mean(energy_train_losses)) if energy_train_losses else 0.0,
+            'energy_train_loss_last': float(energy_train_losses[-1]) if energy_train_losses else 0.0,
+            'extent_sampling_mode': extent_meta.get("mode"),
+            'extent_sampling_applied': bool(extent_meta.get("applied", False)),
+            'extent_span_days_requested': int(extent_meta.get("span_days_requested", 0) or 0),
+            'extent_span_days_actual': float(extent_meta.get("span_days_actual", 0.0) or 0.0),
+            'extent_available_span_days_total': float(extent_meta.get("available_span_days_total", 0.0) or 0.0),
+            'extent_span_days_target_met': bool(extent_meta.get("span_days_target_met", False)),
+            'extent_start': extent_meta.get("extent_start"),
+            'extent_end': extent_meta.get("extent_end"),
+            'extent_rows_before': int(extent_meta.get("rows_before", 0) or 0),
+            'extent_rows_after': int(extent_meta.get("rows_after", 0) or 0),
+            'extent_fallback_reason': extent_meta.get("fallback_reason"),
             'equity_curve': notional_curve,
             'timestamp': datetime.now().isoformat(),
             # Cache codec_features for Pareto replay - HRM-only retraining
             'codec_features': codec_features.tobytes().hex() if codec_features is not None else None,
             'codec_features_shape': codec_features.shape if codec_features is not None else None,
         }
-
-        return result
+        return attach_episode_objective_telemetry(result, self.config)
 
     def run_episode_training(self, progress_callback=None):
         """
@@ -953,6 +1459,7 @@ class EpochEpisodeTrainer:
         # Record (and refresh) session start time when training actually begins
         self.session_start_time = datetime.now().isoformat()
         print(f"[SESSION] Episode training started at {self.session_start_time}")
+        print(f"[OBJECTIVE] {objective_weight_config_from_config(self.config)}")
 
         all_pairs = [
             'ADAUSDT', 'APTUSDT', 'ARBUSDT', 'ATOMUSDT', 'AVAXUSDT',
@@ -1012,7 +1519,8 @@ class EpochEpisodeTrainer:
                     )
 
             if not is_pareto_replay:
-                np.random.seed(episode_id)
+                if bool(getattr(self.config, "reseed_pairs_by_episode", True)):
+                    np.random.seed(episode_id)
                 episode_pairs = list(np.random.choice(
                     all_pairs,
                     size=min(self.config.pair_width, len(all_pairs)),
@@ -1020,6 +1528,18 @@ class EpochEpisodeTrainer:
                 ))
 
             result = self.train_episode(episode_id, episode_pairs)
+            if (
+                bool(getattr(self.config, "strict_calendar_extent", False))
+                and isinstance(result, dict)
+                and str(result.get('error', '')).startswith("Calendar extent requirement unmet by corpus:")
+            ):
+                print(f"[TRAIN_ABORT] {result['error']}")
+                self.results.append(result)
+                self.event_queue.put(('episode_complete', result))
+                if progress_callback:
+                    progress_callback(episode_id + 1, self.config.n_epoch_episodes, result)
+                self.running = False
+                break
             if is_pareto_replay:
                 result['is_replay'] = True
                 result['replay_std'] = pareto_perturbation_mag
@@ -1037,26 +1557,104 @@ class EpochEpisodeTrainer:
         self.running = False
 
     def _save_checkpoint(self, completed_episodes: int):
+        serialized_results = [attach_episode_objective_telemetry(r, self.config) for r in self.results]
+        self.results = serialized_results
+        objective_weight_config = objective_weight_config_from_config(self.config)
+        checkpoint_artifacts = self._save_hrm_artifacts(
+            Path("hrm/checkpoints"),
+            "hrm_latest",
+        )
         checkpoint = {
             'completed_episodes': completed_episodes,
             'total_episodes': self.config.n_epoch_episodes,
             'session_start_time': self.session_start_time,
             'checkpoint_time': datetime.now().isoformat(),
-            'results': self.results,
+            'results': serialized_results,
+            'objective_telemetry': summarize_training_objective_telemetry(serialized_results, self.config),
+            'objective_weight_config': objective_weight_config,
+            'hrm_artifacts': checkpoint_artifacts,
         }
 
         with open('training_checkpoint.json', 'w') as f:
             json.dump(checkpoint, f, indent=2)
 
+    def _save_hrm_artifacts(self, out_dir: Path, stem: str) -> Dict[str, Any]:
+        """
+        Persist the deployable HRM runtime (MLX weights + model config).
+
+        `training_results.json` tracks episode metrics only; these artifacts are what
+        the paper/live runner needs to reproduce the HRM trade heads.
+        """
+        if not HAS_MLX or self.model is None or self.model_config is None:
+            return {
+                'saved': False,
+                'reason': 'mlx_or_model_unavailable',
+                'objective_weight_config': objective_weight_config_from_config(self.config),
+            }
+
+        out_dir.mkdir(parents=True, exist_ok=True)
+        weights_path = out_dir / f"{stem}_weights.npz"
+        config_path = out_dir / f"{stem}_model_config.json"
+        schema_path = out_dir / f"{stem}_feature_schema.json"
+        objective_path = out_dir / f"{stem}_objective_config.json"
+
+        try:
+            self.model.save_weights(str(weights_path))
+            with open(config_path, 'w') as f:
+                json.dump(asdict(self.model_config), f, indent=2)
+            with open(schema_path, 'w') as f:
+                json.dump(
+                    {
+                        'instrument_keys': list(getattr(self.candle_pipeline, 'instrument_keys', []) or []),
+                        'context_feature_keys': list(getattr(self.candle_pipeline, 'context_feature_keys', []) or []),
+                    },
+                    f,
+                    indent=2,
+                )
+            with open(objective_path, 'w') as f:
+                json.dump(objective_weight_config_from_config(self.config), f, indent=2)
+            return {
+                'saved': True,
+                'weights_path': str(weights_path.resolve()),
+                'config_path': str(config_path.resolve()),
+                'feature_schema_path': str(schema_path.resolve()),
+                'objective_config_path': str(objective_path.resolve()),
+                'objective_weight_config': objective_weight_config_from_config(self.config),
+            }
+        except Exception as e:
+            print(f"[Trainer] Failed to save HRM artifacts to {out_dir}: {e}")
+            return {
+                'saved': False,
+                'reason': str(e),
+                'weights_path': str(weights_path),
+                'config_path': str(config_path),
+                'feature_schema_path': str(schema_path),
+                'objective_config_path': str(objective_path),
+                'objective_weight_config': objective_weight_config_from_config(self.config),
+            }
+
     def _save_final_results(self):
+        serialized_results = [attach_episode_objective_telemetry(r, self.config) for r in self.results]
+        self.results = serialized_results
+        objective_weight_config = objective_weight_config_from_config(self.config)
+        realized_pnls = [r['realized_pnl'] for r in serialized_results if 'realized_pnl' in r]
+        hit_rates = [r['hit_rate'] for r in serialized_results if 'hit_rate' in r]
+        final_capitals = [r['final_capital'] for r in serialized_results if 'final_capital' in r]
+        trained_artifacts = self._save_hrm_artifacts(
+            Path("models/trained"),
+            "hrm_latest",
+        )
         summary = {
-            'total_episodes': len(self.results),
+            'total_episodes': len(serialized_results),
             'session_start_time': self.session_start_time,
             'session_end_time': datetime.now().isoformat(),
-            'avg_realized_pnl': np.mean([r['realized_pnl'] for r in self.results if 'realized_pnl' in r]),
-            'avg_hit_rate': np.mean([r['hit_rate'] for r in self.results if 'hit_rate' in r]),
-            'total_notional': sum([r['final_capital'] for r in self.results if 'final_capital' in r]),
-            'results': self.results
+            'avg_realized_pnl': float(np.mean(realized_pnls)) if realized_pnls else 0.0,
+            'avg_hit_rate': float(np.mean(hit_rates)) if hit_rates else 0.0,
+            'total_notional': float(sum(final_capitals)) if final_capitals else 0.0,
+            'results': serialized_results,
+            'objective_telemetry': summarize_training_objective_telemetry(serialized_results, self.config),
+            'objective_weight_config': objective_weight_config,
+            'hrm_artifacts': trained_artifacts,
         }
 
         with open('training_results.json', 'w') as f:
@@ -1176,6 +1774,44 @@ def main():
                         help='MLX optimizer learning rate')
     parser.add_argument('--weight-decay', type=float, default=1e-2,
                         help='MLX optimizer weight decay')
+    parser.add_argument('--trade-update-prob', type=float, default=0.10,
+                        help='Probability of a low-rate trade-head (alpha) update per sampled bar window')
+    parser.add_argument('--trade-update-min-abs-return', type=float, default=0.0,
+                        help='Skip trade-head updates when realized window return magnitude is below this threshold')
+    parser.add_argument('--energy-update-prob', type=float, default=0.0,
+                        help='Probability of a low-rate energy-routing proxy update per sampled bar window')
+    parser.add_argument('--energy-update-min-abs-return', type=float, default=0.0,
+                        help='Skip energy-routing updates when realized window return magnitude is below this threshold')
+    parser.add_argument('--energy-discount-gamma', type=float, default=0.99,
+                        help='Discount factor for energy-routing target proxy (training-only)')
+    parser.add_argument('--energy-roundtrip-cost-bps', type=float, default=16.0,
+                        help='Roundtrip cost (bps) used in energy-routing target proxy')
+    parser.add_argument('--energy-churn-penalty', type=float, default=0.0,
+                        help='Additional size-proportional churn penalty in energy-routing target proxy')
+    parser.add_argument('--energy-target-clip', type=float, default=0.25,
+                        help='Clip realized return target magnitude for energy-routing proxy loss')
+    parser.add_argument('--pretrain-only', action='store_true',
+                        help='Disable trade-head and energy-routing updates to focus on world-model pretraining')
+    parser.add_argument('--fully-stochastic-pair-sampling', action='store_true',
+                        help='Do not reseed pair sampling by episode id (less repeatable, more stochastic)')
+    parser.add_argument('--min-extent-days', type=int, default=0,
+                        help='Minimum stochastic calendar extent in days (0 disables calendar-span sampling)')
+    parser.add_argument('--max-extent-days', type=int, default=0,
+                        help='Maximum stochastic calendar extent in days (0 disables calendar-span sampling)')
+    parser.add_argument('--min-extent-rows', type=int, default=256,
+                        help='Minimum rows required after calendar-span sampling; falls back if too small')
+    parser.add_argument('--strict-calendar-extent', action='store_true',
+                        help='Abort training if requested min calendar span cannot be satisfied by loaded candle history')
+    parser.add_argument('--objective-world-model-weight', type=float, default=1.0,
+                        help='Audit/control weight for the world-model objective term')
+    parser.add_argument('--objective-trade-head-weight', type=float, default=1.0,
+                        help='Audit/control weight for the trade-head (alpha) objective term')
+    parser.add_argument('--objective-energy-routing-weight', type=float, default=0.0,
+                        help='Audit/control weight for the energy-routing objective term')
+    parser.add_argument('--objective-cost-turnover-weight', type=float, default=0.0,
+                        help='Audit/control weight for the turnover/cost penalty proxy term')
+    parser.add_argument('--objective-regime-weight-scale', type=float, default=1.0,
+                        help='Audit/control scale for the regime-weighting proxy multiplier')
     parser.add_argument('--dashboard', action='store_true', help='Run Streamlit dashboard')
 
     args = parser.parse_args()
@@ -1192,14 +1828,103 @@ def main():
             optimizer_name=args.optimizer,
             learning_rate=args.learning_rate,
             weight_decay=args.weight_decay,
+            trade_update_prob=(0.0 if args.pretrain_only else float(args.trade_update_prob)),
+            trade_update_min_abs_return=float(args.trade_update_min_abs_return),
+            energy_update_prob=(0.0 if args.pretrain_only else float(args.energy_update_prob)),
+            energy_update_min_abs_return=float(args.energy_update_min_abs_return),
+            pretrain_only=bool(args.pretrain_only),
+            reseed_pairs_by_episode=not bool(args.fully_stochastic_pair_sampling),
+            min_extent_days=int(args.min_extent_days),
+            max_extent_days=int(args.max_extent_days),
+            min_extent_rows=int(args.min_extent_rows),
+            strict_calendar_extent=bool(args.strict_calendar_extent),
+            energy_discount_gamma=float(args.energy_discount_gamma),
+            energy_roundtrip_cost_bps=float(args.energy_roundtrip_cost_bps),
+            energy_churn_penalty=float(args.energy_churn_penalty),
+            energy_target_clip=float(args.energy_target_clip),
+            objective_world_model_weight=float(args.objective_world_model_weight),
+            objective_trade_head_weight=float(args.objective_trade_head_weight),
+            objective_energy_routing_weight=float(args.objective_energy_routing_weight),
+            objective_cost_turnover_weight=float(args.objective_cost_turnover_weight),
+            objective_regime_weight_scale=float(args.objective_regime_weight_scale),
+        )
+        print(f"Objective weight controls: {objective_weight_config_from_config(config)}")
+        print(
+            f"Training mode: {'PRETRAIN_ONLY' if config.pretrain_only else 'JOINT'} | "
+            f"pair_sampling={'fully_stochastic' if not config.reseed_pairs_by_episode else 'episode_reseeded'} | "
+            f"calendar_extent_days={config.min_extent_days}-{config.max_extent_days if config.max_extent_days else 0} | "
+            f"calendar_extent_strict={'on' if config.strict_calendar_extent else 'off'} | "
+            f"trade_update_prob={config.trade_update_prob:.3f} | energy_update_prob={config.energy_update_prob:.3f}"
         )
 
         trainer = EpochEpisodeTrainer(config)
 
+        predictor_loss_hist: List[float] = []
+        trade_loss_hist: List[float] = []
+        energy_loss_hist: List[float] = []
+
+        def _rolling_mean(vals: List[float], window: int) -> float:
+            if not vals:
+                return 0.0
+            return float(np.mean(vals[-max(1, int(window)) :]))
+
+        def _rolling_median(vals: List[float], window: int) -> float:
+            if not vals:
+                return 0.0
+            return float(np.median(vals[-max(1, int(window)) :]))
+
+        def _rolling_percentile(vals: List[float], window: int, q: float) -> float:
+            if not vals:
+                return 0.0
+            return float(np.percentile(vals[-max(1, int(window)) :], q))
+
         def progress(current, total, result):
             pct = (current / total) * 100
             realized_pnl = result.get('realized_pnl', 0)
-            print(f"Episode {current}/{total} ({pct:.1f}%) - Realized PnL: ${realized_pnl:.2f}")
+            predictor_loss = float(result.get('predictor_loss', 0.0) or 0.0)
+            trade_loss = float(result.get('trade_train_loss_mean', result.get('trade_train_loss_last', 0.0)) or 0.0)
+            energy_loss = float(result.get('energy_train_loss_mean', result.get('energy_train_loss_last', 0.0)) or 0.0)
+            predictor_loss_hist.append(predictor_loss)
+            trade_loss_hist.append(trade_loss)
+            energy_loss_hist.append(energy_loss)
+
+            pred_ma5 = _rolling_mean(predictor_loss_hist, 5)
+            pred_ma20 = _rolling_mean(predictor_loss_hist, 20)
+            pred_med20 = _rolling_median(predictor_loss_hist, 20)
+            pred_p90_20 = _rolling_percentile(predictor_loss_hist, 20, 90.0)
+            trade_ma5 = _rolling_mean(trade_loss_hist, 5)
+            trade_ma20 = _rolling_mean(trade_loss_hist, 20)
+            energy_ma5 = _rolling_mean(energy_loss_hist, 5)
+            energy_ma20 = _rolling_mean(energy_loss_hist, 20)
+
+            trade_eval_count = int(result.get('trade_train_eval_count', 0) or 0)
+            energy_eval_count = int(result.get('energy_train_eval_count', 0) or 0)
+            hit_rate = float(result.get('hit_rate', 0.0) or 0.0)
+            extent_days = float(result.get('extent_span_days_actual', 0.0) or 0.0)
+            extent_mode = str(result.get('extent_sampling_mode', 'none') or 'none')
+            extent_req_days = int(result.get('extent_span_days_requested', 0) or 0)
+            extent_avail_days = float(result.get('extent_available_span_days_total', 0.0) or 0.0)
+            extent_target_met = bool(result.get('extent_span_days_target_met', False))
+            extent_err = str(result.get('extent_fallback_reason', '') or '')
+            extent_suffix = ""
+            if extent_req_days > 0:
+                extent_suffix = f"(req={extent_req_days}d"
+                if extent_avail_days > 0.0:
+                    extent_suffix += f",avail={extent_avail_days:.1f}d"
+                if not extent_target_met:
+                    extent_suffix += ",target_miss"
+                extent_suffix += ")"
+            if extent_err:
+                extent_suffix += f"[{extent_err}]"
+
+            print(
+                f"Episode {current}/{total} ({pct:.1f}%) "
+                f"pnl=${realized_pnl:.2f} hit={hit_rate:.1%} "
+                f"extent={extent_mode}:{extent_days:.1f}d{extent_suffix} "
+                f"pred_loss={predictor_loss:.4f} (ma5={pred_ma5:.4f}, ma20={pred_ma20:.4f}, med20={pred_med20:.4f}, p90_20={pred_p90_20:.4f}) "
+                f"trade_loss={trade_loss:.4f} (ma5={trade_ma5:.4f}, ma20={trade_ma20:.4f}, n={trade_eval_count}) "
+                f"energy_loss={energy_loss:.4f} (ma5={energy_ma5:.4f}, ma20={energy_ma20:.4f}, n={energy_eval_count})"
+            )
 
         trainer.run_episode_training(progress_callback=progress)
 
