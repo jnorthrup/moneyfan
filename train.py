@@ -6,10 +6,12 @@ EpochBasket Training System
 Single pipeline: Source → DuckDB → Pandas → CandleCache → EpochBasketTrainer
 
 Each epoch episode is a stochastic multi-pair OHLCV sampling window:
-  - pair_width    : number of coin pairs per episode
+  - pair_width              : number of coin pairs per episode
+  - n_epoch_episodes        : total number of stochastic multi-pair sampling windows
   - bar_sequences_per_episode : number of sliding OHLCV bar windows drawn per episode
-  - min_bar_window / max_bar_window : stochastic bar window length (in candles)
-  - candles_per_extent : raw candle depth per extent from the data pipeline
+  - min_bar_window          : minimum stochastic bar window length (candles)
+  - max_bar_window          : maximum stochastic bar window length (candles)
+  - candles_per_extent      : raw candle depth per extent from the data pipeline
 
 Usage:
     python train.py --episodes 500 --notional 100
@@ -47,11 +49,15 @@ try:
     from hrm.hierarchical_codec_mlx import (
         MLXHierarchicalCodec,
         MLXCodecTrainer,
-        HierarchicalCodecConfig as MLXConfig
+        HierarchicalCodecConfig as MLXConfig,
+        enable_ane_optimization
     )
     HAS_MLX = True
 except ImportError:
     HAS_MLX = False
+    # Define a no-op stub when MLX is not available
+    def enable_ane_optimization():
+        print("⚠️  MLX not available - ANE/GPU optimization disabled")
 
 from codec_models import load_all_codecs
 from hrm.order_intent import NormalizedTradeIntent, RiskTier, VetoDecision
@@ -117,6 +123,8 @@ class EpisodeTrainingConfig:
     max_extent_days: int = 0
     min_extent_rows: int = 256
     strict_calendar_extent: bool = False
+    candle_source: str = "auto"
+    duckdb_corpus_path: str = ""
     energy_discount_gamma: float = 0.99
     energy_roundtrip_cost_bps: float = 16.0
     energy_churn_penalty: float = 0.0
@@ -126,6 +134,18 @@ class EpisodeTrainingConfig:
     objective_energy_routing_weight: float = 0.0
     objective_cost_turnover_weight: float = 0.0
     objective_regime_weight_scale: float = 1.0
+    weights_path: str = ""
+    hidden_dim: int = 64
+    regime_layers: int = 2
+    tactical_layers: int = 2
+    attention_heads: int = 4
+    # Timer-based stochastic training controls
+    timer_based: bool = False
+    min_interval_seconds: int = 30
+    max_interval_seconds: int = 86400
+    min_pair_width: int = 3
+    max_pair_width: int = 45
+    max_training_seconds: int = 0
 
 
 OBJECTIVE_TELEMETRY_VERSION = 1
@@ -495,6 +515,11 @@ class CandlePipeline:
     def __init__(self, cache: CandleCache):
         self.cache = cache
         self.data_dir = Path(project_root) / "data" / "binance"
+        self.data_dir.mkdir(parents=True, exist_ok=True)
+        self.candle_source = "auto"
+        self.duckdb_corpus_path = str((self.data_dir / "hrm_data.duckdb").resolve())
+        self.last_candle_source_used: str = "unknown"
+        self.last_candle_source_detail: Optional[str] = None
         self.instrument_keys: List[str] = []
         self.context_feature_keys: List[str] = []
         self.last_feature_symbols: List[str] = []
@@ -507,8 +532,110 @@ class CandlePipeline:
         if len(self.experts) != 24:
             print(f"⚠️  WARNING: Loaded {len(self.experts)} codec experts, expected exactly 24!")
 
+    def configure_source(self, candle_source: str = "auto", duckdb_corpus_path: Optional[str] = None) -> None:
+        self.candle_source = str(candle_source or "auto")
+        if duckdb_corpus_path:
+            self.duckdb_corpus_path = str(Path(duckdb_corpus_path).expanduser().resolve())
+
+    def _duckdb_symbol_table_name(self, symbol: str) -> str:
+        norm = str(symbol or "").upper().replace("-", "").replace("/", "")
+        for suffix in ("USDT", "USD"):
+            if norm.endswith(suffix) and len(norm) > len(suffix):
+                norm = norm[: -len(suffix)]
+                break
+        return norm.lower()
+
+    def _load_candles_duckdb_symbol_tables(self, con: Any, symbols: List[str], start: str, end: str) -> Tuple[List[pd.DataFrame], Optional[str]]:
+        dfs: List[pd.DataFrame] = []
+        where_clauses: List[str] = []
+        if start:
+            where_clauses.append(f"timestamp >= '{start} 00:00:00'")
+        if end:
+            where_clauses.append(f"timestamp <= '{end} 23:59:59'")
+        where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+
+        try:
+            existing_tables = {row[0] for row in con.execute("SHOW TABLES").fetchall()}
+        except Exception:
+            existing_tables = set()
+
+        for sym in symbols:
+            table = self._duckdb_symbol_table_name(sym)
+            if table not in existing_tables:
+                continue
+            try:
+                q = f"SELECT * FROM {table} {where_sql} ORDER BY timestamp ASC"
+                df_sym = con.execute(q).df()
+                if df_sym.empty:
+                    continue
+                if 'symbol' not in df_sym.columns:
+                    df_sym['symbol'] = sym
+                dfs.append(df_sym)
+            except Exception:
+                continue
+        return dfs, "duckdb_symbol_tables"
+
+    def _load_candles_duckdb_sequences_import(self, con: Any, symbols: List[str], start: str, end: str) -> Tuple[List[pd.DataFrame], Optional[str]]:
+        dfs: List[pd.DataFrame] = []
+        if not symbols:
+            return dfs, "duckdb_sequences_import"
+
+        symbol_sql = ", ".join([f"'{str(s)}'" for s in symbols])
+        where_clauses = [f"symbol IN ({symbol_sql})"]
+        if start:
+            where_clauses.append(f"timestamp >= '{start} 00:00:00'")
+        if end:
+            where_clauses.append(f"timestamp <= '{end} 23:59:59'")
+        q = (
+            "SELECT * FROM binance_sequences_import "
+            f"WHERE {' AND '.join(where_clauses)} "
+            "ORDER BY symbol ASC, timestamp ASC"
+        )
+        try:
+            df = con.execute(q).df()
+            if not df.empty:
+                dfs.append(df)
+        except Exception:
+            pass
+        return dfs, "duckdb_sequences_import"
+
+    def _load_candles_parquet_sequences(self, symbols: List[str], start: str, end: str) -> Tuple[List[pd.DataFrame], Optional[str]]:
+        import duckdb
+        dfs: List[pd.DataFrame] = []
+        con = duckdb.connect(':memory:')
+        try:
+            for sym in symbols:
+                slug = sym.replace("-", "_").replace("/", "_")
+                path = self.data_dir / f"{slug}_sequences.parquet"
+                if not path.exists():
+                    continue
+                where_clauses = []
+                if start:
+                    where_clauses.append(f"timestamp >= '{start} 00:00:00'")
+                if end:
+                    where_clauses.append(f"timestamp <= '{end} 23:59:59'")
+                where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+                query = f"""
+                    SELECT * FROM read_parquet('{path}')
+                    {where_sql}
+                    ORDER BY timestamp ASC
+                """
+                df_sym = con.execute(query).df()
+                if df_sym.empty:
+                    continue
+                if 'pair' in df_sym.columns and 'symbol' not in df_sym.columns:
+                    df_sym['symbol'] = df_sym['pair']
+                elif 'symbol' not in df_sym.columns:
+                    df_sym['symbol'] = sym
+                dfs.append(df_sym)
+        finally:
+            con.close()
+        return dfs, "parquet_sequences"
+
     def load_candles(self, symbols: List[str], start: str, end: str) -> pd.DataFrame:
-        cache_key = f"candles:{','.join(sorted(symbols))}:{start}:{end}"
+        source_tag = str(getattr(self, "candle_source", "auto") or "auto")
+        db_tag = str(getattr(self, "duckdb_corpus_path", "") or "")
+        cache_key = f"candles:{source_tag}:{db_tag}:{','.join(sorted(symbols))}:{start}:{end}"
 
         cached = self.cache.get(cache_key)
         if cached is not None:
@@ -516,62 +643,78 @@ class CandlePipeline:
 
         try:
             import duckdb
-            from datetime import datetime
 
-            # Use an in-memory duckdb connection optimized for quick parquet scans
-            con = duckdb.connect(':memory:')
+            self.last_candle_source_used = "none"
+            self.last_candle_source_detail = None
 
-            dfs = []
-            for sym in symbols:
-                slug = sym.replace("-", "_").replace("/", "_")
-                path = self.data_dir / f"{slug}_sequences.parquet"
+            requested_source = str(getattr(self, "candle_source", "auto") or "auto")
+            source_order = {
+                "auto": ["duckdb_symbol_tables", "duckdb_sequences_import", "parquet_sequences"],
+                "duckdb_symbol_tables": ["duckdb_symbol_tables"],
+                "duckdb_sequences_import": ["duckdb_sequences_import"],
+                "parquet_sequences": ["parquet_sequences"],
+            }.get(requested_source, [requested_source])
 
-                # print(f"[DEBUG] Checking path: {path} (exists? {path.exists()})")
-                if path.exists():
+            dfs: List[pd.DataFrame] = []
+            source_used: Optional[str] = None
+            detail_parts: List[str] = []
+
+            for candidate in source_order:
+                if candidate.startswith("duckdb_"):
+                    db_path = Path(str(getattr(self, "duckdb_corpus_path", "") or "")).expanduser()
+                    if not db_path.exists():
+                        detail_parts.append(f"{candidate}:missing_db")
+                        continue
                     try:
-                        # Build the WHERE clause dynamically
-                        where_clauses = []
-                        if start:
-                            where_clauses.append(f"timestamp >= '{start} 00:00:00'")
-                        if end:
-                            where_clauses.append(f"timestamp <= '{end} 23:59:59'")
-
-                        where_sql = ""
-                        if where_clauses:
-                            where_sql = "WHERE " + " AND ".join(where_clauses)
-
-                        # Use DuckDB to query the parquet file natively (zero-copy date filtering)
-                        query = f"""
-                            SELECT * FROM read_parquet('{path}')
-                            {where_sql}
-                            ORDER BY timestamp ASC
-                        """
-
-                        df_sym = con.execute(query).df()
-                        # print(f"[DEBUG] DuckDB loaded {len(df_sym)} rows for {sym}")
-
-                        if not df_sym.empty:
-                            # Normalize column: 'pair' -> 'symbol'
-                            if 'pair' in df_sym.columns and 'symbol' not in df_sym.columns:
-                                df_sym['symbol'] = df_sym['pair']
-                            elif 'symbol' not in df_sym.columns:
-                                df_sym['symbol'] = sym
-                            dfs.append(df_sym)
-                        else:
-                            print(f"[DEBUG] df_sym empty after DuckDB filter for {sym}")
+                        con = duckdb.connect(str(db_path), read_only=True)
+                        try:
+                            if candidate == "duckdb_symbol_tables":
+                                dfs, source_used = self._load_candles_duckdb_symbol_tables(con, symbols, start, end)
+                            elif candidate == "duckdb_sequences_import":
+                                dfs, source_used = self._load_candles_duckdb_sequences_import(con, symbols, start, end)
+                            else:
+                                dfs, source_used = ([], None)
+                        finally:
+                            con.close()
                     except Exception as e:
-                        print(f"[DEBUG] Failed to read {path} via DuckDB: {e}")
-                else:
-                    print(f"No parquet file at {path}")
+                        detail_parts.append(f"{candidate}:error:{type(e).__name__}")
+                        dfs = []
+                        source_used = None
+                    if dfs:
+                        break
+                    detail_parts.append(f"{candidate}:empty")
+                    continue
 
-            con.close()
+                if candidate == "parquet_sequences":
+                    try:
+                        dfs, source_used = self._load_candles_parquet_sequences(symbols, start, end)
+                    except Exception as e:
+                        detail_parts.append(f"{candidate}:error:{type(e).__name__}")
+                        dfs = []
+                        source_used = None
+                    if dfs:
+                        break
+                    detail_parts.append(f"{candidate}:empty")
+                    continue
 
             if dfs:
                 df = pd.concat(dfs, ignore_index=True)
+                if 'timestamp' in df.columns:
+                    try:
+                        df = df.sort_values(['symbol', 'timestamp']).reset_index(drop=True)
+                    except Exception:
+                        df = df.sort_values(['timestamp']).reset_index(drop=True)
+                self.last_candle_source_used = str(source_used or requested_source)
+                self.last_candle_source_detail = ",".join(detail_parts) if detail_parts else None
                 self.cache.put(cache_key, df)
                 return df
             else:
-                print(f"[DEBUG] dfs list is empty after iterating all symbols")
+                self.last_candle_source_used = "none"
+                self.last_candle_source_detail = ",".join(detail_parts) if detail_parts else None
+                print(
+                    f"[DEBUG] No candles loaded for {symbols} source={requested_source} "
+                    f"details={self.last_candle_source_detail or 'none'}"
+                )
         except Exception as e:
             print(f"DuckDB parquet query failed for {symbols}: {e}")
 
@@ -804,11 +947,48 @@ class EpochEpisodeTrainer:
         self.config = config
         self.candle_cache = CandleCache(config.cache_size)
         self.candle_pipeline = CandlePipeline(self.candle_cache)
+        self.candle_pipeline.configure_source(
+            candle_source=str(getattr(config, "candle_source", "auto") or "auto"),
+            duckdb_corpus_path=str(getattr(config, "duckdb_corpus_path", "") or "") or None,
+        )
         ob_depth_frames = 256 if config.ob_decay_mode == "hyperbolic" else 20
 
+        # Check for model config override
+        model_config_override = None
+        override_path = os.environ.get('MODEL_CONFIG_OVERRIDE', '')
+        if override_path and Path(override_path).exists():
+            try:
+                with open(override_path, 'r') as f:
+                    model_config_override = json.load(f)
+                print(f"[Trainer] Loaded model config override from {override_path}")
+            except Exception as e:
+                print(f"[Trainer] Error loading model config override: {e}")
+        
+        # Use command-line args or config or override
+        hidden_dim = (
+            getattr(config, 'hidden_dim', 64) if not model_config_override 
+            else model_config_override.get('hidden_dim', 64)
+        )
+        regime_layers = (
+            getattr(config, 'regime_layers', 2) if not model_config_override
+            else model_config_override.get('regime_attn_layers', 2)
+        )
+        tactical_layers = (
+            getattr(config, 'tactical_layers', 2) if not model_config_override
+            else model_config_override.get('tactical_attn_layers', 2)
+        )
+        attention_heads = (
+            getattr(config, 'attention_heads', 4) if not model_config_override
+            else model_config_override.get('n_heads', 4)
+        )
+        codec_outputs = (
+            24 if not model_config_override 
+            else model_config_override.get('n_codec_outputs', 24)
+        )
+        
         self.model_config = MLXConfig(
-            n_codec_outputs=24,
-            hidden_dim=64,
+            n_codec_outputs=codec_outputs,
+            hidden_dim=hidden_dim,
             ob_depth_frames=ob_depth_frames,
             ob_lookback_horizon=200,
             ob_decay_mode=config.ob_decay_mode,
@@ -827,18 +1007,34 @@ class EpochEpisodeTrainer:
             energy_roundtrip_cost_bps=config.energy_roundtrip_cost_bps,
             energy_churn_penalty=config.energy_churn_penalty,
             energy_target_clip=config.energy_target_clip,
+            regime_attn_layers=regime_layers,
+            tactical_attn_layers=tactical_layers,
+            n_heads=attention_heads,
         ) if HAS_MLX else None
+        
+        if HAS_MLX:
+            print(f"[Trainer] Model config: hidden_dim={hidden_dim}, "
+                  f"regime_layers={regime_layers}, tactical_layers={tactical_layers}, "
+                  f"heads={attention_heads}")
+            # Enable ANE/GPU optimization for better performance on Apple Silicon
+            enable_ane_optimization()
 
         # Persistent HRM model and trainer - initialized once, trained continuously
         self.model = None
         self.trainer = None
         self._init_model_if_needed()
+        
+        # Load existing weights if provided
+        if hasattr(config, 'weights_path') and config.weights_path:
+            self._try_load_weights(config.weights_path)
 
         self.results: List[Dict] = []
         self.event_queue = queue.Queue()
         self.running = False
-        # ISO-8601 timestamp recorded at trainer construction
         self.session_start_time: str = datetime.now().isoformat()
+        # Track recently Pareto-replayed episodes to avoid repeated noise injection
+        self._pareto_replay_cooldown: set = set()  # episode_ids in cooldown
+        self._pareto_cooldown_window: int = 100  # episodes to skip after replay
 
     def _init_model_if_needed(self, force_reinit: bool = False, known_input_dim: Optional[int] = None):
         """Initialize HRM model and trainer once, preserving training state across episodes."""
@@ -878,6 +1074,38 @@ class EpochEpisodeTrainer:
         self.trainer.model = self.model
         print(f"[Trainer] HRM model initialized: {self.model_config.input_dim} features, "
               f"hidden={self.model_config.hidden_dim}")
+
+    def _try_load_weights(self, weights_path: str):
+        """Try to load existing weights from the specified path."""
+        if not HAS_MLX:
+            return
+        if not weights_path:
+            return
+        try:
+            from pathlib import Path
+            weights_file = Path(weights_path)
+            if not weights_file.exists():
+                print(f"⚠️  Weights file not found: {weights_file}")
+                return
+            # Guard: verify bar_feature_proj shape matches current input_dim before loading.
+            # Mismatched weights cause the cryptic MLX [addmm] ValueError that disables GPU training.
+            import mlx.core as _mx
+            candidate = dict(_mx.load(str(weights_file)))
+            proj_key = next((k for k in candidate if 'bar_feature_proj' in k and 'weight' in k), None)
+            if proj_key is not None:
+                stored_in_dim = candidate[proj_key].shape[-1]
+                expected_in_dim = int(self.model_config.input_dim)
+                if stored_in_dim != expected_in_dim:
+                    print(
+                        f"⚠️  Skipping weight load: bar_feature_proj input_dim mismatch "
+                        f"(stored={stored_in_dim}, expected={expected_in_dim}). "
+                        "Reinitializing with fresh weights."
+                    )
+                    return
+            self.model.load_weights(str(weights_file))
+            print(f"✅ Loaded existing weights from {weights_file}")
+        except Exception as e:
+            print(f"⚠️  Failed to load weights from {weights_path}: {e}")
 
     def _build_trade_intent(self, symbol: str, output_np: np.ndarray) -> NormalizedTradeIntent:
         pred_fwd_return = float(output_np[0])
@@ -1014,6 +1242,8 @@ class EpochEpisodeTrainer:
                     'extent_available_span_days_total': float(extent_meta.get("available_span_days_total", 0.0) or 0.0),
                     'extent_span_days_target_met': bool(extent_meta.get("span_days_target_met", False)),
                     'extent_fallback_reason': extent_meta.get("fallback_reason"),
+                    'candle_source_used': getattr(self.candle_pipeline, "last_candle_source_used", None),
+                    'candle_source_detail': getattr(self.candle_pipeline, "last_candle_source_detail", None),
                 }
         elif not df.empty and self.config.candles_per_extent != -1:
             before_rows = int(len(df))
@@ -1150,8 +1380,35 @@ class EpochEpisodeTrainer:
                 if not hasattr(self, '_mlx_disabled') or not self._mlx_disabled:
                     try:
                         batch_mx = mx.array(batch_np)
-                        world_model_loss, hrm_memory = trainer.pretrain_step(batch_mx, memory=hrm_memory)
-                        pretrain_eval_count += 1
+
+                        # Apply coalescing to regular training if enabled
+                        if self.config.replay_coalescing and self.config.trade_update_prob == 0.0 and self.config.energy_update_prob == 0.0:
+                            # Pretraining-only mode with coalescing enabled
+                            # Skip memory persistence to reduce overhead and simplify autograd graph
+                            world_model_loss, _ = trainer.pretrain_step(
+                                batch_mx,
+                                memory=None,  # No memory needed for pretraining-only
+                                auto_eval=False,
+                                clip_gradients=True,
+                                max_gradient_norm=1.0
+                            )
+                            trainer.flush_updates(world_model_loss, memory=None)
+                            pretrain_eval_count += 1
+                        else:
+                            # Standard training with optional gradient clipping
+                            use_memory = hrm_memory if (
+                                self.config.trade_update_prob > 0.0 or
+                                self.config.energy_update_prob > 0.0
+                            ) else None
+
+                            world_model_loss, hrm_memory = trainer.pretrain_step(
+                                batch_mx,
+                                memory=use_memory,
+                                clip_gradients=True,
+                                max_gradient_norm=1.0
+                            )
+                            pretrain_eval_count += 1
+
                         loss_val = float(world_model_loss.item())
                         bar_window_losses.append(loss_val)
 
@@ -1168,7 +1425,7 @@ class EpochEpisodeTrainer:
                                     1, self.config.max_adaptive_replays + 1
                                 )
                                 replay_batches_np: List[np.ndarray] = []
-                                shock_perturbation_mag = min(0.1 * shock_z, 0.5)
+                                shock_perturbation_mag = min(0.08 * shock_z, 0.20)  # Capped at 20% (was 50%)
                                 for _replay in range(num_replays):
                                     adaptive_replay_count += 1
                                     shock_perturbation_noise = (
@@ -1233,6 +1490,9 @@ class EpochEpisodeTrainer:
                             batch_mx,
                             realized_returns_mx,
                             memory=hrm_memory,
+                            auto_eval=not self.config.replay_coalescing,  # Support coalescing
+                            clip_gradients=True,
+                            max_gradient_norm=1.0,
                         )
                         trade_train_eval_count += 1
                         trade_train_losses.append(float(alpha_loss.item()))
@@ -1254,6 +1514,9 @@ class EpochEpisodeTrainer:
                             batch_mx,
                             realized_returns_mx,
                             memory=hrm_memory,
+                            auto_eval=not self.config.replay_coalescing,  # Support coalescing
+                            clip_gradients=True,
+                            max_gradient_norm=1.0,
                         )
                         energy_train_eval_count += 1
                         energy_train_losses.append(float(energy_loss.item()))
@@ -1386,8 +1649,18 @@ class EpochEpisodeTrainer:
                     'extent_rows_before': int(extent_meta.get("rows_before", 0) or 0),
                     'extent_rows_after': int(extent_meta.get("rows_after", 0) or 0),
                     'extent_fallback_reason': extent_meta.get("fallback_reason"),
+                    'candle_source_used': getattr(self.candle_pipeline, "last_candle_source_used", None),
+                    'candle_source_detail': getattr(self.candle_pipeline, "last_candle_source_detail", None),
                 }
                 self.event_queue.put(('episode_complete', attach_episode_objective_telemetry(episode_event, self.config)))
+
+            # Flush any coalesced optimizer updates at end of epoch
+            if HAS_MLX and self.config.replay_coalescing and trainer is not None and bar_window_losses:
+                try:
+                    last_loss = mx.array(bar_window_losses[-1])
+                    trainer.flush_updates(last_loss, memory=hrm_memory)
+                except Exception as e:
+                    print(f"[Warning] Failed to flush updates at epoch end: {e}")
 
         # Final per-codec leaderboard
         top_idx = int(np.argmax(codec_conviction_sum))
@@ -1436,11 +1709,10 @@ class EpochEpisodeTrainer:
             'extent_rows_before': int(extent_meta.get("rows_before", 0) or 0),
             'extent_rows_after': int(extent_meta.get("rows_after", 0) or 0),
             'extent_fallback_reason': extent_meta.get("fallback_reason"),
+            'candle_source_used': getattr(self.candle_pipeline, "last_candle_source_used", None),
+            'candle_source_detail': getattr(self.candle_pipeline, "last_candle_source_detail", None),
             'equity_curve': notional_curve,
             'timestamp': datetime.now().isoformat(),
-            # Cache codec_features for Pareto replay - HRM-only retraining
-            'codec_features': codec_features.tobytes().hex() if codec_features is not None else None,
-            'codec_features_shape': codec_features.shape if codec_features is not None else None,
         }
         return attach_episode_objective_telemetry(result, self.config)
 
@@ -1460,6 +1732,10 @@ class EpochEpisodeTrainer:
         self.session_start_time = datetime.now().isoformat()
         print(f"[SESSION] Episode training started at {self.session_start_time}")
         print(f"[OBJECTIVE] {objective_weight_config_from_config(self.config)}")
+        # Timer-based training tracking
+        timer_start = time.time()
+        episode_id = 0
+        max_training_secs = getattr(self.config, 'max_training_seconds', 0) or 0
 
         all_pairs = [
             'ADAUSDT', 'APTUSDT', 'ARBUSDT', 'ATOMUSDT', 'AVAXUSDT',
@@ -1470,8 +1746,21 @@ class EpochEpisodeTrainer:
             'SUIUSDT', 'TIAUSDT', 'UNIUSDT', 'WIFUSDT', 'XRPUSDT',
         ]
 
-        for episode_id in range(self.config.n_epoch_episodes):
-            if not self.running:
+        while self.running:
+            # Check max training time limit
+            elapsed = time.time() - timer_start
+            if max_training_secs > 0 and elapsed >= max_training_secs:
+                print(f"[TIMER] Reached max training time: {max_training_secs}s elapsed ({elapsed:.1f}s)")
+                break
+
+            # Check n_epoch_episodes limit if not in timer-based mode
+            if not getattr(self.config, 'timer_based', False):
+                if episode_id >= self.config.n_epoch_episodes:
+                    break
+            else:
+                # In timer-based mode, report progress differently
+                if episode_id > 0 and episode_id % 100 == 0:
+                    print(f"[TIMER] Episode {episode_id} after {elapsed/60:.1f} minutes")
                 break
 
             # Self-Adapting Pareto Replay (Risk outside of normalcy)
@@ -1489,7 +1778,12 @@ class EpochEpisodeTrainer:
                     r['z_score'] = (r.get('realized_pnl', 0.0) - mean_pnl) / std_pnl
 
                 # Identify Pareto tails (|z| > 1.0) and split into alpha/drawdown channels
-                pareto_extremes = [r for r in self.results if abs(r.get('z_score', 0.0)) > 1.0]
+                # Exclude episodes in cooldown to prevent repeated noise injection
+                pareto_extremes = [
+                    r for r in self.results
+                    if abs(r.get('z_score', 0.0)) > 1.0
+                    and r.get('episode_id') not in self._pareto_replay_cooldown
+                ]
                 alpha_extremes = [r for r in pareto_extremes if r['z_score'] > 0]
                 drawdown_extremes = [r for r in pareto_extremes if r['z_score'] < 0]
 
@@ -1509,9 +1803,16 @@ class EpochEpisodeTrainer:
                 if selected:
                     is_pareto_replay = True
                     z_score = selected['z_score']
-                    # Self-adapting perturbation: stronger for wilder extremes
-                    pareto_perturbation_mag = min(0.5, 0.1 * abs(z_score))
+                    # Self-adapting perturbation: stronger for wilder extremes (capped at 15%)
+                    pareto_perturbation_mag = min(0.15, 0.05 * abs(z_score))
                     episode_pairs = selected['symbols']
+                    # Add to cooldown to avoid repeated noise injection
+                    self._pareto_replay_cooldown.add(selected['episode_id'])
+                    # Clean up old cooldown entries (> 2x window ago)
+                    self._pareto_replay_cooldown = {
+                        eid for eid in self._pareto_replay_cooldown
+                        if eid > episode_id - 2 * self._pareto_cooldown_window
+                    }
 
                     print(
                         f"Pareto Replay [{pareto_tail_label}] episode {selected['episode_id']} "
@@ -1802,6 +2103,11 @@ def main():
                         help='Minimum rows required after calendar-span sampling; falls back if too small')
     parser.add_argument('--strict-calendar-extent', action='store_true',
                         help='Abort training if requested min calendar span cannot be satisfied by loaded candle history')
+    parser.add_argument('--candle-source', type=str, default='auto',
+                        choices=['auto', 'parquet_sequences', 'duckdb_sequences_import', 'duckdb_symbol_tables'],
+                        help='Candle corpus source for training data loads')
+    parser.add_argument('--duckdb-corpus-path', type=str, default='',
+                        help='Optional DuckDB corpus path (default: data/binance/hrm_data.duckdb)')
     parser.add_argument('--objective-world-model-weight', type=float, default=1.0,
                         help='Audit/control weight for the world-model objective term')
     parser.add_argument('--objective-trade-head-weight', type=float, default=1.0,
@@ -1812,6 +2118,29 @@ def main():
                         help='Audit/control weight for the turnover/cost penalty proxy term')
     parser.add_argument('--objective-regime-weight-scale', type=float, default=1.0,
                         help='Audit/control scale for the regime-weighting proxy multiplier')
+    parser.add_argument('--weights-path', type=str, default='',
+                        help='Path to existing weights .npz file to resume training from')
+    parser.add_argument('--hidden-dim', type=int, default=64,
+                        help='Hidden dimension size for the HRM model')
+    parser.add_argument('--regime-layers', type=int, default=2,
+                        help='Number of regime attention layers')
+    parser.add_argument('--tactical-layers', type=int, default=2,
+                        help='Number of tactical attention layers')
+    parser.add_argument('--attention-heads', type=int, default=4,
+                        help='Number of attention heads')
+    # Timer-based stochastic training arguments
+    parser.add_argument('--timer-based', action='store_true',
+                        help='Enable timer-driven episode scheduling (overrides --episodes)')
+    parser.add_argument('--min-interval-seconds', type=int, default=30,
+                        help='Minimum seconds between timer-based episodes')
+    parser.add_argument('--max-interval-seconds', type=int, default=86400,
+                        help='Maximum seconds between timer-based episodes (1 day)')
+    parser.add_argument('--max-training-seconds', type=int, default=0,
+                        help='Maximum total training time in seconds (0 = unlimited)')
+    parser.add_argument('--min-pair-width', type=int, default=3,
+                        help='Minimum number of pairs per stochastic episode')
+    parser.add_argument('--max-pair-width', type=int, default=45,
+                        help='Maximum number of pairs per stochastic episode')
     parser.add_argument('--dashboard', action='store_true', help='Run Streamlit dashboard')
 
     args = parser.parse_args()
@@ -1838,6 +2167,8 @@ def main():
             max_extent_days=int(args.max_extent_days),
             min_extent_rows=int(args.min_extent_rows),
             strict_calendar_extent=bool(args.strict_calendar_extent),
+            candle_source=str(args.candle_source),
+            duckdb_corpus_path=str(args.duckdb_corpus_path or ""),
             energy_discount_gamma=float(args.energy_discount_gamma),
             energy_roundtrip_cost_bps=float(args.energy_roundtrip_cost_bps),
             energy_churn_penalty=float(args.energy_churn_penalty),
@@ -1847,11 +2178,17 @@ def main():
             objective_energy_routing_weight=float(args.objective_energy_routing_weight),
             objective_cost_turnover_weight=float(args.objective_cost_turnover_weight),
             objective_regime_weight_scale=float(args.objective_regime_weight_scale),
+            weights_path=str(args.weights_path or ""),
+            hidden_dim=int(args.hidden_dim),
+            regime_layers=int(args.regime_layers),
+            tactical_layers=int(args.tactical_layers),
+            attention_heads=int(args.attention_heads),
         )
         print(f"Objective weight controls: {objective_weight_config_from_config(config)}")
         print(
             f"Training mode: {'PRETRAIN_ONLY' if config.pretrain_only else 'JOINT'} | "
             f"pair_sampling={'fully_stochastic' if not config.reseed_pairs_by_episode else 'episode_reseeded'} | "
+            f"candle_source={config.candle_source} | "
             f"calendar_extent_days={config.min_extent_days}-{config.max_extent_days if config.max_extent_days else 0} | "
             f"calendar_extent_strict={'on' if config.strict_calendar_extent else 'off'} | "
             f"trade_update_prob={config.trade_update_prob:.3f} | energy_update_prob={config.energy_update_prob:.3f}"
@@ -1899,6 +2236,7 @@ def main():
 
             trade_eval_count = int(result.get('trade_train_eval_count', 0) or 0)
             energy_eval_count = int(result.get('energy_train_eval_count', 0) or 0)
+            pretrain_eval_count = int(result.get('pretrain_eval_count', 0) or 0)
             hit_rate = float(result.get('hit_rate', 0.0) or 0.0)
             extent_days = float(result.get('extent_span_days_actual', 0.0) or 0.0)
             extent_mode = str(result.get('extent_sampling_mode', 'none') or 'none')
@@ -1906,6 +2244,7 @@ def main():
             extent_avail_days = float(result.get('extent_available_span_days_total', 0.0) or 0.0)
             extent_target_met = bool(result.get('extent_span_days_target_met', False))
             extent_err = str(result.get('extent_fallback_reason', '') or '')
+            candle_source_used = str(result.get('candle_source_used', '') or '')
             extent_suffix = ""
             if extent_req_days > 0:
                 extent_suffix = f"(req={extent_req_days}d"
@@ -1920,10 +2259,11 @@ def main():
             print(
                 f"Episode {current}/{total} ({pct:.1f}%) "
                 f"pnl=${realized_pnl:.2f} hit={hit_rate:.1%} "
-                f"extent={extent_mode}:{extent_days:.1f}d{extent_suffix} "
+                f"src={candle_source_used or 'n/a'} extent={extent_mode}:{extent_days:.1f}d{extent_suffix} "
                 f"pred_loss={predictor_loss:.4f} (ma5={pred_ma5:.4f}, ma20={pred_ma20:.4f}, med20={pred_med20:.4f}, p90_20={pred_p90_20:.4f}) "
                 f"trade_loss={trade_loss:.4f} (ma5={trade_ma5:.4f}, ma20={trade_ma20:.4f}, n={trade_eval_count}) "
-                f"energy_loss={energy_loss:.4f} (ma5={energy_ma5:.4f}, ma20={energy_ma20:.4f}, n={energy_eval_count})"
+                f"energy_loss={energy_loss:.4f} (ma5={energy_ma5:.4f}, ma20={energy_ma20:.4f}, n={energy_eval_count}) "
+                f"pretrain_steps={pretrain_eval_count}"
             )
 
         trainer.run_episode_training(progress_callback=progress)

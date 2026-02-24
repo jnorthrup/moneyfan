@@ -426,7 +426,19 @@ class MLXHierarchicalCodec(nn.Module):
             output     : predicted codec scores (pretrain) or trade parameters (trade)
             new_memory : (temporal_ob_state, regime_state, tactical_state)
         """
-        B, T, _ = bar_codec_features.shape
+        B, T, F = bar_codec_features.shape
+
+        # ── Input shape guard ─────────────────────────────────────────────────
+        # Validate before the first matmul so callers get a descriptive error
+        # (not the cryptic MLX [addmm] message) when weights were built with a
+        # different input_dim than the incoming feature tensor.
+        expected_dim = self.config.input_dim
+        if F != expected_dim:
+            raise ValueError(
+                f"[HRM] Input feature dimension mismatch: got {F} features but "
+                f"bar_feature_proj was built for {expected_dim}. "
+                "Re-initialize the model or load compatible weights."
+            )
 
         temporal_ob_state, regime_state, tactical_state = (
             memory if memory else (None, None, None)
@@ -678,11 +690,29 @@ class MLXBasketTrainer:
             eval_args.append(self.optimizer.state)
         mx.eval(*eval_args)
 
+    def clip_gradients(self, grads: Dict[str, mx.array], max_norm: float = 1.0) -> Dict[str, mx.array]:
+        """
+        Clip gradients to a maximum norm to prevent gradient explosion during BPTT.
+
+        Args:
+            grads: Dictionary of gradients from mx.value_and_grad
+            max_norm: Maximum L2 norm for the gradients
+
+        Returns:
+            Clipped gradients
+        """
+        total_norm_sq = sum(mx.square(g).sum() for g in grads.values() if g is not None)
+        total_norm = mx.sqrt(total_norm_sq) + 1e-8
+        scale = mx.minimum(max_norm / total_norm, mx.array(1.0))
+        return {k: v * scale for k, v in grads.items()}
+
     def pretrain_step(
         self,
         bar_codec_features: mx.array,
         memory: Optional[Tuple] = None,
         auto_eval: bool = True,
+        clip_gradients: bool = False,
+        max_gradient_norm: float = 1.0,
     ) -> Tuple[mx.array, Tuple]:
         """
         World-model pre-training step with optimizer update.
@@ -694,6 +724,8 @@ class MLXBasketTrainer:
             self.model, bar_codec_features, memory
         )
         if self.optimizer is not None:
+            if clip_gradients:
+                grads = self.clip_gradients(grads, max_gradient_norm)
             self.optimizer.update(self.model, grads)
         if auto_eval:
             self._eval_training_state(world_model_loss, memory=next_memory)
@@ -705,6 +737,8 @@ class MLXBasketTrainer:
         realized_returns: mx.array,
         memory: Optional[Tuple] = None,
         auto_eval: bool = True,
+        clip_gradients: bool = False,
+        max_gradient_norm: float = 1.0,
     ) -> Tuple[mx.array, Tuple]:
         """
         Alpha-maximisation training step with optimizer update.
@@ -716,6 +750,8 @@ class MLXBasketTrainer:
             self.model, bar_codec_features, realized_returns, memory
         )
         if self.optimizer is not None:
+            if clip_gradients:
+                grads = self.clip_gradients(grads, max_gradient_norm)
             self.optimizer.update(self.model, grads)
         if auto_eval:
             self._eval_training_state(alpha_loss, memory=next_memory)
@@ -727,6 +763,8 @@ class MLXBasketTrainer:
         realized_returns: mx.array,
         memory: Optional[Tuple] = None,
         auto_eval: bool = True,
+        clip_gradients: bool = False,
+        max_gradient_norm: float = 1.0,
     ) -> Tuple[mx.array, Tuple]:
         """
         Energy-routing proxy training step with optimizer update.
@@ -738,6 +776,8 @@ class MLXBasketTrainer:
             self.model, bar_codec_features, realized_returns, memory
         )
         if self.optimizer is not None:
+            if clip_gradients:
+                grads = self.clip_gradients(grads, max_gradient_norm)
             self.optimizer.update(self.model, grads)
         if auto_eval:
             self._eval_training_state(energy_loss, memory=next_memory)
