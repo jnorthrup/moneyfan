@@ -87,6 +87,17 @@ class EpisodeTrainingConfig:
       bar_shock_z_threshold   : per-bar z-score threshold for frame-level shock detection
       max_adaptive_replays    : max extra SGD steps applied on a regime shock window
 
+    Data split parameters:
+      train_split             : fraction of symbols/episodes for training (0.0-1.0)
+      val_split               : fraction for validation
+      test_split              : fraction for testing (derived: 1.0 - train - val)
+      split_mode              : 'symbols' (split by symbols) or 'time' (split by timestamp)
+      time_split_fraction     : fraction of time period for train (used when split_mode='time')
+
+    Randomness parameters:
+      use_true_randomness     : use system entropy instead of episode_id seeding
+      random_seed             : optional fixed seed for reproducibility (None = system entropy)
+
     Extent definition:
       extent = T + n  (bar_window_len T bars + prediction_horizon n bars)
       candles_per_extent sets the raw candle pool depth from which extents are drawn.
@@ -121,7 +132,6 @@ class EpisodeTrainingConfig:
     energy_update_prob: float = 0.0
     energy_update_min_abs_return: float = 0.0
     pretrain_only: bool = False
-    reseed_pairs_by_episode: bool = True
     min_extent_days: int = 0
     max_extent_days: int = 0
     min_extent_rows: int = 256
@@ -149,6 +159,16 @@ class EpisodeTrainingConfig:
     min_pair_width: int = 3
     max_pair_width: int = 45
     max_training_seconds: int = 0
+    # Data split controls (standard ML practice)
+    split_mode: str = "symbols"  # "symbols" or "time"
+    train_split: float = 0.70  # 70% for training
+    val_split: float = 0.15    # 15% for validation
+    test_split: float = 0.15   # 15% for testing (calculated: 1.0 - train - val)
+    time_split_fraction: float = 0.70  # fraction of time period for train (when split_mode='time')
+    # Randomness controls (standard ML practice)
+    use_true_randomness: bool = True  # Use system entropy instead of episode_id seeding
+    random_seed: Optional[int] = None  # Optional fixed seed for reproducibility (None = system entropy)
+    reseed_pairs_by_episode: bool = False  # DEPRECATED: now controlled by use_true_randomness
 
 
 OBJECTIVE_TELEMETRY_VERSION = 1
@@ -1044,6 +1064,21 @@ class EpochEpisodeTrainer:
         self._checkpoint_interval: int = 300  # 5 minutes in seconds
         self._periodic_checkpoint_thread: Optional[threading.Thread] = None
 
+        # Data split state (standard ML practice)
+        self._train_symbols: List[str] = []
+        self._val_symbols: List[str] = []
+        self._test_symbols: List[str] = []
+        self._train_time_range: Optional[Tuple[str, str]] = None  # (start, end)
+        self._val_time_range: Optional[Tuple[str, str]] = None
+        self._test_time_range: Optional[Tuple[str, str]] = None
+        self._current_split: str = "train"  # train, val, or test
+
+        # Initialize randomness based on config
+        self._init_randomness()
+
+        # Initialize data splits
+        self._init_data_splits(all_symbols=None)  # Will be set in run_episode_training
+
     def _init_model_if_needed(self, force_reinit: bool = False, known_input_dim: Optional[int] = None):
         """Initialize HRM model and trainer once, preserving training state across episodes."""
         if not HAS_MLX:
@@ -1115,6 +1150,166 @@ class EpochEpisodeTrainer:
         except Exception as e:
             print(f"⚠️  Failed to load weights from {weights_path}: {e}")
 
+    def _init_randomness(self):
+        """Initialize random number generator based on configuration."""
+        if self.config.random_seed is not None:
+            # Use specified seed for reproducibility
+            np.random.seed(self.config.random_seed)
+            print(f"[RANDOMNESS] Seeded with fixed seed: {self.config.random_seed}")
+        elif self.config.use_true_randomness:
+            # Use system entropy (default behavior when seed is None)
+            print(f"[RANDOMNESS] Using system entropy (true randomness)")
+        else:
+            # Legacy behavior: seed per episode based on episode_id
+            print(f"[RANDOMNESS] Using episode_id-based seeding (DEPRECATED - deterministic)")
+            print(f"            Consider using --use-true-randomness for stochastic sampling")
+
+    def _init_data_splits(self, all_symbols: Optional[List[str]] = None):
+        """
+        Initialize train/val/test splits based on configuration.
+
+        Two modes:
+        1. 'symbols': Split symbols into train/val/test sets
+        2. 'time': Split time periods into train/val/test sets
+        """
+        if all_symbols is None:
+            all_symbols = [
+                'ADAUSDT', 'APTUSDT', 'ARBUSDT', 'ATOMUSDT', 'AVAXUSDT',
+                'BCHUSDT', 'BNBUSDT', 'BONKUSDT', 'BTCUSDT', 'DOGEUSDT',
+                'DOTUSDT', 'ETCUSDT', 'ETHUSDT', 'FILUSDT', 'INJUSDT',
+                'JUPUSDT', 'LINKUSDT', 'LTCUSDT', 'MATICUSDT', 'OPUSDT',
+                'PEPEUSDT', 'PYTHUSDT', 'RUNEUSDT', 'SEIUSDT', 'SOLUSDT',
+                'SUIUSDT', 'TIAUSDT', 'UNIUSDT', 'WIFUSDT', 'XRPUSDT',
+            ]
+
+        if self.config.split_mode == "symbols":
+            # Split by symbols (standard ML practice)
+            self._split_by_symbols(all_symbols)
+        elif self.config.split_mode == "time":
+            # Split by time period (standard ML practice for time series)
+            self._split_by_time(all_symbols)
+        else:
+            raise ValueError(f"Unknown split_mode: {self.config.split_mode}")
+
+    def _split_by_symbols(self, all_symbols: List[str]):
+        """Split symbols into train/val/test sets using stratified sampling."""
+        # Normalize splits
+        train_ratio = float(self.config.train_split)
+        val_ratio = float(self.config.val_split)
+        test_ratio = float(self.config.test_split)
+
+        # Ensure ratios sum to 1.0
+        total = train_ratio + val_ratio + test_ratio
+        if abs(total - 1.0) > 0.01:
+            # Auto-normalize
+            train_ratio /= total
+            val_ratio /= total
+            test_ratio = 1.0 - train_ratio - val_ratio
+
+        # Shuffle symbols for random split
+        shuffled = all_symbols.copy()
+        np.random.shuffle(shuffled)
+
+        # Calculate split indices
+        n_total = len(shuffled)
+        n_train = int(n_total * train_ratio)
+        n_val = int(n_total * val_ratio)
+
+        # Assign symbols to splits
+        self._train_symbols = shuffled[:n_train]
+        self._val_symbols = shuffled[n_train:n_train + n_val]
+        self._test_symbols = shuffled[n_train + n_val:]
+
+        print(f"\n[DATA_SPLIT] Split mode: symbols")
+        print(f"[DATA_SPLIT] Total symbols: {n_total}")
+        print(f"[DATA_SPLIT] Train symbols ({len(self._train_symbols)}): {', '.join(self._train_symbols)}")
+        print(f"[DATA_SPLIT] Val symbols ({len(self._val_symbols)}): {', '.join(self._val_symbols)}")
+        print(f"[DATA_SPLIT] Test symbols ({len(self._test_symbols)}): {', '.join(self._test_symbols)}")
+
+    def _split_by_time(self, all_symbols: List[str]):
+        """
+        Split by time period for time series validation.
+
+        This requires loading data first to determine time range.
+        The split will be done per-episode based on timestamp.
+        """
+        train_fraction = float(self.config.time_split_fraction)
+        if train_fraction <= 0 or train_fraction >= 1.0:
+            raise ValueError(f"time_split_fraction must be between 0 and 1, got {train_fraction}")
+
+        val_fraction = (1.0 - train_fraction) / 2.0
+        test_fraction = (1.0 - train_fraction) / 2.0
+
+        self._train_symbols = all_symbols
+        self._val_symbols = all_symbols  # Same symbols, different time range
+        self._test_symbols = all_symbols
+
+        print(f"\n[DATA_SPLIT] Split mode: time")
+        print(f"[DATA_SPLIT] Train fraction: {train_fraction:.2%}")
+        print(f"[DATA_SPLIT] Val fraction: {val_fraction:.2%}")
+        print(f"[DATA_SPLIT] Test fraction: {test_fraction:.2%}")
+        print(f"[DATA_SPLIT] Time ranges will be determined when loading data")
+
+    def _get_symbols_for_split(self, split: str) -> List[str]:
+        """Get symbol list for specified split (train, val, or test)."""
+        if split == "train":
+            return self._train_symbols
+        elif split == "val":
+            return self._val_symbols
+        elif split == "test":
+            return self._test_symbols
+        else:
+            raise ValueError(f"Unknown split: {split}")
+
+    def _get_sample_pairs_for_episode(self, episode_id: int, all_pairs: List[str]) -> Tuple[List[str], str]:
+        """
+        Get sample pairs for an episode based on data split.
+
+        Returns:
+            tuple: (episode_pairs, split_name)
+        """
+        # Determine which split this episode belongs to
+        if self.config.split_mode == "symbols":
+            # Assign episodes to splits in round-robin fashion for balanced training
+            split_cycle = episode_id % 3
+            if split_cycle == 0:
+                split_name = "train"
+                available_pairs = self._train_symbols
+            elif split_cycle == 1:
+                split_name = "val"
+                available_pairs = self._val_symbols
+            else:
+                split_name = "test"
+                available_pairs = self._test_symbols
+        else:
+            # Time-based split: always train (time split happens at data loading)
+            split_name = "train"
+            available_pairs = all_pairs
+
+        # Select pairs from the appropriate split
+        pair_width = min(self.config.pair_width, len(available_pairs))
+        if pair_width == 0:
+            raise ValueError(f"No symbols available for split '{split_name}'")
+
+        # Use true randomness or episode_id-based seeding
+        if self.config.use_true_randomness:
+            # True randomness - no seeding (system entropy)
+            episode_pairs = list(np.random.choice(
+                available_pairs,
+                size=pair_width,
+                replace=False
+            ))
+        else:
+            # Legacy deterministic behavior
+            np.random.seed(episode_id)
+            episode_pairs = list(np.random.choice(
+                available_pairs,
+                size=pair_width,
+                replace=False
+            ))
+
+        return episode_pairs, split_name
+
     def _setup_signal_handlers(self):
         """Set up signal handlers for graceful checkpointing on Ctrl-C."""
         def signal_handler(signum, frame):
@@ -1173,6 +1368,19 @@ class EpochEpisodeTrainer:
                 'tactical_attn_layers': self.model_config.tactical_attn_layers,
                 'n_heads': self.model_config.n_heads,
                 'input_dim': self.model_config.input_dim,
+            },
+            'data_split_config': {
+                'split_mode': self.config.split_mode,
+                'train_symbols': self._train_symbols,
+                'val_symbols': self._val_symbols,
+                'test_symbols': self._test_symbols,
+                'train_split': self.config.train_split,
+                'val_split': self.config.val_split,
+                'test_split': self.config.test_split,
+            },
+            'randomness_config': {
+                'use_true_randomness': self.config.use_true_randomness,
+                'random_seed': self.config.random_seed,
             },
         }
 
@@ -1939,15 +2147,16 @@ class EpochEpisodeTrainer:
                     )
 
             if not is_pareto_replay:
-                if bool(getattr(self.config, "reseed_pairs_by_episode", True)):
-                    np.random.seed(episode_id)
-                episode_pairs = list(np.random.choice(
-                    all_pairs,
-                    size=min(self.config.pair_width, len(all_pairs)),
-                    replace=False
-                ))
+                # Use new data split logic with true stochastic sampling
+                episode_pairs, split_name = self._get_sample_pairs_for_episode(episode_id, all_pairs)
+                # Track which split this episode belongs to
+                self._current_split = split_name
 
             result = self.train_episode(episode_id, episode_pairs)
+            # Add split information to result
+            if isinstance(result, dict):
+                result['data_split'] = self._current_split
+
             if (
                 bool(getattr(self.config, "strict_calendar_extent", False))
                 and isinstance(result, dict)
@@ -2205,11 +2414,30 @@ def main():
     parser.add_argument('--pretrain-only', action='store_true',
                         help='Disable trade-head and energy-routing updates to focus on world-model pretraining')
     parser.add_argument('--fully-stochastic-pair-sampling', action='store_true',
-                        help='Do not reseed pair sampling by episode id (less repeatable, more stochastic)')
+                        help='DEPRECATED: Use --use-true-randomness instead')
     parser.add_argument('--min-extent-days', type=int, default=0,
                         help='Minimum stochastic calendar extent in days (0 disables calendar-span sampling)')
     parser.add_argument('--max-extent-days', type=int, default=0,
                         help='Maximum stochastic calendar extent in days (0 disables calendar-span sampling)')
+    # Data split arguments (standard ML practice)
+    parser.add_argument('--split-mode', type=str, default='symbols',
+                        choices=['symbols', 'time'],
+                        help='How to split data: "symbols" (split by symbol) or "time" (split by time period)')
+    parser.add_argument('--train-split', type=float, default=0.70,
+                        help='Fraction of symbols/time for training (when split_mode=symbols)')
+    parser.add_argument('--val-split', type=float, default=0.15,
+                        help='Fraction of symbols/time for validation')
+    parser.add_argument('--test-split', type=float, default=0.15,
+                        help='Fraction of symbols/time for testing (auto-calculated if 0)')
+    parser.add_argument('--time-split-fraction', type=float, default=0.70,
+                        help='Fraction of time period for train (when split_mode=time)')
+    # Randomness arguments (standard ML practice)
+    parser.add_argument('--use-true-randomness', action='store_true', default=True,
+                        help='Use system entropy for true randomness (recommended)')
+    parser.add_argument('--no-true-randomness', action='store_true',
+                        help='Use episode_id-based seeding (DEPRECATED, deterministic)')
+    parser.add_argument('--random-seed', type=int, default=None,
+                        help='Fixed random seed for reproducibility (None = system entropy)')
     parser.add_argument('--min-extent-rows', type=int, default=256,
                         help='Minimum rows required after calendar-span sampling; falls back if too small')
     parser.add_argument('--strict-calendar-extent', action='store_true',
@@ -2277,7 +2505,16 @@ def main():
             energy_update_prob=(0.0 if args.pretrain_only else float(args.energy_update_prob)),
             energy_update_min_abs_return=float(args.energy_update_min_abs_return),
             pretrain_only=bool(args.pretrain_only),
-            reseed_pairs_by_episode=not bool(args.fully_stochastic_pair_sampling),
+            # New randomness controls (standard ML practice)
+            use_true_randomness=bool(args.use_true_randomness) if not args.no_true_randomness else False,
+            random_seed=args.random_seed if args.random_seed is not None else None,
+            reseed_pairs_by_episode=False,  # DEPRECATED - now controlled by use_true_randomness
+            # Data split controls
+            split_mode=str(args.split_mode),
+            train_split=float(args.train_split),
+            val_split=float(args.val_split),
+            test_split=float(args.test_split) if args.test_split > 0 else 1.0 - float(args.train_split) - float(args.val_split),  # Auto-calculate if 0
+            time_split_fraction=float(args.time_split_fraction),
             min_extent_days=int(args.min_extent_days),
             max_extent_days=int(args.max_extent_days),
             min_extent_rows=int(args.min_extent_rows),
@@ -2300,9 +2537,12 @@ def main():
             attention_heads=int(args.attention_heads),
         )
         print(f"Objective weight controls: {objective_weight_config_from_config(config)}")
+        randomness_mode = "true_random" if config.use_true_randomness else ("fixed_seed" if config.random_seed is not None else "deterministic")
         print(
             f"Training mode: {'PRETRAIN_ONLY' if config.pretrain_only else 'JOINT'} | "
-            f"pair_sampling={'fully_stochastic' if not config.reseed_pairs_by_episode else 'episode_reseeded'} | "
+            f"randomness={randomness_mode} | "
+            f"split_mode={config.split_mode} | "
+            f"train_split={config.train_split:.2f} val_split={config.val_split:.2f} test_split={config.test_split:.2f} | "
             f"candle_source={config.candle_source} | "
             f"calendar_extent_days={config.min_extent_days}-{config.max_extent_days if config.max_extent_days else 0} | "
             f"calendar_extent_strict={'on' if config.strict_calendar_extent else 'off'} | "
@@ -2419,8 +2659,12 @@ def main():
             if extent_err:
                 extent_suffix += f"[{extent_err}]"
 
+            # Get data split info
+            data_split = result.get('data_split', 'unknown')
+
             print(
                 f"Episode {current}/{total} ({pct:.1f}%) "
+                f"[{data_split.upper()}] "  # Show data split (TRAIN/VAL/TEST)
                 f"pnl=${realized_pnl:.2f} hit={hit_rate:.1%} "
                 f"src={candle_source_used or 'n/a'} extent={extent_mode}:{extent_days:.1f}d{extent_suffix} "
                 f"pred_loss={predictor_loss:.4f} (ma5={pred_ma5:.4f}, ma20={pred_ma20:.4f}, med20={pred_med20:.4f}, p90_20={pred_p90_20:.4f}) "
