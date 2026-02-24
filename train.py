@@ -1635,6 +1635,7 @@ class EpochEpisodeTrainer:
             hrm_memory = None
 
             for bar_seq_i in range(self.config.bar_sequences_per_episode):
+                print(f"[DEBUG] bar_seq_i: {bar_seq_i}, hrm_memory: {type(hrm_memory)}")
                 if bar_window_len > len(codec_features):
                     continue
 
@@ -1669,7 +1670,19 @@ class EpochEpisodeTrainer:
                 # HRM world-model training step (thread-safe, skip if previously failed)
                 if not hasattr(self, '_mlx_disabled') or not self._mlx_disabled:
                     try:
+                        # DEBUG: Check what batch_np is before creating MX array
+                        print(f"[DEBUG] batch_np type: {type(batch_np)}")
+                        print(f"[DEBUG] batch_np shape: {batch_np.shape if hasattr(batch_np, 'shape') else 'NO SHAPE'}")
+                        if isinstance(batch_np, dict):
+                            print(f"[DEBUG] batch_np is a dict with keys: {batch_np.keys()}")
+                        elif hasattr(batch_np, 'dtype'):
+                            print(f"[DEBUG] batch_np dtype: {batch_np.dtype}")
+
+                        print(f"[DEBUG] About to call mx.array(batch_np)...")
                         batch_mx = mx.array(batch_np)
+                        print(f"[DEBUG] batch_mx created successfully, type: {type(batch_mx)}")
+
+                        # Apply coalescing to regular training if enabled
 
                         # Apply coalescing to regular training if enabled
                         if self.config.replay_coalescing and self.config.trade_update_prob == 0.0 and self.config.energy_update_prob == 0.0:
@@ -1682,6 +1695,7 @@ class EpochEpisodeTrainer:
                                 clip_gradients=True,
                                 max_gradient_norm=1.0
                             )
+                            print(f"[DEBUG] coalescing branch: pretrain_step returned")
                             trainer.flush_updates(world_model_loss, memory=None)
                             pretrain_eval_count += 1
                         else:
@@ -1697,9 +1711,13 @@ class EpochEpisodeTrainer:
                                 clip_gradients=True,
                                 max_gradient_norm=1.0
                             )
+                            print(f"[DEBUG] standard branch: pretrain_step returned")
                             pretrain_eval_count += 1
 
+                        # Extract loss value for logging
+                        print(f"[DEBUG] About to call world_model_loss.item()...")
                         loss_val = float(world_model_loss.item())
+                        print(f"[DEBUG] loss_val extracted: {loss_val}")
                         bar_window_losses.append(loss_val)
 
                         # Regime Shock Detection: flag extent if loss z-score > shock_z_threshold
@@ -1729,6 +1747,8 @@ class EpochEpisodeTrainer:
                                     )
 
                                 if self.config.replay_coalescing and len(replay_batches_np) > 1:
+                                    print(f"[DEBUG] Taking REPLAY_COALESCING branch")
+                                    chunk_size = max(1, int(self.config.replay_coalescing_chunk_size))
                                     chunk_size = max(1, int(self.config.replay_coalescing_chunk_size))
                                     for chunk_start in range(0, len(replay_batches_np), chunk_size):
                                         chunk = replay_batches_np[chunk_start:chunk_start + chunk_size]
@@ -1751,6 +1771,9 @@ class EpochEpisodeTrainer:
                                         replay_coalesced_steps += len(chunk)
                                 else:
                                     for perturbed_bar_batch in replay_batches_np:
+                                        print(f"[DEBUG] perturbed_bar_batch type: {type(perturbed_bar_batch)}")
+                                        if isinstance(perturbed_bar_batch, dict):
+                                            print(f"[DEBUG] perturbed_bar_batch is a dict with keys: {perturbed_bar_batch.keys()}")
                                         perturbed_batch_mx = mx.array(perturbed_bar_batch)
                                         replay_loss, hrm_memory = trainer.pretrain_step(
                                             perturbed_batch_mx, memory=hrm_memory
