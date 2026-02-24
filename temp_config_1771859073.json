@@ -1,0 +1,7 @@
+{
+  "hidden_dim": 64,
+  "regime_attn_layers": 2,
+  "tactical_attn_layers": 2,
+  "n_heads": 4,
+  "n_codec_outputs": 24
+}
