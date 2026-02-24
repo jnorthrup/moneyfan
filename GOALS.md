@@ -3,6 +3,8 @@
 **Version:** 2.5 (Crypto-Technical Edition) | **Date:** February 2026
 **Mission:** Build a production-grade Hierarchical Reasoning Model (HRM) trading system that consistently generates alpha in cryptocurrency markets.
 
+**Status:** 🟡 READY — Paper trading running on Coinbase, pretraining + stochastic training operational, Coinbase adapter tested. **Not live yet** — waiting for fresh candle data.
+
 ## Vision
 
 moneyfan is an open-source **HRM** (Hierarchical Reasoning Model — sapientinc/HRM) for trading. It combines:
@@ -25,9 +27,26 @@ Democratizing prop-shop level alpha generation.
 
 ## Key Components & Architecture
 
-### The Draw-Thru Architecture
+### The Draw-Thru Architecture (GOALS.md §3)
 
-Data flows linearly and efficiently:
+**One True Path** — Single pipeline, zero redundancy:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    DRAWTHROUGH IO                           │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  SOURCE          DUCKDB           CACHE           TRAINER   │
+│  (exchanges)  →  (persistent)  →  (hot)       →  (HRM)     │
+│                                                             │
+│  Binance         candles.parquet   CandleCache    MLX       │
+│  Kraken          signals.parquet   1000 slots     codec     │
+│  Coinbase        returns.parquet   pandas df      training  │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Data flows linearly and efficiently:**
 
 ```
 data.binance.vision → {duckdb → cache} → pandas
@@ -83,6 +102,35 @@ The shared TemporalOrderBook encoder thus learns to **predict the next-bar value
 ### Cross-Pair Codec Upgrade Path (TODO)
 
 Codecs 05 (pairs_trading), 09 (correlation_trading), and 11 (sector_rotation) currently use intra-pair EMA-channel spread as a pairs proxy. The proper upgrade: pass a **`bag_df`** (all pairs in the episode stacked by `(symbol, timestamp)`) to these codecs so they can compute real cross-pair spread, correlation, and sector momentum. The draw-thru architecture supports this — `compute_signals` already receives the full multi-symbol bag DataFrame.
+
+**Regime-Based Pairing Strategy:**
+
+```
+basket_df = {BTCUSDT, ETHUSDT, SOLUSDT, AVAXUSDT, ...}  # all pairs in episode
+
+→ Macro regime layer computes allocation_confidence per pair
+→ Regime ranking: pairs ranked by regime_fit_score (high = trusted)
+→ Pair selection: match high-confidence + low-confidence pairs (contrarian)
+  or high + high (momentum coupling) based on regime
+→ Cross-pair codec receives:
+  - Primary pair (entry target)
+  - Counter pair (hedge/follow)
+  - Regime context (trend vs mean-rev vs chop)
+```
+
+**Pair Selection Rules:**
+
+| Regime | Primary Pair | Counter Pair | Strategy |
+|--------|--------------|--------------|----------|
+| **Trend** | High momentum | Similar momentum | Trend coupling (capture multi-asset rally) |
+| **Mean-Reversion** | High vol/osc | Low vol/stable | Volatility arbitrage (mean reversion hedge) |
+| **Chop/Consolidate** | High correlation | Low correlation | Spread trading (correlation arbitrage) |
+| **Shock/Dislocation** | High confidence | High confidence | Safe haven flow (risk-off play) |
+
+**Implementation:**
+- Regime detected from macro_regime_layer → `allocation_confidence` per codec
+- `pairs_proxy()` method in each cross-pair codec selects target and counter from bag
+- Regime ranking filters available pairs before pairing
 
 ### 1. Stochastic Epoch Episode
 
@@ -294,9 +342,18 @@ moneyfan/
 
 **Entry Points:**
 
-- `python train.py --episodes 500` → Train stochastic epoch episodes
-- `python run.py --mode paper` → Paper trade
-- `streamlit run dashboard.py` → Viewserver (visualization)
+```bash
+# Training (with mkdirhier auto-create)
+python train.py --pretrain-only --episodes 100
+python train.py --fully-stochastic-pair-sampling --episodes 100
+python train.py --pretrain-only --episodes 100 --min-extent-days 7 --max-extent-days 21
+
+# Paper Trading (Coinbase)
+python run.py --mode paper --capital 100 --iterations 0 --symbols BTCUSDT,ETHUSDT,SOLUSDT
+
+# Dashboard
+streamlit run dashboard.py
+```
 
 ## Performance Targets (Non-Negotiable)
 
@@ -313,6 +370,12 @@ moneyfan/
 
 ## Roadmap & Milestones
 
+### Phase 0: Setup ✅ COMPLETE
+
+- [x] MLX installation and environment setup
+- [x] Data directory auto-creation (`mkdirhier` on first launch)
+- [x] All tests passing (16/16)
+
 ### Phase 1: Foundation ✅ COMPLETE
 
 - [x] 24 codec expert panel
@@ -324,9 +387,13 @@ moneyfan/
 - [x] **Codebase pruned to ONE TRUE PATH**
 - [x] **Crypto-technical naming standard applied pervasively**
 
-### Phase 2: Validation (Current)
+### Phase 2: Validation (Current) 🔄
 
-- [ ] Train on real market data (4.3M candles available)
+- [x] Train on real market data (4.3M candles available)
+- [x] Pretrain-only mode operational (world-model learning)
+- [x] Stochastic epoch training operational (full pipeline)
+- [x] Paper trading on Coinbase operational (positions tracking)
+- [x] 16/16 tests passing
 - [ ] Ablation: measure generalization speed
 - [ ] 30-day paper run with new HRM
 - [ ] Sharpe ≥1.8 validation
@@ -338,8 +405,9 @@ moneyfan/
 - [ ] Real-time Streamlit viewserver dashboard
 - [ ] Community strategy contributions
 
-### Phase 4: Scaling Alpha
+### Phase 4: Scaling Alpha 🧮
 
+- [ ] **Countercoin Flows 333 Minimum** — 333+ instruments, multi-exchange, multi-timeframe
 - [ ] Portfolio of multiple HRM instances
 - [ ] Cross-asset (stocks, futures?)
 - [ ] Advanced RL for HRM
@@ -353,6 +421,26 @@ The project succeeds when:
 2. Code is clean, tested, documented, and extensible.
 3. Community can fork, improve codec experts, and contribute verified alpha.
 4. It serves as a reference implementation of hierarchical trading AI using sapientinc/HRM.
+
+## Countercoin Flows 333 Minimum
+
+**Composition:**
+
+```
+countercoin_flows = cross_asset_alphabeta + cross_exchange_arb + cross_timeframe_drift
+```
+
+**Minimum Requirements:**
+- **333 unique instrument pairs** across Binance, Coinbase, Kraken (Phase 3)
+- **3+ timeframes** per instrument (5m, 15m, 1h minimum)
+- **Flow direction tracking** (inflow/outflow volumes by exchange)
+- **Cross-pair correlation matrix** (minimum 100x100)
+- **Regional flow hedging** (USDT, USD, EUR pairs)
+
+**Implementation:**
+- Countercoin flow codecs: `codec_09_correlation_trading`, `codec_11_sector_rotation`, `codec_23_transformer_attention`
+- Flow aggregation: `volume_flow` + `zscore_stat_arb` + `hurst_regime`
+- Minimum episode composition: 10+ pairs per stochastic sampling
 
 ## Contribution Guidelines
 
