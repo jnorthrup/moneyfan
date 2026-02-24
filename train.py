@@ -62,6 +62,9 @@ except ImportError:
 from codec_models import load_all_codecs
 from hrm.order_intent import NormalizedTradeIntent, RiskTier, VetoDecision
 
+import signal
+import threading
+
 
 
 @dataclass
@@ -1023,7 +1026,7 @@ class EpochEpisodeTrainer:
         self.model = None
         self.trainer = None
         self._init_model_if_needed()
-        
+
         # Load existing weights if provided
         if hasattr(config, 'weights_path') and config.weights_path:
             self._try_load_weights(config.weights_path)
@@ -1035,6 +1038,11 @@ class EpochEpisodeTrainer:
         # Track recently Pareto-replayed episodes to avoid repeated noise injection
         self._pareto_replay_cooldown: set = set()  # episode_ids in cooldown
         self._pareto_cooldown_window: int = 100  # episodes to skip after replay
+        # Signal handling for graceful checkpointing
+        self._shutdown_requested = False
+        self._last_checkpoint_time: float = 0.0
+        self._checkpoint_interval: int = 300  # 5 minutes in seconds
+        self._periodic_checkpoint_thread: Optional[threading.Thread] = None
 
     def _init_model_if_needed(self, force_reinit: bool = False, known_input_dim: Optional[int] = None):
         """Initialize HRM model and trainer once, preserving training state across episodes."""
@@ -1106,6 +1114,80 @@ class EpochEpisodeTrainer:
             print(f"✅ Loaded existing weights from {weights_file}")
         except Exception as e:
             print(f"⚠️  Failed to load weights from {weights_path}: {e}")
+
+    def _setup_signal_handlers(self):
+        """Set up signal handlers for graceful checkpointing on Ctrl-C."""
+        def signal_handler(signum, frame):
+            print(f"\n\n{'='*60}")
+            print(f"🚨 Received signal {signum} (Ctrl-C) - graceful shutdown initiated")
+            print(f"   Saving checkpoint before exiting...")
+            print(f"{'='*60}\n")
+            self._shutdown_requested = True
+            # Don't raise KeyboardInterrupt - let the training loop handle it
+            signal.signal(signal.SIGINT, signal.SIG_DFL)
+
+        signal.signal(signal.SIGINT, signal_handler)
+
+    def _start_periodic_checkpoint(self):
+        """Start a background thread for periodic checkpointing every 5 minutes."""
+        def checkpoint_worker():
+            while self.running and not self._shutdown_requested:
+                time.sleep(60)  # Check every minute
+                if not self.running or self._shutdown_requested:
+                    break
+                elapsed = time.time() - self._last_checkpoint_time
+                if elapsed >= self._checkpoint_interval:
+                    print(f"\n[CHECKPOINT] Auto-save triggered after {elapsed:.0f}s...")
+                    if self.results:
+                        self._save_checkpoint(len(self.results))
+                        self._last_checkpoint_time = time.time()
+
+        self._periodic_checkpoint_thread = threading.Thread(target=checkpoint_worker, daemon=True)
+        self._periodic_checkpoint_thread.start()
+
+    def _save_checkpoint(self, completed_episodes: int, force_suffix: str = ""):
+        """Save checkpoint with optional timestamp suffix for atomic saves."""
+        serialized_results = [attach_episode_objective_telemetry(r, self.config) for r in self.results]
+        self.results = serialized_results
+        objective_weight_config = objective_weight_config_from_config(self.config)
+
+        # Save HRM artifacts
+        checkpoint_artifacts = self._save_hrm_artifacts(
+            Path("hrm/checkpoints"),
+            f"hrm_latest{force_suffix}",
+        )
+
+        # Build checkpoint metadata
+        checkpoint = {
+            'completed_episodes': completed_episodes,
+            'total_episodes': self.config.n_epoch_episodes,
+            'session_start_time': self.session_start_time,
+            'checkpoint_time': datetime.now().isoformat(),
+            'results': serialized_results,
+            'objective_telemetry': summarize_training_objective_telemetry(serialized_results, self.config),
+            'objective_weight_config': objective_weight_config,
+            'hrm_artifacts': checkpoint_artifacts,
+            'model_config': {
+                'hidden_dim': self.model_config.hidden_dim,
+                'regime_attn_layers': self.model_config.regime_attn_layers,
+                'tactical_attn_layers': self.model_config.tactical_attn_layers,
+                'n_heads': self.model_config.n_heads,
+                'input_dim': self.model_config.input_dim,
+            },
+        }
+
+        # Save checkpoint JSON (with temp file for atomic write)
+        checkpoint_path = f'training_checkpoint{force_suffix}.json'
+        temp_path = checkpoint_path + '.tmp'
+        try:
+            with open(temp_path, 'w') as f:
+                json.dump(checkpoint, f, indent=2)
+            os.replace(temp_path, checkpoint_path)
+            print(f"[CHECKPOINT] Saved to {checkpoint_path} (ep={completed_episodes})")
+        except Exception as e:
+            print(f"[CHECKPOINT] Failed to save {checkpoint_path}: {e}")
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
 
     def _build_trade_intent(self, symbol: str, output_np: np.ndarray) -> NormalizedTradeIntent:
         pred_fwd_return = float(output_np[0])
@@ -1716,7 +1798,7 @@ class EpochEpisodeTrainer:
         }
         return attach_episode_objective_telemetry(result, self.config)
 
-    def run_episode_training(self, progress_callback=None):
+    def run_episode_training(self, progress_callback=None, resume_from_checkpoint: Optional[Dict] = None):
         """
         Run the full stochastic epoch episode training loop.
 
@@ -1728,13 +1810,47 @@ class EpochEpisodeTrainer:
         """
         self.running = True
         self.results = []
+
+        # Resume from checkpoint if provided
+        start_episode = 0
+        if resume_from_checkpoint:
+            try:
+                results = resume_from_checkpoint.get('results', [])
+                if results:
+                    self.results = results
+                    start_episode = len(results)
+                    print(f"[RESUME] Restored {start_episode} results from checkpoint")
+                    # Restore last checkpoint time for periodic checkpointing
+                    checkpoint_time_str = resume_from_checkpoint.get('checkpoint_time')
+                    if checkpoint_time_str:
+                        try:
+                            checkpoint_time = datetime.fromisoformat(checkpoint_time_str)
+                            self._last_checkpoint_time = checkpoint_time.timestamp()
+                        except Exception:
+                            self._last_checkpoint_time = time.time()
+            except Exception as e:
+                print(f"[RESUME] Failed to restore results from checkpoint: {e}")
+
         # Record (and refresh) session start time when training actually begins
         self.session_start_time = datetime.now().isoformat()
+        if resume_from_checkpoint:
+            original_start = resume_from_checkpoint.get('session_start_time')
+            if original_start:
+                self.session_start_time = original_start
+                print(f"[RESUME] Preserving original session start time: {original_start}")
+
         print(f"[SESSION] Episode training started at {self.session_start_time}")
         print(f"[OBJECTIVE] {objective_weight_config_from_config(self.config)}")
+
+        # Set up signal handlers for graceful checkpointing
+        self._setup_signal_handlers()
+
+        # Start periodic checkpoint thread
+        self._start_periodic_checkpoint()
+
         # Timer-based training tracking
         timer_start = time.time()
-        episode_id = 0
+        episode_id = start_episode
         max_training_secs = getattr(self.config, 'max_training_seconds', 0) or 0
 
         all_pairs = [
@@ -1745,6 +1861,9 @@ class EpochEpisodeTrainer:
             'PEPEUSDT', 'PYTHUSDT', 'RUNEUSDT', 'SEIUSDT', 'SOLUSDT',
             'SUIUSDT', 'TIAUSDT', 'UNIUSDT', 'WIFUSDT', 'XRPUSDT',
         ]
+
+        if start_episode > 0:
+            print(f"[RESUME] Starting from episode {start_episode} (skipping first {start_episode} episodes)")
 
         while self.running:
             # Check max training time limit
@@ -1851,33 +1970,25 @@ class EpochEpisodeTrainer:
             if progress_callback:
                 progress_callback(episode_id + 1, self.config.n_epoch_episodes, result)
 
+            # Check for periodic checkpoint
+            if self._last_checkpoint_time == 0:
+                self._last_checkpoint_time = time.time()
+
+            # Check for graceful shutdown request
+            if self._shutdown_requested:
+                print(f"\n{'='*60}")
+                print(f"🛑 Graceful shutdown requested - saving checkpoint...")
+                self._save_checkpoint(episode_id + 1, force_suffix="_interrupt")
+                print(f"   Saved checkpoint at episode {episode_id + 1}")
+                print(f"{'='*60}\n")
+                break
+
             if (episode_id + 1) % 10 == 0:
                 self._save_checkpoint(episode_id + 1)
 
         self._save_final_results()
         self.running = False
-
-    def _save_checkpoint(self, completed_episodes: int):
-        serialized_results = [attach_episode_objective_telemetry(r, self.config) for r in self.results]
-        self.results = serialized_results
-        objective_weight_config = objective_weight_config_from_config(self.config)
-        checkpoint_artifacts = self._save_hrm_artifacts(
-            Path("hrm/checkpoints"),
-            "hrm_latest",
-        )
-        checkpoint = {
-            'completed_episodes': completed_episodes,
-            'total_episodes': self.config.n_epoch_episodes,
-            'session_start_time': self.session_start_time,
-            'checkpoint_time': datetime.now().isoformat(),
-            'results': serialized_results,
-            'objective_telemetry': summarize_training_objective_telemetry(serialized_results, self.config),
-            'objective_weight_config': objective_weight_config,
-            'hrm_artifacts': checkpoint_artifacts,
-        }
-
-        with open('training_checkpoint.json', 'w') as f:
-            json.dump(checkpoint, f, indent=2)
+        print(f"\n[SESSION] Training completed. Total episodes: {len(self.results)}")
 
     def _save_hrm_artifacts(self, out_dir: Path, stem: str) -> Dict[str, Any]:
         """
@@ -2120,6 +2231,10 @@ def main():
                         help='Audit/control scale for the regime-weighting proxy multiplier')
     parser.add_argument('--weights-path', type=str, default='',
                         help='Path to existing weights .npz file to resume training from')
+    parser.add_argument('--resume-checkpoint', action='store_true',
+                        help='Resume from training_checkpoint.json if it exists and model config matches')
+    parser.add_argument('--checkpoint-file', type=str, default='training_checkpoint.json',
+                        help='Checkpoint file to resume from (default: training_checkpoint.json)')
     parser.add_argument('--hidden-dim', type=int, default=64,
                         help='Hidden dimension size for the HRM model')
     parser.add_argument('--regime-layers', type=int, default=2,
@@ -2194,6 +2309,54 @@ def main():
             f"trade_update_prob={config.trade_update_prob:.3f} | energy_update_prob={config.energy_update_prob:.3f}"
         )
 
+        # Attempt to resume from checkpoint if requested
+        checkpoint_resume = None
+        if args.resume_checkpoint:
+            checkpoint_file = Path(args.checkpoint_file)
+            if checkpoint_file.exists():
+                print(f"\n[RESUME] Checking checkpoint file: {checkpoint_file}")
+                try:
+                    with open(checkpoint_file, 'r') as f:
+                        checkpoint = json.load(f)
+                    # Verify model config compatibility
+                    saved_config = checkpoint.get('model_config', {})
+                    if saved_config:
+                        config_matches = True
+                        mismatches = []
+                        if saved_config.get('hidden_dim') != config.hidden_dim:
+                            config_matches = False
+                            mismatches.append(f"hidden_dim: {saved_config.get('hidden_dim')} != {config.hidden_dim}")
+                        if saved_config.get('regime_attn_layers') != config.regime_layers:
+                            config_matches = False
+                            mismatches.append(f"regime_attn_layers: {saved_config.get('regime_attn_layers')} != {config.regime_layers}")
+                        if saved_config.get('tactical_attn_layers') != config.tactical_layers:
+                            config_matches = False
+                            mismatches.append(f"tactical_attn_layers: {saved_config.get('tactical_attn_layers')} != {config.tactical_layers}")
+                        if saved_config.get('n_heads') != config.attention_heads:
+                            config_matches = False
+                            mismatches.append(f"n_heads: {saved_config.get('n_heads')} != {config.attention_heads}")
+                        if saved_config.get('input_dim') and saved_config.get('input_dim') != 92:
+                            # input_dim is auto-detected, so only warn if it's set and different
+                            print(f"[RESUME] Note: saved input_dim={saved_config.get('input_dim')} (will be auto-detected)")
+
+                        if config_matches:
+                            completed = checkpoint.get('completed_episodes', 0)
+                            print(f"[RESUME] ✅ Config matches! Resuming from episode {completed}")
+                            print(f"[RESUME]    Session started: {checkpoint.get('session_start_time')}")
+                            print(f"[RESUME]    Checkpoint time: {checkpoint.get('checkpoint_time')}")
+                            print(f"[RESUME]    Results count: {len(checkpoint.get('results', []))}")
+                            checkpoint_resume = checkpoint
+                        else:
+                            print(f"[RESUME] ❌ Config mismatch - cannot resume")
+                            for mismatch in mismatches:
+                                print(f"         {mismatch}")
+                    else:
+                        print(f"[RESUME] ❌ No model config in checkpoint - cannot verify compatibility")
+                except Exception as e:
+                    print(f"[RESUME] ❌ Failed to load checkpoint: {e}")
+            else:
+                print(f"[RESUME] ❌ Checkpoint file not found: {checkpoint_file}")
+
         trainer = EpochEpisodeTrainer(config)
 
         predictor_loss_hist: List[float] = []
@@ -2266,7 +2429,7 @@ def main():
                 f"pretrain_steps={pretrain_eval_count}"
             )
 
-        trainer.run_episode_training(progress_callback=progress)
+        trainer.run_episode_training(progress_callback=progress, resume_from_checkpoint=checkpoint_resume)
 
 
 if __name__ == "__main__":
