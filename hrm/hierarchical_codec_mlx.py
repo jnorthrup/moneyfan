@@ -720,9 +720,15 @@ class MLXBasketTrainer:
         Loss: MSE between predicted next-bar codec features and actual last bar.
         Returns: loss scalar, next memory state
         """
+        print(f"[DEBUG pretrain_step] bar_codec_features type: {type(bar_codec_features)}")
+        print(f"[DEBUG pretrain_step] bar_codec_features shape: {bar_codec_features.shape}")
+        print(f"[DEBUG pretrain_step] memory: {memory}")
+
         (world_model_loss, next_memory), grads = self._pretrain_loss_and_grad(
             self.model, bar_codec_features, memory
         )
+        print(f"[DEBUG pretrain_step] loss computed: {world_model_loss}")
+
         if self.optimizer is not None:
             if clip_gradients:
                 grads = self.clip_gradients(grads, max_gradient_norm)
