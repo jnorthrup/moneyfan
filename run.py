@@ -18,6 +18,7 @@ import argparse
 import json
 import time
 import signal
+from uuid import uuid4
 from pathlib import Path
 from datetime import datetime, timezone
 from dataclasses import dataclass
@@ -41,6 +42,7 @@ from hrm.order_intent import NormalizedTradeIntent, RiskTier
 from hrm.trade_head_calibration import TradeHeadCalibrator, discover_trade_head_calibration_path
 from execution.order_intent_adapter import (
     intent_to_coinbase_order_preview,
+    intent_to_freqtrade_handoff,
     intent_to_legacy_signal,
 )
 
@@ -56,6 +58,10 @@ class TradingConfig:
     mode: str = "paper"
     capital: float = 100.0
     broker: str = "coinbase"
+    offload_execution_to_freqtrade: bool = False
+    freqtrade_handoff_path: str = "runtime/freqtrade_handoff.jsonl"
+    emit_hrm_fidelity_dispatch_log: bool = True
+    hrm_fidelity_dispatch_log_path: str = "runtime/hrm_fidelity_dispatch.jsonl"
     symbols: Optional[List[str]] = None
     risk_per_trade: float = 0.01
     max_positions: int = 10
@@ -130,6 +136,16 @@ class TradingConfig:
         self.use_trade_head_calibration = bool(self.use_trade_head_calibration)
         self.state_path = str(self.state_path or "trading_state.json").strip() or "trading_state.json"
         self.resume_state = bool(self.resume_state)
+        self.offload_execution_to_freqtrade = bool(self.offload_execution_to_freqtrade)
+        self.freqtrade_handoff_path = (
+            str(self.freqtrade_handoff_path or "runtime/freqtrade_handoff.jsonl").strip()
+            or "runtime/freqtrade_handoff.jsonl"
+        )
+        self.emit_hrm_fidelity_dispatch_log = bool(self.emit_hrm_fidelity_dispatch_log)
+        self.hrm_fidelity_dispatch_log_path = (
+            str(self.hrm_fidelity_dispatch_log_path or "runtime/hrm_fidelity_dispatch.jsonl").strip()
+            or "runtime/hrm_fidelity_dispatch.jsonl"
+        )
         self.max_drawdown_kill_pct = max(0.0, float(self.max_drawdown_kill_pct))
         self.max_daily_loss_pct = max(0.0, float(self.max_daily_loss_pct))
         self.max_daily_loss_abs = max(0.0, float(self.max_daily_loss_abs))
@@ -1084,6 +1100,8 @@ class TradingEngine:
     def execute_trade_intent(self, intent: NormalizedTradeIntent, signal_row: Optional[Dict] = None):
         if intent.vetoed:
             return None
+        if bool(self.config.offload_execution_to_freqtrade):
+            return self._emit_freqtrade_handoff_intent(intent, signal_row=signal_row)
 
         order_preview = intent_to_coinbase_order_preview(intent)
         if signal_row is not None:
@@ -1127,6 +1145,122 @@ class TradingEngine:
                 if k in signal_row:
                     legacy_signal[k] = signal_row[k]
         return self.execute_trade(legacy_signal)
+
+    def _json_safe(self, value: Any) -> Any:
+        if isinstance(value, dict):
+            return {str(k): self._json_safe(v) for k, v in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [self._json_safe(v) for v in value]
+        if isinstance(value, Path):
+            return str(value)
+        if isinstance(value, datetime):
+            return value.isoformat()
+        if isinstance(value, np.generic):
+            return value.item()
+        return value
+
+    def _append_jsonl(self, path: Path, row: Dict[str, Any]) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "a") as f:
+            f.write(json.dumps(self._json_safe(row)) + "\n")
+
+    def _new_hrm_signal_id(self, symbol: str) -> str:
+        ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
+        sym = str(symbol or "UNKNOWN").upper()
+        return f"hrm-{ts}-{sym}-{uuid4().hex[:10]}"
+
+    def _build_hrm_fidelity_dispatch_event(
+        self,
+        signal_id: str,
+        intent: NormalizedTradeIntent,
+        payload: Dict[str, Any],
+        signal_row: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        signal_row = signal_row or {}
+        model = payload.get("model", {}) if isinstance(payload.get("model"), dict) else {}
+        risk = payload.get("risk", {}) if isinstance(payload.get("risk"), dict) else {}
+        return {
+            "schema": "moneyfan.hrm.fidelity.dispatch.v1",
+            "ts_utc": datetime.now(timezone.utc).isoformat(),
+            "signal_id": signal_id,
+            "iteration": int(getattr(self, "current_iteration", 0) or 0),
+            "execution_target": "freqtrade",
+            "execution_handoff_path": str(self.config.freqtrade_handoff_path),
+            "status": "dispatched_pending_external_fill",
+            "instrument": {
+                "symbol": str(intent.symbol),
+                "pair": str(payload.get("pair", intent.symbol)),
+                "side": str(payload.get("side", "long")),
+                "price": signal_row.get("price"),
+                "price_timestamp": signal_row.get("price_timestamp"),
+            },
+            "prediction": {
+                "pred_fwd_return": model.get("pred_fwd_return", intent.pred_fwd_return),
+                "confidence": model.get("confidence", intent.confidence),
+                "score": model.get("score"),
+                "score_mode": model.get("score_mode"),
+                "passes_edge_gate": model.get("passes_edge_gate"),
+                "predicted_move_bps": model.get("predicted_move_bps"),
+                "predicted_edge_bps": model.get("predicted_edge_bps"),
+                "calibrated_predicted_move_bps": model.get("calibrated_predicted_move_bps"),
+                "calibrated_predicted_edge_bps": model.get("calibrated_predicted_edge_bps"),
+                "effective_predicted_move_bps": model.get("effective_predicted_move_bps"),
+                "effective_predicted_edge_bps": model.get("effective_predicted_edge_bps"),
+                "net_effective_predicted_edge_bps": model.get("net_effective_predicted_edge_bps"),
+                "move_calibration_scale": model.get("move_calibration_scale"),
+                "trade_head_calibration_loaded": bool(model.get("trade_head_calibration_loaded", False)),
+            },
+            "risk": {
+                "risk_tier": risk.get("risk_tier", intent.risk_tier.value),
+                "stop_loss_pct": risk.get("stop_loss_pct", abs(intent.stop_loss_pct)),
+                "take_profit_pct": risk.get("take_profit_pct", max(intent.take_profit_pct, 0.0)),
+                "position_fraction": risk.get("position_fraction", intent.position_fraction),
+                "vetoed": bool(model.get("vetoed", intent.vetoed)),
+                "veto_reason": model.get("veto_reason", intent.veto_reason),
+                "raw_vetoed": bool(model.get("raw_vetoed", False)),
+                "raw_veto_reason": model.get("raw_veto_reason"),
+                "veto_overridden": bool(model.get("veto_overridden", False)),
+                "veto_override_trigger": model.get("veto_override_trigger"),
+                "risk_heads_repaired": bool(model.get("risk_heads_repaired", False)),
+                "risk_head_repair_tags": list(model.get("risk_head_repair_tags", [])),
+            },
+        }
+
+    def _emit_freqtrade_handoff_intent(
+        self,
+        intent: NormalizedTradeIntent,
+        signal_row: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        signal_id = self._new_hrm_signal_id(intent.symbol)
+        payload = intent_to_freqtrade_handoff(intent, signal_row=signal_row)
+        payload["signal_id"] = signal_id
+        payload["dispatch"] = {
+            "target": "freqtrade",
+            "mode": "handoff_file",
+            "handoff_path": str(self.config.freqtrade_handoff_path),
+            "source_mode": str(self.config.mode),
+            "source_broker_label": str(self.config.broker),
+            "iteration": int(getattr(self, "current_iteration", 0) or 0),
+            "signal_id": signal_id,
+        }
+        self.orders.append(payload)
+        self._append_jsonl(Path(self.config.freqtrade_handoff_path), payload)
+        if bool(self.config.emit_hrm_fidelity_dispatch_log):
+            fidelity_event = self._build_hrm_fidelity_dispatch_event(
+                signal_id=signal_id,
+                intent=intent,
+                payload=payload,
+                signal_row=signal_row,
+            )
+            self._append_jsonl(Path(self.config.hrm_fidelity_dispatch_log_path), fidelity_event)
+        print(
+            "📤 FREQTRADE-HANDOFF: "
+            f"{payload.get('side', '?')} {payload.get('pair', intent.symbol)} "
+            f"stake_frac={float(payload.get('stake_fraction', 0.0)):.2f} "
+            f"conf={float(payload.get('model', {}).get('confidence', 0.0)):.2f} "
+            f"signal_id={signal_id[-10:]}"
+        )
+        return payload
 
     def _get_current_price(self, symbol: str) -> Optional[float]:
         price = self.latest_prices.get(symbol)
@@ -1225,6 +1359,16 @@ class TradingEngine:
             f"max_daily_loss_pct={self.config.max_daily_loss_pct:.1%} "
             f"max_daily_loss_abs=${self.config.max_daily_loss_abs:.2f}"
         )
+        if bool(self.config.offload_execution_to_freqtrade):
+            print(
+                "🔌 Execution offload: Freqtrade handoff enabled | "
+                f"path={self.config.freqtrade_handoff_path} | internal positions disabled"
+            )
+            if bool(self.config.emit_hrm_fidelity_dispatch_log):
+                print(
+                    "🧪 HRM fidelity dispatch log: enabled | "
+                    f"path={self.config.hrm_fidelity_dispatch_log_path}"
+                )
         if self.halt_reason and bool(self.config.respect_saved_halt_state):
             print(f"🛑 Refusing to start due to saved halt state: {self.halt_reason}")
             return
@@ -1344,6 +1488,14 @@ def main():
                         help="Starting capital")
     parser.add_argument("--broker", default="coinbase",
                         help="Broker/exchange label (execution is preview-only)")
+    parser.add_argument("--offload-execution-to-freqtrade", action="store_true",
+                        help="Export HRM intents to a Freqtrade handoff JSONL file instead of internal preview execution")
+    parser.add_argument("--freqtrade-handoff-path", type=str, default="runtime/freqtrade_handoff.jsonl",
+                        help="JSONL file path used when --offload-execution-to-freqtrade is enabled")
+    parser.add_argument("--hrm-fidelity-dispatch-log-path", type=str, default="runtime/hrm_fidelity_dispatch.jsonl",
+                        help="JSONL file for HRM prediction/calibration snapshots at dispatch time")
+    parser.add_argument("--no-hrm-fidelity-dispatch-log", action="store_true",
+                        help="Disable extra HRM fidelity dispatch logging when offloading execution")
     parser.add_argument("--risk", type=float, default=0.01,
                         help="Risk per trade (fraction of capital)")
     parser.add_argument("--max-positions", type=int, default=10,
@@ -1428,6 +1580,10 @@ def main():
         mode=args.mode,
         capital=args.capital,
         broker=args.broker,
+        offload_execution_to_freqtrade=args.offload_execution_to_freqtrade,
+        freqtrade_handoff_path=args.freqtrade_handoff_path,
+        emit_hrm_fidelity_dispatch_log=not args.no_hrm_fidelity_dispatch_log,
+        hrm_fidelity_dispatch_log_path=args.hrm_fidelity_dispatch_log_path,
         symbols=parsed_symbols,
         risk_per_trade=args.risk,
         max_positions=args.max_positions,
