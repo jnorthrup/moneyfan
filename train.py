@@ -196,7 +196,7 @@ def _safe_int(value: Any, default: int = 0) -> int:
         return int(default)
 
 
-def objective_weight_config_from_config(config: Optional[EpisodeTrainingConfig]) -> Dict[str, float]:
+def objective_weight_config_from_config(config: Optional[EpisodeTrainingConfig]) -> Dict[str, Any]:
     """
     Extract and normalize profit-oriented objective weight controls for auditing.
     """
@@ -206,6 +206,9 @@ def objective_weight_config_from_config(config: Optional[EpisodeTrainingConfig])
         "energy_routing_weight": _safe_float(getattr(config, "objective_energy_routing_weight", 0.0), 0.0),
         "cost_turnover_weight": _safe_float(getattr(config, "objective_cost_turnover_weight", 0.0), 0.0),
         "regime_weight_scale": _safe_float(getattr(config, "objective_regime_weight_scale", 1.0), 1.0),
+        "trade_step_schedule_mode": str(getattr(config, "trade_step_schedule_mode", "probabilistic")),
+        "trade_step_min_density": _safe_float(getattr(config, "trade_step_min_density", 0.0), 0.0),
+        "trade_step_schedule_interval": _safe_int(getattr(config, "trade_step_schedule_interval", 0), 0),
     }
 
 
@@ -1081,6 +1084,9 @@ class EpochEpisodeTrainer:
             regime_attn_layers=regime_layers,
             tactical_attn_layers=tactical_layers,
             n_heads=attention_heads,
+            cost_turnover_weight=config.objective_cost_turnover_weight,
+            world_model_weight=config.objective_world_model_weight,
+            trade_head_weight=config.objective_trade_head_weight,
         ) if HAS_MLX else None
         
         if HAS_MLX:
@@ -1804,7 +1810,10 @@ class EpochEpisodeTrainer:
                                         for perturbed_bar_batch in chunk:
                                             perturbed_batch_mx = mx.array(perturbed_bar_batch)
                                             replay_loss, hrm_memory = trainer.pretrain_step(
-                                                perturbed_batch_mx, memory=hrm_memory, auto_eval=False
+                                                perturbed_batch_mx,
+                                                memory=hrm_memory,
+                                                auto_eval=False,
+                                                scale=float(getattr(self.config, 'objective_regime_weight_scale', 1.0))
                                             )
                                             replay_losses.append(replay_loss)
 
@@ -1824,7 +1833,9 @@ class EpochEpisodeTrainer:
                                             print(f"[DEBUG] perturbed_bar_batch is a dict with keys: {perturbed_bar_batch.keys()}")
                                         perturbed_batch_mx = mx.array(perturbed_bar_batch)
                                         replay_loss, hrm_memory = trainer.pretrain_step(
-                                            perturbed_batch_mx, memory=hrm_memory
+                                            perturbed_batch_mx,
+                                            memory=hrm_memory,
+                                            scale=float(getattr(self.config, 'objective_regime_weight_scale', 1.0))
                                         )
                                         replay_eval_count += 1
 
@@ -1835,15 +1846,20 @@ class EpochEpisodeTrainer:
                 else:
                     bar_window_losses.append(0.0)
 
+                # Compute signal density for this window (fraction of non-zero signals across 24 codecs)
+                n_signals = 24
+                window_signals = batch_np[0, :, :n_signals]
+                total_possible_signals = window_signals.size
+                nonzero_count = np.count_nonzero(window_signals)
+                sample_density = float(nonzero_count) / float(total_possible_signals) if total_possible_signals > 0 else 0.0
+
                 # Back-burner "simmering" alpha updates: low-rate trade-head training
                 # so the trade heads learn realized-return alignment without dominating
                 # the world-model objective.
                 if (
                     HAS_MLX
                     and not getattr(self, '_mlx_disabled', False)
-                    and float(self.config.trade_update_prob) > 0.0
-                    and abs(raw_move) >= float(self.config.trade_update_min_abs_return)
-                    and np.random.random() < float(self.config.trade_update_prob)
+                    and should_run_trade_step(bar_seq_i, raw_move, self.config, sample_density)
                 ):
                     try:
                         realized_returns_mx = mx.array(np.array([raw_move], dtype=np.float32))
@@ -2555,6 +2571,14 @@ def main():
                         help='Minimum number of pairs per stochastic episode')
     parser.add_argument('--max-pair-width', type=int, default=45,
                         help='Maximum number of pairs per stochastic episode')
+    # Trade-step scheduling arguments
+    parser.add_argument('--trade-step-schedule-mode', type=str, default='probabilistic',
+                        choices=['probabilistic', 'deterministic', 'density_gated'],
+                        help='Scheduling mode for trade-head updates')
+    parser.add_argument('--trade-step-min-density', type=float, default=0.0,
+                        help='Minimum sample density for density_gated mode (0.0 to 1.0)')
+    parser.add_argument('--trade-step-schedule-interval', type=int, default=0,
+                        help='Step interval for deterministic mode (0 = every step)')
     parser.add_argument('--dashboard', action='store_true', help='Run Streamlit dashboard')
 
     args = parser.parse_args()
@@ -2573,6 +2597,9 @@ def main():
             weight_decay=args.weight_decay,
             trade_update_prob=(0.0 if args.pretrain_only else float(args.trade_update_prob)),
             trade_update_min_abs_return=float(args.trade_update_min_abs_return),
+            trade_step_schedule_mode=str(args.trade_step_schedule_mode),
+            trade_step_min_density=float(args.trade_step_min_density),
+            trade_step_schedule_interval=int(args.trade_step_schedule_interval),
             energy_update_prob=(0.0 if args.pretrain_only else float(args.energy_update_prob)),
             energy_update_min_abs_return=float(args.energy_update_min_abs_return),
             pretrain_only=bool(args.pretrain_only),

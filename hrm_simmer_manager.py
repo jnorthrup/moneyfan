@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+qqqqqqq#!/usr/bin/env python3
 """
 Background HRM simmer loop: low-rate training + walk-forward validation + gated promotion.
 
@@ -658,6 +658,50 @@ def parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
+def _create_deployment_package(cycle_dir: Path, summary: Dict[str, Any]):
+    """
+    Create a deployment package (compact ZIP) for Freqtrade ring agent / DHT discovery.
+    """
+    deploy_dir = Path("models/deploy")
+    deploy_dir.mkdir(parents=True, exist_ok=True)
+    
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    bundle_name = f"hrm_bundle_{timestamp}"
+    bundle_dir = deploy_dir / bundle_name
+    bundle_dir.mkdir(parents=True, exist_ok=True)
+    
+    # 1. Copy core artifacts
+    for name in ARTIFACT_BASENAMES:
+        src = ARTIFACT_DIR / name
+        if src.exists():
+            shutil.copy2(src, bundle_dir / name)
+            
+    # 2. Extract and save condensed deployment metadata
+    deployment_metadata = {
+        "version": "1.0",
+        "timestamp": timestamp,
+        "cycle_index": summary.get("cycle_index"),
+        "metrics": {
+            "mean_equity_delta": summary.get("promotion", {}).get("gate_details", {}).get("mean_equity_delta", 0.0),
+            "weighted_mean_equity_delta": summary.get("promotion", {}).get("gate_details", {}).get("weighted_mean_equity_delta", 0.0),
+        },
+        "objective_config": summary.get("train_summary", {}).get("objective_weight_config", {}),
+    }
+    
+    with open(bundle_dir / "deployment_metadata.json", "w") as f:
+        json.dump(deployment_metadata, f, indent=2)
+        
+    # 3. Create ZIP archive
+    shutil.make_archive(str(deploy_dir / bundle_name), 'zip', bundle_dir)
+    print(f"📦 Deployment bundle created: {deploy_dir / bundle_name}.zip")
+    
+    # Update 'latest' symlink/pointer
+    latest_link = deploy_dir / "hrm_latest.zip"
+    if latest_link.exists():
+        latest_link.unlink()
+    shutil.copy2(deploy_dir / f"{bundle_name}.zip", latest_link)
+
+
 def main():
     args = parse_args()
     root = Path(args.out_dir)
@@ -881,6 +925,7 @@ def main():
 
         if promoted:
             print("✅ Candidate promoted")
+            _create_deployment_package(cycle_dir, summary)
         else:
             print("↩️  Candidate rejected, restored prior checkpoint")
 
