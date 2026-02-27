@@ -89,6 +89,11 @@ class HRMConfig:
     energy_roundtrip_cost_bps: float = 16.0
     energy_churn_penalty: float = 0.0
     energy_target_clip: float = 0.25
+    
+    # Objective weights (for differentiable penalties)
+    world_model_weight: float = 1.0
+    trade_head_weight: float = 1.0
+    cost_turnover_weight: float = 0.0
 
     # Legacy aliases for callers that still use old field names
     @property
@@ -591,8 +596,20 @@ class MLXBasketTrainer:
 
             raw_pnl = (exit_final - entry) * size * conviction * 100.0
             final_pnl = mx.where(pred_dir > 0, raw_pnl, -raw_pnl)
-            final_pnl = final_pnl * active_mask
-            alpha_loss = -mx.mean(final_pnl)
+            
+            # Differentiable cost penalty: penalize predicted exposure to encourage sparse, high-conviction signals.
+            # (Roundtrip cost in bps * effective size)
+            roundtrip_cost = float(getattr(model.config, "energy_roundtrip_cost_bps", 16.0)) / 10000.0
+            cost_penalty = roundtrip_cost * size * conviction * 100.0 # scale to PnL units (100x return)
+            
+            # Combine terms using objective weights
+            # Note: final_pnl is (+) for profit, (-) for loss. We want to maximize (alpha - cost).
+            # So loss = -(alpha - cost) = -alpha + cost
+            weighted_alpha = final_pnl * float(getattr(model.config, "trade_head_weight", 1.0))
+            weighted_cost = cost_penalty * float(getattr(model.config, "cost_turnover_weight", 0.0))
+            
+            net_pnl = weighted_alpha - weighted_cost
+            alpha_loss = -mx.mean(net_pnl * active_mask)
             return alpha_loss, next_memory
 
         energy_discount_gamma = float(max(0.0, min(1.0, getattr(self.config, "energy_discount_gamma", 0.99))))
@@ -713,6 +730,7 @@ class MLXBasketTrainer:
         auto_eval: bool = True,
         clip_gradients: bool = False,
         max_gradient_norm: float = 1.0,
+        scale: float = 1.0,
     ) -> Tuple[mx.array, Tuple]:
         """
         World-model pre-training step with optimizer update.
@@ -720,14 +738,13 @@ class MLXBasketTrainer:
         Loss: MSE between predicted next-bar codec features and actual last bar.
         Returns: loss scalar, next memory state
         """
-        print(f"[DEBUG pretrain_step] bar_codec_features type: {type(bar_codec_features)}")
-        print(f"[DEBUG pretrain_step] bar_codec_features shape: {bar_codec_features.shape}")
-        print(f"[DEBUG pretrain_step] memory: {memory}")
-
         (world_model_loss, next_memory), grads = self._pretrain_loss_and_grad(
             self.model, bar_codec_features, memory
         )
-        print(f"[DEBUG pretrain_step] loss computed: {world_model_loss}")
+        
+        if scale != 1.0:
+            world_model_loss = world_model_loss * scale
+            grads = {k: v * scale if v is not None else None for k, v in grads.items()}
 
         if self.optimizer is not None:
             if clip_gradients:
@@ -745,6 +762,7 @@ class MLXBasketTrainer:
         auto_eval: bool = True,
         clip_gradients: bool = False,
         max_gradient_norm: float = 1.0,
+        scale: float = 1.0,
     ) -> Tuple[mx.array, Tuple]:
         """
         Alpha-maximisation training step with optimizer update.
@@ -755,6 +773,11 @@ class MLXBasketTrainer:
         (alpha_loss, next_memory), grads = self._trade_loss_and_grad(
             self.model, bar_codec_features, realized_returns, memory
         )
+        
+        if scale != 1.0:
+            alpha_loss = alpha_loss * scale
+            grads = {k: v * scale if v is not None else None for k, v in grads.items()}
+
         if self.optimizer is not None:
             if clip_gradients:
                 grads = self.clip_gradients(grads, max_gradient_norm)
@@ -771,6 +794,7 @@ class MLXBasketTrainer:
         auto_eval: bool = True,
         clip_gradients: bool = False,
         max_gradient_norm: float = 1.0,
+        scale: float = 1.0,
     ) -> Tuple[mx.array, Tuple]:
         """
         Energy-routing proxy training step with optimizer update.
@@ -781,6 +805,11 @@ class MLXBasketTrainer:
         (energy_loss, next_memory), grads = self._energy_loss_and_grad(
             self.model, bar_codec_features, realized_returns, memory
         )
+        
+        if scale != 1.0:
+            energy_loss = energy_loss * scale
+            grads = {k: v * scale if v is not None else None for k, v in grads.items()}
+
         if self.optimizer is not None:
             if clip_gradients:
                 grads = self.clip_gradients(grads, max_gradient_norm)
