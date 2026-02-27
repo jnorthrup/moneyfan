@@ -129,6 +129,10 @@ class EpisodeTrainingConfig:
     ob_hyperbolic_tau: float = 32.0
     trade_update_prob: float = 0.10
     trade_update_min_abs_return: float = 0.0
+    # Trade-step scheduling controls for increasing signal density
+    trade_step_schedule_mode: str = "probabilistic"  # "probabilistic", "deterministic", "density_gated"
+    trade_step_min_density: float = 0.0  # Minimum sample density threshold for density_gated mode
+    trade_step_schedule_interval: int = 0  # Interval for deterministic mode (0 = every step)
     energy_update_prob: float = 0.0
     energy_update_min_abs_return: float = 0.0
     pretrain_only: bool = False
@@ -326,6 +330,50 @@ def attach_episode_objective_telemetry(
     enriched = dict(episode_metrics)
     enriched["objective_telemetry"] = build_episode_objective_telemetry(enriched, config=config)
     return enriched
+
+
+def should_run_trade_step(
+    bar_seq_i: int,
+    raw_move: float,
+    config: EpisodeTrainingConfig,
+    sample_density: float = 1.0,
+) -> bool:
+    """
+    Determine if trade-step should run based on scheduling mode.
+    
+    Args:
+        bar_seq_i: Current bar sequence index
+        raw_move: Raw window return magnitude
+        config: Training configuration
+        sample_density: Current sample density (for density_gated mode)
+    
+    Returns:
+        bool: True if trade-step should run
+    """
+    mode = getattr(config, 'trade_step_schedule_mode', 'probabilistic')
+    
+    # First check the minimum return threshold (gating)
+    min_abs_return = getattr(config, 'trade_update_min_abs_return', 0.0)
+    if abs(raw_move) < float(min_abs_return):
+        return False
+    
+    if mode == "deterministic":
+        interval = getattr(config, 'trade_step_schedule_interval', 0)
+        if interval <= 0:
+            return True  # Every step
+        return (bar_seq_i % interval) == 0
+    
+    elif mode == "density_gated":
+        min_density = getattr(config, 'trade_step_min_density', 0.0)
+        if sample_density < float(min_density):
+            return False
+        # Also apply probability in density_gated mode
+        prob = getattr(config, 'trade_update_prob', 0.10)
+        return np.random.random() < float(prob)
+    
+    else:  # "probabilistic" (default)
+        prob = getattr(config, 'trade_update_prob', 0.10)
+        return np.random.random() < float(prob)
 
 
 def summarize_training_objective_telemetry(
@@ -1363,11 +1411,11 @@ class EpochEpisodeTrainer:
             'objective_weight_config': objective_weight_config,
             'hrm_artifacts': checkpoint_artifacts,
             'model_config': {
-                'hidden_dim': self.model_config.hidden_dim,
-                'regime_attn_layers': self.model_config.regime_attn_layers,
-                'tactical_attn_layers': self.model_config.tactical_attn_layers,
-                'n_heads': self.model_config.n_heads,
-                'input_dim': self.model_config.input_dim,
+                'hidden_dim': getattr(self.model_config, 'hidden_dim', None) if self.model_config else None,
+                'regime_attn_layers': getattr(self.model_config, 'regime_attn_layers', None) if self.model_config else None,
+                'tactical_attn_layers': getattr(self.model_config, 'tactical_attn_layers', None) if self.model_config else None,
+                'n_heads': getattr(self.model_config, 'n_heads', None) if self.model_config else None,
+                'input_dim': getattr(self.model_config, 'input_dim', None) if self.model_config else None,
             },
             'data_split_config': {
                 'split_mode': self.config.split_mode,
