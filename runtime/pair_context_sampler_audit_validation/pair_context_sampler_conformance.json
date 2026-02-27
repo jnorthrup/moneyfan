@@ -1,0 +1,51 @@
+{
+  "schema": "moneyfan.pair_context_sampler_conformance.v1",
+  "generated_at_utc": "2026-02-26T00:28:50.149039+00:00",
+  "result": "pass",
+  "context": {
+    "exchange_target": "coinbase_advanced",
+    "data_source": "binance"
+  },
+  "summary": {
+    "rows_total": 2,
+    "rows_parsed": 2,
+    "parse_error_rows": 0,
+    "columns_seen": [
+      "pair",
+      "symbol",
+      "ts_utc",
+      "price",
+      "side",
+      "signal_id"
+    ],
+    "missing_required_columns": [],
+    "missing_recommended_columns": [],
+    "null_violations": 0,
+    "timestamp_violations": 0,
+    "monotonic_timestamp_violations": 0
+  },
+  "details": {
+    "parse_errors": [],
+    "null_violations": [],
+    "timestamp_violations": [],
+    "monotonic_timestamp_violations": []
+  },
+  "contract": {
+    "required_columns": [
+      "pair",
+      "symbol",
+      "ts_utc"
+    ],
+    "recommended_columns": [
+      "price",
+      "side",
+      "signal_id"
+    ],
+    "non_nullable_columns": [
+      "pair",
+      "ts_utc"
+    ],
+    "timestamp_column": "ts_utc",
+    "require_monotonic_ts": false
+  }
+}

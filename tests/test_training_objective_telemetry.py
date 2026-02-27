@@ -16,6 +16,10 @@ def _trainer_stub(tmp_path: Path) -> EpochEpisodeTrainer:
     trainer = EpochEpisodeTrainer.__new__(EpochEpisodeTrainer)
     trainer.config = EpisodeTrainingConfig(n_epoch_episodes=2, bar_sequences_per_episode=100)
     trainer.session_start_time = "2026-02-23T00:00:00"
+    trainer.model_config = None  # MLX not available in test environment
+    trainer._train_symbols = []
+    trainer._val_symbols = []
+    trainer._test_symbols = []
     trainer.results = [
         {
             "episode_id": 0,
