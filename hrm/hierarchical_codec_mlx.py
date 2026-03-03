@@ -39,10 +39,13 @@ try:
     import mlx.core as mx
     import mlx.nn as nn
     import mlx.optimizers as optim
+    from mlx.utils import tree_flatten, tree_map
     HAS_MLX = True
 except ImportError:
     HAS_MLX = False
     optim = None
+    tree_flatten = None
+    tree_map = None
     print("MLX not available")
 
 
@@ -707,21 +710,35 @@ class MLXBasketTrainer:
             eval_args.append(self.optimizer.state)
         mx.eval(*eval_args)
 
-    def clip_gradients(self, grads: Dict[str, mx.array], max_norm: float = 1.0) -> Dict[str, mx.array]:
+    def clip_gradients(self, grads: Any, max_norm: float = 1.0) -> Any:
         """
         Clip gradients to a maximum norm to prevent gradient explosion during BPTT.
 
         Args:
-            grads: Dictionary of gradients from mx.value_and_grad
+            grads: Gradient tree from mx.value_and_grad (nested dict/list leaves)
             max_norm: Maximum L2 norm for the gradients
 
         Returns:
             Clipped gradients
         """
-        total_norm_sq = sum(mx.square(g).sum() for g in grads.values() if g is not None)
+        if tree_flatten is None or tree_map is None:
+            return grads
+
+        leaves = [leaf for _, leaf in tree_flatten(grads) if leaf is not None]
+        if not leaves:
+            return grads
+
+        total_norm_sq = None
+        for g in leaves:
+            term = mx.sum(mx.square(g))
+            total_norm_sq = term if total_norm_sq is None else (total_norm_sq + term)
+
+        if total_norm_sq is None:
+            return grads
+
         total_norm = mx.sqrt(total_norm_sq) + 1e-8
-        scale = mx.minimum(max_norm / total_norm, mx.array(1.0))
-        return {k: v * scale for k, v in grads.items()}
+        scale = mx.minimum(mx.array(1.0), (float(max_norm) / total_norm))
+        return tree_map(lambda g: (None if g is None else g * scale), grads)
 
     def pretrain_step(
         self,

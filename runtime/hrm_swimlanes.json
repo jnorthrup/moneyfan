@@ -1,0 +1,255 @@
+{
+  "generated_at": "2026-03-02T18:10:24",
+  "lane_count": 24,
+  "required_archetypes": [
+    "grid",
+    "volatile_breakout"
+  ],
+  "effective_width": 64,
+  "min_effective_width": 24,
+  "width_growth_factor": 64,
+  "width_growth_steps": 1,
+  "width_growth_rule": "repeated((2^2)^3)",
+  "lanes": [
+    {
+      "lane_id": 0,
+      "archetype": "grid",
+      "risk_tier": "protective",
+      "weight": 1.0,
+      "fast": 8.0,
+      "slow": 34.0,
+      "sig": 5.0,
+      "sharp": 0.8
+    },
+    {
+      "lane_id": 1,
+      "archetype": "grid",
+      "risk_tier": "protective",
+      "weight": 1.0,
+      "fast": 8.0,
+      "slow": 34.0,
+      "sig": 5.0,
+      "sharp": 0.8
+    },
+    {
+      "lane_id": 2,
+      "archetype": "grid",
+      "risk_tier": "protective",
+      "weight": 1.0,
+      "fast": 8.0,
+      "slow": 34.0,
+      "sig": 5.0,
+      "sharp": 0.8
+    },
+    {
+      "lane_id": 3,
+      "archetype": "grid",
+      "risk_tier": "protective",
+      "weight": 1.0,
+      "fast": 8.0,
+      "slow": 34.0,
+      "sig": 5.0,
+      "sharp": 0.8
+    },
+    {
+      "lane_id": 4,
+      "archetype": "volatile_breakout",
+      "risk_tier": "normal",
+      "weight": 1.05,
+      "fast": 6.0,
+      "slow": 24.0,
+      "sig": 4.0,
+      "sharp": 1.4
+    },
+    {
+      "lane_id": 5,
+      "archetype": "volatile_breakout",
+      "risk_tier": "normal",
+      "weight": 1.05,
+      "fast": 6.0,
+      "slow": 24.0,
+      "sig": 4.0,
+      "sharp": 1.4
+    },
+    {
+      "lane_id": 6,
+      "archetype": "volatile_breakout",
+      "risk_tier": "normal",
+      "weight": 1.05,
+      "fast": 6.0,
+      "slow": 24.0,
+      "sig": 4.0,
+      "sharp": 1.4
+    },
+    {
+      "lane_id": 7,
+      "archetype": "volatile_breakout",
+      "risk_tier": "normal",
+      "weight": 1.05,
+      "fast": 6.0,
+      "slow": 24.0,
+      "sig": 4.0,
+      "sharp": 1.4
+    },
+    {
+      "lane_id": 8,
+      "archetype": "trend",
+      "risk_tier": "normal",
+      "weight": 1.0,
+      "fast": 12.0,
+      "slow": 26.0,
+      "sig": 9.0,
+      "sharp": 1.0
+    },
+    {
+      "lane_id": 9,
+      "archetype": "trend",
+      "risk_tier": "normal",
+      "weight": 1.0,
+      "fast": 12.0,
+      "slow": 26.0,
+      "sig": 9.0,
+      "sharp": 1.0
+    },
+    {
+      "lane_id": 10,
+      "archetype": "trend",
+      "risk_tier": "normal",
+      "weight": 1.0,
+      "fast": 12.0,
+      "slow": 26.0,
+      "sig": 9.0,
+      "sharp": 1.0
+    },
+    {
+      "lane_id": 11,
+      "archetype": "trend",
+      "risk_tier": "normal",
+      "weight": 1.0,
+      "fast": 12.0,
+      "slow": 26.0,
+      "sig": 9.0,
+      "sharp": 1.0
+    },
+    {
+      "lane_id": 12,
+      "archetype": "mean_reversion",
+      "risk_tier": "caution",
+      "weight": 0.95,
+      "fast": 14.0,
+      "slow": 30.0,
+      "sig": 10.0,
+      "sharp": 0.9
+    },
+    {
+      "lane_id": 13,
+      "archetype": "mean_reversion",
+      "risk_tier": "caution",
+      "weight": 0.95,
+      "fast": 14.0,
+      "slow": 30.0,
+      "sig": 10.0,
+      "sharp": 0.9
+    },
+    {
+      "lane_id": 14,
+      "archetype": "mean_reversion",
+      "risk_tier": "caution",
+      "weight": 0.95,
+      "fast": 14.0,
+      "slow": 30.0,
+      "sig": 10.0,
+      "sharp": 0.9
+    },
+    {
+      "lane_id": 15,
+      "archetype": "mean_reversion",
+      "risk_tier": "caution",
+      "weight": 0.95,
+      "fast": 14.0,
+      "slow": 30.0,
+      "sig": 10.0,
+      "sharp": 0.9
+    },
+    {
+      "lane_id": 16,
+      "archetype": "momentum",
+      "risk_tier": "normal",
+      "weight": 1.0,
+      "fast": 10.0,
+      "slow": 22.0,
+      "sig": 7.0,
+      "sharp": 1.15
+    },
+    {
+      "lane_id": 17,
+      "archetype": "momentum",
+      "risk_tier": "normal",
+      "weight": 1.0,
+      "fast": 10.0,
+      "slow": 22.0,
+      "sig": 7.0,
+      "sharp": 1.15
+    },
+    {
+      "lane_id": 18,
+      "archetype": "momentum",
+      "risk_tier": "normal",
+      "weight": 1.0,
+      "fast": 10.0,
+      "slow": 22.0,
+      "sig": 7.0,
+      "sharp": 1.15
+    },
+    {
+      "lane_id": 19,
+      "archetype": "momentum",
+      "risk_tier": "normal",
+      "weight": 1.0,
+      "fast": 10.0,
+      "slow": 22.0,
+      "sig": 7.0,
+      "sharp": 1.15
+    },
+    {
+      "lane_id": 20,
+      "archetype": "liquidity_rotation",
+      "risk_tier": "caution",
+      "weight": 0.92,
+      "fast": 16.0,
+      "slow": 36.0,
+      "sig": 12.0,
+      "sharp": 0.85
+    },
+    {
+      "lane_id": 21,
+      "archetype": "liquidity_rotation",
+      "risk_tier": "caution",
+      "weight": 0.92,
+      "fast": 16.0,
+      "slow": 36.0,
+      "sig": 12.0,
+      "sharp": 0.85
+    },
+    {
+      "lane_id": 22,
+      "archetype": "liquidity_rotation",
+      "risk_tier": "caution",
+      "weight": 0.92,
+      "fast": 16.0,
+      "slow": 36.0,
+      "sig": 12.0,
+      "sharp": 0.85
+    },
+    {
+      "lane_id": 23,
+      "archetype": "liquidity_rotation",
+      "risk_tier": "caution",
+      "weight": 0.92,
+      "fast": 16.0,
+      "slow": 36.0,
+      "sig": 12.0,
+      "sharp": 0.85
+    }
+  ]
+}

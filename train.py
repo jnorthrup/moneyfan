@@ -66,6 +66,16 @@ import signal
 import threading
 
 
+DEFAULT_TRAINING_PAIRS: List[str] = [
+    'ADAUSDT', 'APTUSDT', 'ARBUSDT', 'ATOMUSDT', 'AVAXUSDT',
+    'BCHUSDT', 'BNBUSDT', 'BONKUSDT', 'BTCUSDT', 'DOGEUSDT',
+    'DOTUSDT', 'ETCUSDT', 'ETHUSDT', 'FILUSDT', 'INJUSDT',
+    'JUPUSDT', 'LINKUSDT', 'LTCUSDT', 'MATICUSDT', 'OPUSDT',
+    'PEPEUSDT', 'PYTHUSDT', 'RUNEUSDT', 'SEIUSDT', 'SOLUSDT',
+    'SUIUSDT', 'TIAUSDT', 'UNIUSDT', 'WIFUSDT', 'XRPUSDT',
+]
+
+
 
 @dataclass
 class EpisodeTrainingConfig:
@@ -142,6 +152,8 @@ class EpisodeTrainingConfig:
     strict_calendar_extent: bool = False
     candle_source: str = "auto"
     duckdb_corpus_path: str = ""
+    pair_universe_file: str = ""
+    codec_outputs: int = 24
     energy_discount_gamma: float = 0.99
     energy_roundtrip_cost_bps: float = 16.0
     energy_churn_penalty: float = 0.0
@@ -1056,8 +1068,9 @@ class EpochEpisodeTrainer:
             else model_config_override.get('n_heads', 4)
         )
         codec_outputs = (
-            24 if not model_config_override 
-            else model_config_override.get('n_codec_outputs', 24)
+            max(int(getattr(config, 'codec_outputs', 24)), 1)
+            if not model_config_override
+            else max(int(model_config_override.get('n_codec_outputs', getattr(config, 'codec_outputs', 24))), 1)
         )
         
         self.model_config = MLXConfig(
@@ -1130,8 +1143,12 @@ class EpochEpisodeTrainer:
         # Initialize randomness based on config
         self._init_randomness()
 
+        # Resolve pair universe once per run (file/connectome/DuckDB fallback).
+        self._all_pairs_source: str = "default"
+        self._all_pairs_universe: List[str] = self._resolve_pair_universe()
+
         # Initialize data splits
-        self._init_data_splits(all_symbols=None)  # Will be set in run_episode_training
+        self._init_data_splits(all_symbols=self._all_pairs_universe)
 
     def _init_model_if_needed(self, force_reinit: bool = False, known_input_dim: Optional[int] = None):
         """Initialize HRM model and trainer once, preserving training state across episodes."""
@@ -1157,7 +1174,8 @@ class EpochEpisodeTrainer:
                     'close': np.linspace(20050, 20150, probe_len),
                     'volume': np.random.random(probe_len) * 100
                 })
-                probed_signals = self.candle_pipeline.compute_signals(dummy_df, 24)
+                codec_outputs = max(int(getattr(self.model_config, "n_signals", 24)), 1)
+                probed_signals = self.candle_pipeline.compute_signals(dummy_df, codec_outputs)
                 actual_dim = probed_signals.shape[1]
                 self.model_config.input_dim = actual_dim
                 print(f"[Trainer] Robust calibration: {actual_dim} input features detected.")
@@ -1218,6 +1236,134 @@ class EpochEpisodeTrainer:
             print(f"[RANDOMNESS] Using episode_id-based seeding (DEPRECATED - deterministic)")
             print(f"            Consider using --use-true-randomness for stochastic sampling")
 
+    @staticmethod
+    def _normalize_symbol(raw: str) -> str:
+        sym = str(raw or "").strip().upper().replace("-", "").replace("/", "")
+        return sym
+
+    def _load_pair_universe_file(self, path: Path) -> List[str]:
+        try:
+            text = path.read_text(encoding="utf-8").strip()
+        except Exception:
+            return []
+        if not text:
+            return []
+
+        symbols: List[str] = []
+        try:
+            doc = json.loads(text)
+            if isinstance(doc, list):
+                symbols = [self._normalize_symbol(x) for x in doc]
+            elif isinstance(doc, dict):
+                for key in ("mapped_symbols", "symbols", "training_pairs", "pairs"):
+                    value = doc.get(key)
+                    if isinstance(value, list):
+                        symbols.extend(self._normalize_symbol(x) for x in value)
+        except Exception:
+            # Plain text fallback: one symbol per line (supports connectome symbol files).
+            symbols = [
+                self._normalize_symbol(line.split("#", 1)[0])
+                for line in text.splitlines()
+            ]
+
+        deduped: List[str] = []
+        seen = set()
+        for sym in symbols:
+            if not sym:
+                continue
+            if sym in seen:
+                continue
+            seen.add(sym)
+            deduped.append(sym)
+        return deduped
+
+    def _discover_pairs_from_duckdb(self, db_path: Path, timeframe: str = "5m") -> List[str]:
+        try:
+            import duckdb
+        except Exception:
+            return []
+        if not db_path.exists():
+            return []
+
+        con = None
+        try:
+            con = duckdb.connect(str(db_path), read_only=True)
+            tables = {row[0] for row in con.execute("SHOW TABLES").fetchall()}
+
+            if "ohlcv" in tables:
+                rows = con.execute(
+                    "SELECT DISTINCT pair FROM ohlcv WHERE timeframe = ? ORDER BY pair ASC",
+                    [timeframe],
+                ).fetchall()
+                pairs = [self._normalize_symbol(row[0]) for row in rows if row and row[0]]
+                if pairs:
+                    return pairs
+
+            if "binance_sequences_import" in tables:
+                rows = con.execute(
+                    "SELECT DISTINCT symbol FROM binance_sequences_import ORDER BY symbol ASC"
+                ).fetchall()
+                pairs = [self._normalize_symbol(row[0]) for row in rows if row and row[0]]
+                if pairs:
+                    return pairs
+
+            if "binance_klines" in tables:
+                rows = con.execute(
+                    "SELECT DISTINCT symbol FROM binance_klines WHERE timeframe = ? ORDER BY symbol ASC",
+                    [timeframe],
+                ).fetchall()
+                pairs = [self._normalize_symbol(row[0]) for row in rows if row and row[0]]
+                if pairs:
+                    return pairs
+        except Exception as e:
+            print(f"[PAIR_UNIVERSE] DuckDB discovery failed: {e}")
+        finally:
+            if con is not None:
+                try:
+                    con.close()
+                except Exception:
+                    pass
+        return []
+
+    def _resolve_pair_universe(self) -> List[str]:
+        required_anchors = ("BTCUSDT", "ETHUSDT", "SOLUSDT")
+
+        def with_anchors(symbols: List[str]) -> List[str]:
+            out = [self._normalize_symbol(s) for s in symbols if self._normalize_symbol(s)]
+            seen = set(out)
+            for anchor in required_anchors:
+                if anchor not in seen:
+                    out.append(anchor)
+                    seen.add(anchor)
+            return out
+
+        configured = str(getattr(self.config, "pair_universe_file", "") or "").strip()
+        if configured:
+            path = Path(configured).expanduser()
+            if path.exists():
+                symbols = self._load_pair_universe_file(path)
+                if symbols:
+                    self._all_pairs_source = f"pair_universe_file:{path}"
+                    symbols = with_anchors(symbols)
+                    print(f"[PAIR_UNIVERSE] Loaded {len(symbols)} symbols from {path} (anchors=BTC,ETH,SOL)")
+                    return symbols
+                print(f"[PAIR_UNIVERSE] No symbols found in {path}, falling back")
+            else:
+                print(f"[PAIR_UNIVERSE] File missing: {path}, falling back")
+
+        db_path_raw = str(getattr(self.config, "duckdb_corpus_path", "") or "").strip()
+        if db_path_raw:
+            db_path = Path(db_path_raw).expanduser()
+            symbols = self._discover_pairs_from_duckdb(db_path, timeframe="5m")
+            if symbols:
+                self._all_pairs_source = f"duckdb:{db_path}"
+                symbols = with_anchors(symbols)
+                print(f"[PAIR_UNIVERSE] Discovered {len(symbols)} symbols from DuckDB {db_path} (anchors=BTC,ETH,SOL)")
+                return symbols
+
+        self._all_pairs_source = "default"
+        return with_anchors(list(DEFAULT_TRAINING_PAIRS))
+
     def _init_data_splits(self, all_symbols: Optional[List[str]] = None):
         """
         Initialize train/val/test splits based on configuration.
@@ -1227,14 +1373,10 @@ class EpochEpisodeTrainer:
         2. 'time': Split time periods into train/val/test sets
         """
         if all_symbols is None:
-            all_symbols = [
-                'ADAUSDT', 'APTUSDT', 'ARBUSDT', 'ATOMUSDT', 'AVAXUSDT',
-                'BCHUSDT', 'BNBUSDT', 'BONKUSDT', 'BTCUSDT', 'DOGEUSDT',
-                'DOTUSDT', 'ETCUSDT', 'ETHUSDT', 'FILUSDT', 'INJUSDT',
-                'JUPUSDT', 'LINKUSDT', 'LTCUSDT', 'MATICUSDT', 'OPUSDT',
-                'PEPEUSDT', 'PYTHUSDT', 'RUNEUSDT', 'SEIUSDT', 'SOLUSDT',
-                'SUIUSDT', 'TIAUSDT', 'UNIUSDT', 'WIFUSDT', 'XRPUSDT',
-            ]
+            all_symbols = list(DEFAULT_TRAINING_PAIRS)
+        all_symbols = [self._normalize_symbol(s) for s in all_symbols if self._normalize_symbol(s)]
+        if not all_symbols:
+            all_symbols = list(DEFAULT_TRAINING_PAIRS)
 
         if self.config.split_mode == "symbols":
             # Split by symbols (standard ML practice)
@@ -1535,6 +1677,12 @@ class EpochEpisodeTrainer:
         """
         if not HAS_MLX:
             return {'episode_id': episode_id, 'error': 'MLX not available'}
+        debug_batch = os.environ.get("MONEYFAN_DEBUG_BATCH", "").strip().lower() in {"1", "true", "yes", "on"}
+        mlx_fail_error: Optional[str] = None
+
+        def _dbg(msg: str) -> None:
+            if debug_batch:
+                print(msg)
 
         df = self.candle_pipeline.load_candles(episode_pairs, None, None)
         extent_meta: Dict[str, Any] = {
@@ -1682,14 +1830,20 @@ class EpochEpisodeTrainer:
         symbol_ranges = list(getattr(self.candle_pipeline, 'last_symbol_ranges', []))
 
         for epoch in range(self.config.epochs):
-            bar_window_len = np.random.randint(
-                self.config.min_bar_window, self.config.max_bar_window
-            )
+            min_bar = max(int(self.config.min_bar_window), 1)
+            max_bar = max(int(self.config.max_bar_window), min_bar)
+            if max_bar <= min_bar:
+                bar_window_len = min_bar
+            else:
+                # randint upper-bound is exclusive; include max_bar by adding 1.
+                bar_window_len = int(np.random.randint(min_bar, max_bar + 1))
 
             hrm_memory = None
 
             for bar_seq_i in range(self.config.bar_sequences_per_episode):
-                print(f"[DEBUG] bar_seq_i: {bar_seq_i}, hrm_memory: {type(hrm_memory)}")
+                _dbg(f"[DEBUG] bar_seq_i: {bar_seq_i}, hrm_memory: {type(hrm_memory)}")
+                if mlx_fail_error is not None:
+                    break
                 if bar_window_len > len(codec_features):
                     continue
 
@@ -1725,16 +1879,16 @@ class EpochEpisodeTrainer:
                 if not hasattr(self, '_mlx_disabled') or not self._mlx_disabled:
                     try:
                         # DEBUG: Check what batch_np is before creating MX array
-                        print(f"[DEBUG] batch_np type: {type(batch_np)}")
-                        print(f"[DEBUG] batch_np shape: {batch_np.shape if hasattr(batch_np, 'shape') else 'NO SHAPE'}")
+                        _dbg(f"[DEBUG] batch_np type: {type(batch_np)}")
+                        _dbg(f"[DEBUG] batch_np shape: {batch_np.shape if hasattr(batch_np, 'shape') else 'NO SHAPE'}")
                         if isinstance(batch_np, dict):
-                            print(f"[DEBUG] batch_np is a dict with keys: {batch_np.keys()}")
+                            _dbg(f"[DEBUG] batch_np is a dict with keys: {batch_np.keys()}")
                         elif hasattr(batch_np, 'dtype'):
-                            print(f"[DEBUG] batch_np dtype: {batch_np.dtype}")
+                            _dbg(f"[DEBUG] batch_np dtype: {batch_np.dtype}")
 
-                        print(f"[DEBUG] About to call mx.array(batch_np)...")
+                        _dbg("[DEBUG] About to call mx.array(batch_np)...")
                         batch_mx = mx.array(batch_np)
-                        print(f"[DEBUG] batch_mx created successfully, type: {type(batch_mx)}")
+                        _dbg(f"[DEBUG] batch_mx created successfully, type: {type(batch_mx)}")
 
                         # Apply coalescing to regular training if enabled
 
@@ -1749,7 +1903,7 @@ class EpochEpisodeTrainer:
                                 clip_gradients=True,
                                 max_gradient_norm=1.0
                             )
-                            print(f"[DEBUG] coalescing branch: pretrain_step returned")
+                            _dbg("[DEBUG] coalescing branch: pretrain_step returned")
                             trainer.flush_updates(world_model_loss, memory=None)
                             pretrain_eval_count += 1
                         else:
@@ -1765,13 +1919,13 @@ class EpochEpisodeTrainer:
                                 clip_gradients=True,
                                 max_gradient_norm=1.0
                             )
-                            print(f"[DEBUG] standard branch: pretrain_step returned")
+                            _dbg("[DEBUG] standard branch: pretrain_step returned")
                             pretrain_eval_count += 1
 
                         # Extract loss value for logging
-                        print(f"[DEBUG] About to call world_model_loss.item()...")
+                        _dbg("[DEBUG] About to call world_model_loss.item()...")
                         loss_val = float(world_model_loss.item())
-                        print(f"[DEBUG] loss_val extracted: {loss_val}")
+                        _dbg(f"[DEBUG] loss_val extracted: {loss_val}")
                         bar_window_losses.append(loss_val)
 
                         # Regime Shock Detection: flag extent if loss z-score > shock_z_threshold
@@ -1828,9 +1982,9 @@ class EpochEpisodeTrainer:
                                         replay_coalesced_steps += len(chunk)
                                 else:
                                     for perturbed_bar_batch in replay_batches_np:
-                                        print(f"[DEBUG] perturbed_bar_batch type: {type(perturbed_bar_batch)}")
+                                        _dbg(f"[DEBUG] perturbed_bar_batch type: {type(perturbed_bar_batch)}")
                                         if isinstance(perturbed_bar_batch, dict):
-                                            print(f"[DEBUG] perturbed_bar_batch is a dict with keys: {perturbed_bar_batch.keys()}")
+                                            _dbg(f"[DEBUG] perturbed_bar_batch is a dict with keys: {perturbed_bar_batch.keys()}")
                                         perturbed_batch_mx = mx.array(perturbed_bar_batch)
                                         replay_loss, hrm_memory = trainer.pretrain_step(
                                             perturbed_batch_mx,
@@ -1840,14 +1994,25 @@ class EpochEpisodeTrainer:
                                         replay_eval_count += 1
 
                     except Exception as e:
-                        print(f"MLX disabled on episode {episode_id}: {type(e).__name__}: {e}")
+                        mlx_fail_error = (
+                            f"MLX disabled on episode {episode_id}: {type(e).__name__}: {e}"
+                        )
+                        print(mlx_fail_error)
                         self._mlx_disabled = True
                         bar_window_losses.append(0.0)
+                        if bool(getattr(self.config, "pretrain_only", False)):
+                            break
                 else:
                     bar_window_losses.append(0.0)
+                    if bool(getattr(self.config, "pretrain_only", False)):
+                        mlx_fail_error = (
+                            f"MLX disabled on episode {episode_id}; "
+                            "pretrain-only requires working MLX pretrain_step"
+                        )
+                        break
 
-                # Compute signal density for this window (fraction of non-zero signals across 24 codecs)
-                n_signals = 24
+                # Compute signal density for this window (fraction of non-zero signals across active codecs)
+                n_signals = max(int(getattr(self.model_config, "n_signals", 24)), 1)
                 window_signals = batch_np[0, :, :n_signals]
                 total_possible_signals = window_signals.size
                 nonzero_count = np.count_nonzero(window_signals)
@@ -1970,6 +2135,9 @@ class EpochEpisodeTrainer:
                         notional *= (1 + ret)
                         notional_curve.append(notional)
 
+            if mlx_fail_error is not None:
+                break
+
             # Throttle events to avoid Streamlit freeze on 500 episodes
             current_time = time.time()
             if (
@@ -2038,6 +2206,19 @@ class EpochEpisodeTrainer:
                     trainer.flush_updates(last_loss, memory=hrm_memory)
                 except Exception as e:
                     print(f"[Warning] Failed to flush updates at epoch end: {e}")
+
+        if mlx_fail_error is not None:
+            return {
+                'episode_id': episode_id,
+                'error': mlx_fail_error,
+                'symbols': episode_pairs,
+                'candle_source_used': getattr(self.candle_pipeline, "last_candle_source_used", None),
+                'candle_source_detail': getattr(self.candle_pipeline, "last_candle_source_detail", None),
+                'extent_sampling_mode': extent_meta.get("mode"),
+                'extent_sampling_applied': bool(extent_meta.get("applied", False)),
+                'extent_rows_before': int(extent_meta.get("rows_before", 0) or 0),
+                'extent_rows_after': int(extent_meta.get("rows_after", 0) or 0),
+            }
 
         # Final per-codec leaderboard
         top_idx = int(np.argmax(codec_conviction_sum))
@@ -2148,14 +2329,12 @@ class EpochEpisodeTrainer:
         episode_id = start_episode
         max_training_secs = getattr(self.config, 'max_training_seconds', 0) or 0
 
-        all_pairs = [
-            'ADAUSDT', 'APTUSDT', 'ARBUSDT', 'ATOMUSDT', 'AVAXUSDT',
-            'BCHUSDT', 'BNBUSDT', 'BONKUSDT', 'BTCUSDT', 'DOGEUSDT',
-            'DOTUSDT', 'ETCUSDT', 'ETHUSDT', 'FILUSDT', 'INJUSDT',
-            'JUPUSDT', 'LINKUSDT', 'LTCUSDT', 'MATICUSDT', 'OPUSDT',
-            'PEPEUSDT', 'PYTHUSDT', 'RUNEUSDT', 'SEIUSDT', 'SOLUSDT',
-            'SUIUSDT', 'TIAUSDT', 'UNIUSDT', 'WIFUSDT', 'XRPUSDT',
-        ]
+        all_pairs = list(self._all_pairs_universe) if self._all_pairs_universe else list(DEFAULT_TRAINING_PAIRS)
+        if not all_pairs:
+            all_pairs = list(DEFAULT_TRAINING_PAIRS)
+        print(f"[PAIR_UNIVERSE] active_count={len(all_pairs)} source={self._all_pairs_source}")
+        # Rebuild splits in case universe changed between trainer init and runtime.
+        self._init_data_splits(all_symbols=all_pairs)
 
         if start_episode > 0:
             print(f"[RESUME] Starting from episode {start_episode} (skipping first {start_episode} episodes)")
@@ -2475,6 +2654,12 @@ def main():
                         help='Starting notional value')
     parser.add_argument('--pair-width', type=int, default=30,
                         help='Coin pairs per episode')
+    parser.add_argument('--bar-sequences-per-episode', type=int, default=100,
+                        help='Number of stochastic bar windows sampled per episode')
+    parser.add_argument('--min-bar-window', type=int, default=64,
+                        help='Minimum sampled bar window length (candles)')
+    parser.add_argument('--max-bar-window', type=int, default=256,
+                        help='Maximum sampled bar window length (candles)')
     parser.add_argument('--optimizer', type=str, default='adamw',
                         choices=['adam', 'adamw', 'lion', 'muon'],
                         help='MLX optimizer for HRM training')
@@ -2506,6 +2691,13 @@ def main():
                         help='Minimum stochastic calendar extent in days (0 disables calendar-span sampling)')
     parser.add_argument('--max-extent-days', type=int, default=0,
                         help='Maximum stochastic calendar extent in days (0 disables calendar-span sampling)')
+    parser.add_argument('--candles-per-extent', type=int, default=1000,
+                        help='Raw candle depth per extent used by the world-model context window')
+    parser.add_argument('--ob-decay-mode', type=str, default='exponential',
+                        choices=['exponential', 'hyperbolic'],
+                        help='Temporal order-book decay mode for horizon compression')
+    parser.add_argument('--ob-hyperbolic-tau', type=float, default=32.0,
+                        help='Hyperbolic tau constant when --ob-decay-mode=hyperbolic')
     # Data split arguments (standard ML practice)
     parser.add_argument('--split-mode', type=str, default='symbols',
                         choices=['symbols', 'time'],
@@ -2534,6 +2726,10 @@ def main():
                         help='Candle corpus source for training data loads')
     parser.add_argument('--duckdb-corpus-path', type=str, default='',
                         help='Optional DuckDB corpus path (default: data/binance/hrm_data.duckdb)')
+    parser.add_argument('--pair-universe-file', type=str, default='',
+                        help='Optional symbol universe file (JSON list/object or newline-delimited symbols)')
+    parser.add_argument('--codec-outputs', type=int, default=24,
+                        help='Active codec outputs for training (e.g. 4 for convergence smoke, 24 for full panel)')
     parser.add_argument('--objective-world-model-weight', type=float, default=1.0,
                         help='Audit/control weight for the world-model objective term')
     parser.add_argument('--objective-trade-head-weight', type=float, default=1.0,
@@ -2592,6 +2788,9 @@ def main():
             n_epoch_episodes=args.episodes,
             notional=args.notional,
             pair_width=args.pair_width,
+            bar_sequences_per_episode=int(args.bar_sequences_per_episode),
+            min_bar_window=int(args.min_bar_window),
+            max_bar_window=int(args.max_bar_window),
             optimizer_name=args.optimizer,
             learning_rate=args.learning_rate,
             weight_decay=args.weight_decay,
@@ -2615,10 +2814,15 @@ def main():
             time_split_fraction=float(args.time_split_fraction),
             min_extent_days=int(args.min_extent_days),
             max_extent_days=int(args.max_extent_days),
+            candles_per_extent=int(args.candles_per_extent),
+            ob_decay_mode=str(args.ob_decay_mode),
+            ob_hyperbolic_tau=float(args.ob_hyperbolic_tau),
             min_extent_rows=int(args.min_extent_rows),
             strict_calendar_extent=bool(args.strict_calendar_extent),
             candle_source=str(args.candle_source),
             duckdb_corpus_path=str(args.duckdb_corpus_path or ""),
+            pair_universe_file=str(args.pair_universe_file or ""),
+            codec_outputs=max(int(args.codec_outputs), 1),
             energy_discount_gamma=float(args.energy_discount_gamma),
             energy_roundtrip_cost_bps=float(args.energy_roundtrip_cost_bps),
             energy_churn_penalty=float(args.energy_churn_penalty),
@@ -2639,9 +2843,11 @@ def main():
         print(
             f"Training mode: {'PRETRAIN_ONLY' if config.pretrain_only else 'JOINT'} | "
             f"randomness={randomness_mode} | "
+            f"codec_outputs={int(config.codec_outputs)} | "
             f"split_mode={config.split_mode} | "
             f"train_split={config.train_split:.2f} val_split={config.val_split:.2f} test_split={config.test_split:.2f} | "
             f"candle_source={config.candle_source} | "
+            f"pair_universe_file={config.pair_universe_file or 'auto'} | "
             f"calendar_extent_days={config.min_extent_days}-{config.max_extent_days if config.max_extent_days else 0} | "
             f"calendar_extent_strict={'on' if config.strict_calendar_extent else 'off'} | "
             f"trade_update_prob={config.trade_update_prob:.3f} | energy_update_prob={config.energy_update_prob:.3f}"

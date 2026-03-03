@@ -1,11 +1,11 @@
 {
-  "n_codec_outputs": 24,
-  "input_dim": 104,
+  "n_codec_outputs": 4,
+  "input_dim": 20,
   "hidden_dim": 64,
-  "ob_depth_frames": 20,
+  "ob_depth_frames": 256,
   "ob_lookback_horizon": 200,
-  "ob_decay_mode": "exponential",
-  "ob_hyperbolic_tau": 32.0,
+  "ob_decay_mode": "hyperbolic",
+  "ob_hyperbolic_tau": 24.0,
   "ob_tactical_near_frames": 64,
   "regime_attn_layers": 2,
   "tactical_attn_layers": 2,
@@ -25,5 +25,8 @@
   "energy_discount_gamma": 0.99,
   "energy_roundtrip_cost_bps": 16.0,
   "energy_churn_penalty": 0.0,
-  "energy_target_clip": 0.25
+  "energy_target_clip": 0.25,
+  "world_model_weight": 1.0,
+  "trade_head_weight": 1.0,
+  "cost_turnover_weight": 0.0
 }
