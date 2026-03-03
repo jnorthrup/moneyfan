@@ -17,3 +17,9 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ## [~] Track: Freqtrade offload + HRM fidelity audit loop (runtime offload, reconciliation, reports, runbook)
 *Link: [./conductor/tracks/freqtrade_offload_hrm_fidelity_20260225/](./conductor/tracks/freqtrade_offload_hrm_fidelity_20260225/)*
+
+## [ ] Track: Pretesting + Paper Testing Drawdown Source Artifacts (Freqtrade Insights Sink)
+
+**Objective:** Produce deterministic drawdown source artifacts from moneyfan and hand them off to `freqtrade`, where all insights are published.
+
+*Link: [./conductor/tracks/pretesting-paper-drawdown-kotlingrad-dsel_20260302/](./conductor/tracks/pretesting-paper-drawdown-kotlingrad-dsel_20260302/)*
