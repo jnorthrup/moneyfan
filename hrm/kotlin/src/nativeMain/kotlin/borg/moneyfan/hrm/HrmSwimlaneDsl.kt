@@ -1,5 +1,8 @@
+@file:OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
 package borg.moneyfan.hrm
 
+import kotlinx.cinterop.*
+import borg.trikeshed.grad.hadamard
 import borg.trikeshed.lib.Series
 import borg.trikeshed.lib.j
 import borg.trikeshed.lib.toSeries
@@ -108,7 +111,7 @@ object HrmSwimlaneDsl {
             spec.sharp.coerceIn(0.1, 4.0),
         ).toSeries()
 
-        return (archetypeVec `ʘ` riskVec) `ʘ` quantVec
+        return (archetypeVec `hadamard` riskVec) `hadamard` quantVec
     }
 
     /** Human-readable glyph tag for diagnostics/telemetry. */

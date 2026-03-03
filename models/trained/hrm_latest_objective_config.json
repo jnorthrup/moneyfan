@@ -3,5 +3,8 @@
   "trade_head_weight": 1.0,
   "energy_routing_weight": 0.0,
   "cost_turnover_weight": 0.0,
-  "regime_weight_scale": 1.0
+  "regime_weight_scale": 1.0,
+  "trade_step_schedule_mode": "probabilistic",
+  "trade_step_min_density": 0.0,
+  "trade_step_schedule_interval": 0
 }
