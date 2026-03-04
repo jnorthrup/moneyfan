@@ -1,0 +1,8 @@
+{
+  "track_id": "runtime_drawdown_guardrails_rollback_20260303",
+  "type": "feature",
+  "status": "new",
+  "created_at": "2026-03-04T02:22:11Z",
+  "updated_at": "2026-03-04T02:22:11Z",
+  "description": "Add runtime drawdown guardrails and rollback-safe operating controls for paper/live-preview trading loops"
+}
