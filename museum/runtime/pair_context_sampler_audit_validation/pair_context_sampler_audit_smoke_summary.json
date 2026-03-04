@@ -1,0 +1,23 @@
+{
+  "schema": "moneyfan.pair_context_sampler_audit_smoke.v1",
+  "generated_at_utc": "2026-03-03T18:12:44.419972+00:00",
+  "context": {
+    "exchange_target": "coinbase_advanced",
+    "data_source": "binance"
+  },
+  "paths": {
+    "runtime_dir": "/Users/jim/work/moneyfan/runtime/pair_context_sampler_audit_validation",
+    "muxer_rows_jsonl": "/Users/jim/work/moneyfan/runtime/pair_context_sampler_audit_validation/pair_context_muxer_rows.jsonl",
+    "trace_jsonl": "/Users/jim/work/moneyfan/runtime/pair_context_sampler_audit_validation/pair_context_sampler_trace.jsonl",
+    "conformance_json": "/Users/jim/work/moneyfan/runtime/pair_context_sampler_audit_validation/pair_context_sampler_conformance.json",
+    "trace_report_json": "/Users/jim/work/moneyfan/runtime/pair_context_sampler_audit_validation/pair_context_sampler_trace_report.json",
+    "trace_report_md": "/Users/jim/work/moneyfan/runtime/pair_context_sampler_audit_validation/pair_context_sampler_trace_report.md"
+  },
+  "results": {
+    "conformance_result": "pass",
+    "trace_rows_written": 2,
+    "trace_report_rows_valid": 2,
+    "pair_width_p95": 2.9499999999999997,
+    "focal_pair_inclusion_failures": 0
+  }
+}

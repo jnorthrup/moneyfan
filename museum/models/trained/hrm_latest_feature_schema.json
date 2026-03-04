@@ -1,0 +1,18 @@
+{
+  "instrument_keys": [
+    "mean_reversion__returns_last",
+    "momentum_trend__momentum_fast",
+    "momentum_trend__returns_last",
+    "trend_following__momentum",
+    "volatility_breakout__atr_norm",
+    "volatility_breakout__momentum",
+    "volatility_breakout__volatility_signal"
+  ],
+  "context_feature_keys": [
+    "ctx_symbol_change",
+    "ctx_symbol_id_norm",
+    "ctx_symbol_pos_norm",
+    "ctx_source_id_norm",
+    "ctx_timeframe_id_norm"
+  ]
+}
