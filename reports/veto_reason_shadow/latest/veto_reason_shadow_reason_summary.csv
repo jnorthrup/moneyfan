@@ -1,2 +1,0 @@
-reason,raw_vetoed_candidates,counterfactual_topk_candidates,displaced_shadow_trades,displaced_shadow_pnl,displaced_shadow_gross_profit,displaced_shadow_gross_loss,displaced_shadow_profit_factor,runs_with_raw_veto,runs_with_cf_topk,runs_with_displacement
-"stop_too_tight",30,0,0,0.0000000000,0.0000000000,0.0000000000,0.0,8,0,0

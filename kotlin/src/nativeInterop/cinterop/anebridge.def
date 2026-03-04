@@ -1,0 +1,4 @@
+package = borg.moneyfan.ane
+headers = moneyfan_ane_bridge.h
+headerFilter = moneyfan_ane_bridge.h
+language = C
