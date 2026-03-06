@@ -3,7 +3,7 @@ import tempfile
 import numpy as np
 import pytest
 
-from quick_variability_check import extract_losses, analyze_variability, get_recommendation
+from quick_variability_check import extract_losses, analyze_variability, get_recommendation, main
 
 
 def test_extract_losses():
@@ -72,3 +72,11 @@ def test_get_recommendation():
 
     # Test Empty
     assert get_recommendation({}) == "No data"
+
+
+def test_main_refuses_to_fabricate_analysis(capsys):
+    rc = main(["--log-file", "/definitely/missing.log"])
+    captured = capsys.readouterr()
+
+    assert rc == 1
+    assert "refusing to fabricate sizing guidance" in captured.out

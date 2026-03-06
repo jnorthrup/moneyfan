@@ -9,9 +9,9 @@ Usage:
     python quick_variability_check.py
 """
 
+import argparse
 import re
 import numpy as np
-from pathlib import Path
 
 
 def extract_losses(log_file: str = "train_pretrain_stochastic_continue.log") -> list:
@@ -70,13 +70,20 @@ def get_recommendation(analysis: dict) -> str:
         return "✅ MODERATE - Current config may be adequate"
 
 
-def main():
-    # Extract and analyze
-    losses = extract_losses()
+def main(argv=None) -> int:
+    parser = argparse.ArgumentParser(description="Analyze pretraining loss variability from a real log file.")
+    parser.add_argument(
+        "--log-file",
+        default="train_pretrain_stochastic_continue.log",
+        help="Training log file containing pred_loss=... lines.",
+    )
+    args = parser.parse_args(argv)
+
+    losses = extract_losses(args.log_file)
     if not losses:
-        losses = [301.65, 236.62, 245.46, 582.25, 572.32, 571.88, 131.72, 244.85,
-                 472.19, 308.53, 379.42, 281.37, 502.94, 282.71, 474.05, 344.34]
-    
+        print(f"No loss data found in {args.log_file}; refusing to fabricate sizing guidance.")
+        return 1
+
     analysis = analyze_variability(losses)
     
     # Print quick analysis
@@ -106,7 +113,8 @@ def main():
         print(f"   3. If mean loss < 100: Model may be overpowered")
         
     print("\n" + "="*60)
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
