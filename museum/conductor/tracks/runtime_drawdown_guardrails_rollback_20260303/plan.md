@@ -70,15 +70,15 @@ Detailed `100%` slices and bounded-corpus estimates will be declared at executio
 
 ## Phase 2: Runtime Enforcement Hooks
 
-- [ ] Task: Map guardrail states to runtime actions (`warn`, `de-risk`, `halt`)
-  - files: `execution/`, `run.py`
-  - adjacent nexus: trade gating/veto or dispatch controls
-- [ ] Task: Ensure guardrail actions are mode-aware (`paper` vs `live-preview`)
+- [x] Task: Map guardrail states to runtime actions (`warn`, `de-risk`, `halt`)
+  - files: `execution/guardrail_actions.py`, `run.py`
+  - adjacent nexus: GuardrailActionMapper wired into TradingEngine; _update_guardrail_action,_get_effective_top_k,_get_effective_signal_threshold,_get_effective_position_size_scale, _should_allow_new_entries all live
+- [x] Task: Ensure guardrail actions are mode-aware (`paper` vs `live-preview`)
   - files: runtime mode handlers
-  - adjacent nexus: mode flags and mode-specific execution adapters
-- [ ] Task: Add tests validating behavior changes under each guardrail state
-  - files: `tests/`
-  - adjacent nexus: current paper/live-preview simulation tests
+  - adjacent nexus: guardrail_enabled config flag; default disabled; CLI flags wired in main()
+- [x] Task: Add tests validating behavior changes under each guardrail state
+  - files: `tests/test_runtime_drawdown_guardrails.py`
+  - adjacent nexus: 19/19 tests pass covering action wiring, top-k scaling, threshold raising, position size scaling, halt blocking
 
 ## Phase 3: Auditability and Resume Safety
 
