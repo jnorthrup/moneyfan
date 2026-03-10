@@ -45,6 +45,12 @@ from execution.order_intent_adapter import (
     intent_to_freqtrade_handoff,
     intent_to_legacy_signal,
 )
+from execution.guardrail_actions import (
+    GuardrailAction,
+    GuardrailActionMapper,
+    GuardrailActionResult,
+    create_guardrail_action_mapper_from_config,
+)
 
 
 DEFAULT_SYMBOLS = [
@@ -210,6 +216,10 @@ class TradingEngine:
         self.guardrail_state: str = "normal"
         self.guardrail_candidate_state: str = "normal"
         self.guardrail_candidate_iterations: int = 0
+        self.guardrail_action_mapper: GuardrailActionMapper = (
+            create_guardrail_action_mapper_from_config(config)
+        )
+        self._current_guardrail_action: Optional[GuardrailActionResult] = None
 
         self._candidate_weights_path = self._discover_weights_path(self.config.weights_path)
         self._candidate_model_config_path = self._discover_model_config_path(
@@ -375,6 +385,92 @@ class TradingEngine:
         print(f"🛡️  GUARDRAIL TRANSITION: {old_state} -> {new_state} (dd={drawdown:.2%})")
         log_path = Path(self.config.guardrail_events_log_path)
         self._append_jsonl(log_path, event)
+
+    def _update_guardrail_action(self):
+        """Update the current guardrail action based on guardrail state.
+        
+        This method applies the guardrail action mapping to determine runtime
+        behavior modifications based on the current guardrail state.
+        """
+        action_result = self.guardrail_action_mapper.apply_action(
+            current_params={},
+            guardrail_state=self.guardrail_state,
+            top_k=self.config.top_k,
+            risk_per_trade=self.config.risk_per_trade,
+            signal_threshold=self.config.signal_threshold,
+            max_positions=self.config.max_positions,
+        )
+        self.current_guardrail_action = action_result.action
+        
+        # Log action changes
+        if action_result.action != GuardrailAction.NORMAL:
+            print(
+                f"🛡️  GUARDRAIL ACTION: {action_result.action.value} | "
+                f"position_scale={action_result.position_size_scale:.2f} "
+                f"top_k={action_result.top_k} "
+                f"signal_thresh={action_result.signal_threshold:.2f} "
+                f"entries={'allowed' if action_result.allow_new_entries else 'blocked'}"
+            )
+
+    def _should_allow_new_entries(self) -> tuple[bool, str]:
+        """Check if new position entries should be allowed based on guardrail state.
+        
+        Returns:
+            Tuple of (allowed: bool, reason: str)
+        """
+        return self.guardrail_action_mapper.should_allow_entry(
+            guardrail_state=self.guardrail_state,
+            current_positions=len(self.positions),
+            max_positions=self.config.max_positions,
+        )
+
+    def _get_effective_signal_threshold(self) -> float:
+        """Get the effective signal threshold considering guardrail actions.
+        
+        Returns:
+            Effective signal threshold to use for this iteration
+        """
+        action_result = self.guardrail_action_mapper.apply_action(
+            current_params={},
+            guardrail_state=self.guardrail_state,
+            top_k=self.config.top_k,
+            risk_per_trade=self.config.risk_per_trade,
+            signal_threshold=self.config.signal_threshold,
+            max_positions=self.config.max_positions,
+        )
+        return action_result.signal_threshold
+
+    def _get_effective_top_k(self) -> int:
+        """Get the effective top-k limit considering guardrail actions.
+        
+        Returns:
+            Effective top-k limit for this iteration
+        """
+        action_result = self.guardrail_action_mapper.apply_action(
+            current_params={},
+            guardrail_state=self.guardrail_state,
+            top_k=self.config.top_k,
+            risk_per_trade=self.config.risk_per_trade,
+            signal_threshold=self.config.signal_threshold,
+            max_positions=self.config.max_positions,
+        )
+        return action_result.top_k
+
+    def _get_effective_position_size_scale(self) -> float:
+        """Get the effective position size scale considering guardrail actions.
+        
+        Returns:
+            Position size multiplier to apply
+        """
+        action_result = self.guardrail_action_mapper.apply_action(
+            current_params={},
+            guardrail_state=self.guardrail_state,
+            top_k=self.config.top_k,
+            risk_per_trade=self.config.risk_per_trade,
+            signal_threshold=self.config.signal_threshold,
+            max_positions=self.config.max_positions,
+        )
+        return action_result.position_size_scale
 
     def _load_state(self):
         if not bool(getattr(self.config, "resume_state", True)):
@@ -1402,6 +1498,9 @@ class TradingEngine:
 
     def _rank_trade_candidates(self, signal_rows: List[Dict]) -> List[Dict]:
         candidates = []
+        # Use effective signal threshold from guardrail actions
+        effective_threshold = self._get_effective_signal_threshold()
+        
         for row in signal_rows:
             if "error" in row:
                 continue
@@ -1412,7 +1511,8 @@ class TradingEngine:
             cooldown_until = int(self.symbol_cooldown_until_iteration.get(str(row.get("symbol")), 0))
             if int(self.current_iteration) < cooldown_until:
                 continue
-            if float(row.get("confidence", 0.0)) < self.config.signal_threshold:
+            # Use effective threshold (may be raised by guardrail derisk action)
+            if float(row.get("confidence", 0.0)) < effective_threshold:
                 continue
             if float(row.get("signal", 0.0)) == 0.0:
                 continue
@@ -1481,6 +1581,14 @@ class TradingEngine:
             if not self._check_kill_switches():
                 break
 
+            # Update guardrail action based on current guardrail state
+            self._update_guardrail_action()
+            
+            # Check if new entries are allowed based on guardrail state
+            entries_allowed, entry_reason = self._should_allow_new_entries()
+            if not entries_allowed:
+                print(f"🛡️  GUARDRAIL: New entries blocked - {entry_reason}")
+
             signal_rows: List[Dict] = []
             for symbol in self.config.symbols:
                 if not self.running:
@@ -1501,13 +1609,31 @@ class TradingEngine:
             else:
                 print("📉 No executable signals this iteration")
 
+            # Apply guardrail action modifications
+            effective_top_k = self._get_effective_top_k()
+            effective_threshold = self._get_effective_signal_threshold()
+            position_size_scale = self._get_effective_position_size_scale()
+            
+            # Log guardrail-modified parameters if different from config
+            if effective_top_k != self.config.top_k or effective_threshold != self.config.signal_threshold:
+                print(
+                    f"🛡️  GUARDRAIL APPLIED: top_k={effective_top_k} (base={self.config.top_k}) "
+                    f"threshold={effective_threshold:.2f} (base={self.config.signal_threshold:.2f}) "
+                    f"size_scale={position_size_scale:.2f}"
+                )
+
             opened_this_loop = 0
             for row in ranked:
-                if opened_this_loop >= self.config.top_k:
+                if opened_this_loop >= effective_top_k:
                     break
                 intent = self._signal_to_intent(row)
                 if intent is None:
                     continue
+                
+                # Apply position size scaling based on guardrail state
+                if position_size_scale < 1.0 and intent.position_fraction > 0:
+                    intent.position_fraction = max(0.01, intent.position_fraction * position_size_scale)
+                
                 before_positions = len(self.positions)
                 result = self.execute_trade_intent(intent, signal_row=row)
                 after_positions = len(self.positions)
@@ -1521,7 +1647,8 @@ class TradingEngine:
 
             print(
                 f"📊 Status: positions={len(self.positions)} pnl=${self.pnl:.2f} "
-                f"orders={len(self.orders)} trades={len(self.trades)}"
+                f"orders={len(self.orders)} trades={len(self.trades)} "
+                f"guardrail={self.guardrail_state}"
             )
 
             if self.config.max_iterations is not None and iteration >= self.config.max_iterations:
@@ -1652,6 +1779,19 @@ def main():
                         help="Hard-halt if UTC-day realized loss reaches this absolute dollar value (0 disables)")
     parser.add_argument("--ignore-saved-halt-state", action="store_true",
                         help="Resume even if saved state contains a previous hard-halt reason")
+    parser.add_argument("--guardrail-enabled", action="store_true",
+                        help="Enable drawdown guardrail state machine (disabled by default)")
+    parser.add_argument("--guardrail-warn-drawdown-pct", type=float, default=0.05,
+                        help="Drawdown fraction that triggers warn state (default 5%%)")
+    parser.add_argument("--guardrail-derisk-drawdown-pct", type=float, default=0.08,
+                        help="Drawdown fraction that triggers de-risk state (default 8%%)")
+    parser.add_argument("--guardrail-halt-drawdown-pct", type=float, default=0.12,
+                        help="Drawdown fraction that triggers halt state (default 12%%)")
+    parser.add_argument("--guardrail-confirmation-window", type=int, default=1,
+                        help="Iterations of sustained violation required before state transition")
+    parser.add_argument("--guardrail-events-log-path", type=str,
+                        default="runtime/guardrail_events.jsonl",
+                        help="JSONL file for guardrail transition event artifact emission")
 
     args = parser.parse_args()
 
@@ -1706,6 +1846,12 @@ def main():
         max_daily_loss_pct=args.max_daily_loss_pct,
         max_daily_loss_abs=args.max_daily_loss_abs,
         respect_saved_halt_state=not args.ignore_saved_halt_state,
+        guardrail_enabled=args.guardrail_enabled,
+        guardrail_warn_drawdown_pct=args.guardrail_warn_drawdown_pct,
+        guardrail_derisk_drawdown_pct=args.guardrail_derisk_drawdown_pct,
+        guardrail_halt_drawdown_pct=args.guardrail_halt_drawdown_pct,
+        guardrail_confirmation_window=args.guardrail_confirmation_window,
+        guardrail_events_log_path=args.guardrail_events_log_path,
     )
 
     engine = TradingEngine(config)

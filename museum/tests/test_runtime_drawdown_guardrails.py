@@ -46,6 +46,9 @@ def engine_stub(tmp_path):
         engine.guardrail_state = "normal"
         engine.guardrail_candidate_state = "normal"
         engine.guardrail_candidate_iterations = 0
+        from execution.guardrail_actions import create_guardrail_action_mapper_from_config
+        engine.guardrail_action_mapper = create_guardrail_action_mapper_from_config(cfg)
+        engine._current_guardrail_action = None
         return engine
 
     return _make
@@ -213,3 +216,90 @@ def test_kill_switch_halts_on_guardrail_halt(engine_stub):
     assert engine.running is False
     assert engine.halt_reason == "guardrail_halt_triggered"
     assert engine.guardrail_state == "halt"
+
+
+# ---------------------------------------------------------------------------
+# Phase 2: Action wiring tests
+# ---------------------------------------------------------------------------
+
+def test_update_guardrail_action_disabled(engine_stub):
+    """When guardrail is disabled, _update_guardrail_action sets no active action."""
+    engine = engine_stub()  # guardrail_enabled=False by default
+    engine._update_guardrail_action()
+    assert engine._current_guardrail_action is None
+
+
+def test_effective_top_k_no_guardrail(engine_stub):
+    """When guardrail is disabled, effective top-k equals config top-k."""
+    engine = engine_stub(top_k=3)
+    engine._update_guardrail_action()
+    assert engine._get_effective_top_k() == 3
+
+
+def test_effective_top_k_derisk(engine_stub):
+    """Under derisk state, effective top-k is scaled down."""
+    engine = engine_stub(guardrail_enabled=True, top_k=4)
+    engine.guardrail_state = "derisk"
+    engine._update_guardrail_action()
+    # Default derisk_top_k_scale=0.5, so 4 * 0.5 = 2
+    assert engine._get_effective_top_k() == 2
+
+
+def test_effective_top_k_halt(engine_stub):
+    """Under halt state, effective top-k is 0 (no new entries)."""
+    engine = engine_stub(guardrail_enabled=True, top_k=5)
+    engine.guardrail_state = "halt"
+    engine._update_guardrail_action()
+    assert engine._get_effective_top_k() == 0
+
+
+def test_effective_signal_threshold_derisk(engine_stub):
+    """Under derisk state, effective signal threshold is raised."""
+    engine = engine_stub(guardrail_enabled=True, signal_threshold=0.65)
+    engine.guardrail_state = "derisk"
+    engine._update_guardrail_action()
+    # Default derisk_confidence_boost=0.10, so 0.65 + 0.10 = 0.75
+    assert engine._get_effective_signal_threshold() == pytest.approx(0.75)
+
+
+def test_effective_position_size_scale_normal(engine_stub):
+    """In normal state with guardrails enabled, position size scale is 1.0."""
+    engine = engine_stub(guardrail_enabled=True)
+    engine.guardrail_state = "normal"
+    engine._update_guardrail_action()
+    assert engine._get_effective_position_size_scale() == pytest.approx(1.0)
+
+
+def test_effective_position_size_scale_derisk(engine_stub):
+    """Under derisk state, position size scale is reduced to 50%."""
+    engine = engine_stub(guardrail_enabled=True)
+    engine.guardrail_state = "derisk"
+    engine._update_guardrail_action()
+    # Default derisk_position_size_scale=0.5
+    assert engine._get_effective_position_size_scale() == pytest.approx(0.5)
+
+
+def test_should_allow_new_entries_disabled(engine_stub):
+    """When guardrail is disabled, new entries are always allowed."""
+    engine = engine_stub()
+    allowed, reason = engine._should_allow_new_entries()
+    assert allowed is True
+    # mapper returns "allowed" for normal state regardless of guardrail_enabled flag
+    assert reason == "allowed"
+
+
+def test_should_allow_new_entries_halt(engine_stub):
+    """Under halt state, new entries are blocked."""
+    engine = engine_stub(guardrail_enabled=True)
+    engine.guardrail_state = "halt"
+    allowed, reason = engine._should_allow_new_entries()
+    assert allowed is False
+    assert "halt" in reason
+
+
+def test_should_allow_new_entries_normal(engine_stub):
+    """Under normal state with positions available, new entries are allowed."""
+    engine = engine_stub(guardrail_enabled=True, max_positions=10)
+    engine.guardrail_state = "normal"
+    allowed, reason = engine._should_allow_new_entries()
+    assert allowed is True
