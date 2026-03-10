@@ -51,9 +51,16 @@ Prepare and validate moneyfan-side pretesting/paper-testing drawdown inputs so t
 
 ## Phase 3: Kotlingrad DSEL Source Alignment
 
-- [ ] Task: Add source manifest fields that reference Kotlingrad expression IDs where available
-- [ ] Task: Add compatibility checks for expression-id stability across runs
-- [ ] Task: Add smoke test for source manifest handoff into freqtrade-side aggregator
+- [x] Task: Add source manifest fields that reference Kotlingrad expression IDs where available
+  - files: `execution/source_manifest.py`
+  - ExpressionEntry: expression_id, expression_id_source (kotlingrad_fingerprint | codec_name | manual), stability_key
+  - CANONICAL_CODEC_NAMES: 24 stable codec kernel identifiers
+- [x] Task: Add compatibility checks for expression-id stability across runs
+  - files: `execution/source_manifest.py` stability_fingerprint(), validate_manifest()
+  - stability_key = SHA-256[:16] of (expression_id:source); stability_fingerprint = SHA-256[:24] over all entries
+- [x] Task: Add smoke test for source manifest handoff into freqtrade-side aggregator
+  - files: `tests/test_source_manifest.py`
+  - 44/44 tests pass: registry, entry construction, stability, schema, validate(), cross-run stability, profile_id integration
 
 ## 100% Slices (Zero-Discovery)
 
@@ -62,7 +69,9 @@ Prepare and validate moneyfan-side pretesting/paper-testing drawdown inputs so t
 - [x] Slice: Add one paper telemetry schema test including threshold crossing payloads
   - delivered: execution/paper_drawdown_telemetry.py + tests/test_paper_drawdown_telemetry.py (49/49 pass)
   - crossing payloads at all 4 states; stress-profile path replay; validate() function
-- [ ] Slice: Add one source-manifest fixture with stable expression IDs
+- [x] Slice: Add one source-manifest fixture with stable expression IDs
+  - delivered: execution/source_manifest.py + tests/test_source_manifest.py (44/44 pass)
+  - CANONICAL_CODEC_NAMES (24), ExpressionEntry, SourceManifest, stability_fingerprint, validate_manifest
 
 ## Decision Queue
 
@@ -70,7 +79,8 @@ Prepare and validate moneyfan-side pretesting/paper-testing drawdown inputs so t
   - Resolved: REQUIRED_TELEMETRY_KEYS in paper_drawdown_telemetry.py (15 fields)
 - [ ] Decide whether moneyfan should include optional explanatory fields or keep a strict minimal schema
   - Current: optional fields (profile_id, effective_top_k) present only when supplied; strict core required
-- [ ] Decide update cadence for source artifact publishing (per run vs daily batch)
+- [x] Decide update cadence for source artifact publishing (per run vs daily batch)
+  - Resolved: per-run manifest for pretesting; daily batch for paper handoff (pending freqtrade integration)
 
 ## Backlog
 
