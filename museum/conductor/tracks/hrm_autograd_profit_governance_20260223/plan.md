@@ -47,10 +47,10 @@ This track now includes training tasks **and** integration with Freqtrade ring a
   - [x] Write tests (or validation checks) for training profile config generation/defaults where applicable
   - [x] Implement operator-facing examples for fast train loops and artifact expectations
   - [x] **CRITICAL:** Create training profiles that can be evaluated by Freqtrade ring agent
-- [ ] **PRIORITY 2:** Record training baseline evidence and remaining MLX training debt
-  - [ ] Write/update tests for any training reporting helpers introduced in this phase
-  - [ ] Implement baseline evidence capture/report updates focused on training throughput and objective behavior
-  - [ ] **CRITICAL:** Ensure training artifacts are compatible with Freqtrade evaluation pipeline
+- [x] **PRIORITY 2:** Record training baseline evidence and remaining MLX training debt
+  - [x] Write/update tests for any training reporting helpers introduced in this phase
+  - [x] Implement baseline evidence capture/report updates focused on training throughput and objective behavior
+  - [x] **CRITICAL:** Ensure training artifacts are compatible with Freqtrade evaluation pipeline
 - [ ] Task: Conductor - User Manual Verification 'Phase 3: MLX HRM Training Evidence and Iteration Baseline' (Protocol in workflow.md)
 
 ## Phase 4: Freqtrade Integration & Model Deployment (ALPHA CRITICAL PATH)
