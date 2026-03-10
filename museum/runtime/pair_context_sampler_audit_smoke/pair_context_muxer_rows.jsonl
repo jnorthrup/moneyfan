@@ -1,2 +1,0 @@
-{"pair": "BTC/USD", "symbol": "BTCUSD", "ts_utc": "2026-02-26T15:00:00Z", "price": 64000.0, "side": "long", "signal_id": "sig-sampler-smoke-001"}
-{"pair": "ETH/USD", "symbol": "ETHUSD", "ts_utc": "2026-02-26T15:00:00Z", "price": 3500.0, "side": "short", "signal_id": "sig-sampler-smoke-002"}

@@ -1,10 +1,0 @@
-═══════════════════════════════════════════════════════
-       STRATEGY COMPARISON BACKTEST
-═══════════════════════════════════════════════════════
-
-Current candles: 699,318
-Target: 6,000,000 (45 assets × 2 years × 5-min)
-
-📥 Fetching 730 days (5min) from Coinbase...
-   Expected: ~210240 candles per asset
-  [1/45] BTC: fetching...    Chunk 10/701, 3000 candles    Chunk 20/701, 6000 candles    Chunk 30/701, 9000 candles    Chunk 40/701, 12000 candles
