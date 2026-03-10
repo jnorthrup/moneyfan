@@ -82,27 +82,27 @@ Detailed `100%` slices and bounded-corpus estimates will be declared at executio
 
 ## Phase 3: Auditability and Resume Safety
 
-- [ ] Task: Emit transition/action events to runtime artifacts with stable schema
-  - files: `runtime/`, artifact emitters
-  - adjacent nexus: existing `metrics.json`/`trades.json` writers
-- [ ] Task: Implement explicit halt-resume semantics and persistence
-  - files: `run.py`, runtime state persistence modules
-  - adjacent nexus: session lifecycle and startup restore logic
-- [ ] Task: Add artifact completeness tests and resume-flow tests
-  - files: `tests/`
-  - adjacent nexus: artifact validation and replay-style tests
+- [x] Task: Emit transition/action events to runtime artifacts with stable schema
+  - files: `run.py` `_emit_guardrail_event`, `runtime/guardrail_events.jsonl`
+  - adjacent nexus: JSONL path, moneyfan.runtime.guardrail.event.v1 schema emitted and tested
+- [x] Task: Implement explicit halt-resume semantics and persistence
+  - files: `run.py` `_save_state`, `_load_state`
+  - adjacent nexus: guardrail_state / candidate window fields survive crash-safe restart; invalid values silently default
+- [x] Task: Add artifact completeness tests and resume-flow tests
+  - files: `tests/test_runtime_drawdown_guardrails.py`
+  - adjacent nexus: 24/24 tests pass; schema completeness, save/load round-trip, invalid-state fallback, halt-resume all covered
 
 ## Phase 4: Operator Verification and Hardening
 
-- [ ] Task: Add operator runbook for guardrail-triggered sessions
-  - files: this track folder and/or runtime docs
-  - adjacent nexus: existing daily operator runbooks
-- [ ] Task: Run targeted validation command set and record expected outcomes
-  - files: test/runtime command docs
-  - adjacent nexus: `workflow.md` verification protocol
-- [ ] Task: Capture rollout notes and fallback toggles for safe adoption
-  - files: this track folder
-  - adjacent nexus: config flags and release toggles
+- [x] Task: Add operator runbook for guardrail-triggered sessions
+  - files: `conductor/tracks/runtime_drawdown_guardrails_rollback_20260303/operator_runbook.md`
+  - adjacent nexus: state reading, halt-resume procedure, threshold adjustment CLI, validation commands
+- [x] Task: Run targeted validation command set and record expected outcomes
+  - files: `operator_runbook.md` (validation section)
+  - adjacent nexus: `PYTHONPATH=... pytest tests/test_runtime_drawdown_guardrails.py` — 24/24 pass
+- [x] Task: Capture rollout notes and fallback toggles for safe adoption
+  - files: `operator_runbook.md` (rollout section)
+  - adjacent nexus: guardrails off-by-default; backward-compat state loading; no broker API side effects
 
 ## 100% Slices (Zero-Discovery Candidate Seeds)
 
@@ -112,9 +112,12 @@ Detailed `100%` slices and bounded-corpus estimates will be declared at executio
 
 ## Decision Queue
 
-- [ ] Decide initial default threshold set for `warn`/`de-risk`/`halt`.
-- [ ] Decide first-pass `de-risk` behavior (size scaling, frequency reduction, or hybrid).
+- [x] Decide initial default threshold set for `warn`/`de-risk`/`halt`.
+  - Resolved: warn=5%, derisk=8%, halt=12% (configurable via CLI flags)
+- [x] Decide first-pass `de-risk` behavior (size scaling, frequency reduction, or hybrid).
+  - Resolved: hybrid — 50% position size scale + 50% top-k reduction + +10% confidence boost
 - [ ] Decide required operator acknowledgment mechanism for resume.
+  - Current: `--ignore-saved-halt-state` flag required to override a saved halt
 
 ## Backlog
 
