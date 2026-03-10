@@ -2550,10 +2550,23 @@ class EpochEpisodeTrainer:
             Path("models/trained"),
             "hrm_latest",
         )
+        session_end = datetime.now()
+        session_start = datetime.fromisoformat(self.session_start_time)
+        elapsed_seconds = max((session_end - session_start).total_seconds(), 1.0)
+        
+        # Calculate approximate steps for throughput (total_trades + pretrain_steps)
+        total_steps = sum(
+            r.get('total_trades', 0) + r.get('pretrain_steps', 0)
+            for r in serialized_results
+        )
+        throughput_steps_per_sec = float(total_steps) / elapsed_seconds if total_steps > 0 else 0.0
+        
         summary = {
             'total_episodes': len(serialized_results),
             'session_start_time': self.session_start_time,
-            'session_end_time': datetime.now().isoformat(),
+            'session_end_time': session_end.isoformat(),
+            'elapsed_seconds': float(elapsed_seconds),
+            'throughput_steps_per_sec': float(throughput_steps_per_sec),
             'avg_realized_pnl': float(np.mean(realized_pnls)) if realized_pnls else 0.0,
             'avg_hit_rate': float(np.mean(hit_rates)) if hit_rates else 0.0,
             'total_notional': float(sum(final_capitals)) if final_capitals else 0.0,
@@ -2568,6 +2581,7 @@ class EpochEpisodeTrainer:
 
         print(f"\nTraining complete!")
         print(f"Total episodes: {summary['total_episodes']}")
+        print(f"Elapsed Time: {elapsed_seconds:.1f}s (Throughput: {throughput_steps_per_sec:.1f} steps/s)")
         print(f"Avg Realized PnL: ${summary['avg_realized_pnl']:.2f}")
         print(f"Avg Hit Rate: {summary['avg_hit_rate']:.1%}")
 
