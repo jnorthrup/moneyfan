@@ -22,10 +22,18 @@ Prepare and validate moneyfan-side pretesting/paper-testing drawdown inputs so t
 
 ## Phase 1: Pretesting Drawdown Inputs
 
-- [ ] Task: Define deterministic pretesting stress profiles for drawdown-focused evaluation
-- [ ] Task: Add profile metadata (`profile_id`, regime tags, expected DD bands)
-- [ ] Task: Add tests validating profile determinism and schema stability
-- [ ] Task: Emit source artifacts intended for `freqtrade` insight ingestion
+- [x] Task: Define deterministic pretesting stress profiles for drawdown-focused evaluation
+  - files: `execution/drawdown_stress_profiles.py`
+  - 5 profiles: benign, warn_breach, derisk_path, full_halt, oscillating_warn
+- [x] Task: Add profile metadata (`profile_id`, regime tags, expected DD bands)
+  - files: `execution/drawdown_stress_profiles.py`
+  - each profile has profile_id, regime_tags, expected_dd_band, expected_guardrail_states
+- [x] Task: Add tests validating profile determinism and schema stability
+  - files: `tests/test_drawdown_stress_profiles.py`
+  - 79/79 tests pass: schema, determinism, DD-band bounds, threshold alignment
+- [x] Task: Emit source artifacts intended for `freqtrade` insight ingestion
+  - files: `execution/drawdown_stress_profiles.py` `as_source_artifact()`
+  - schema: moneyfan.drawdown.stress_profile.v1; JSON-serializable; freqtrade-compatible
 
 ## Phase 2: Paper Testing Drawdown Telemetry
 
@@ -42,7 +50,8 @@ Prepare and validate moneyfan-side pretesting/paper-testing drawdown inputs so t
 
 ## 100% Slices (Zero-Discovery)
 
-- [ ] Slice: Add one deterministic drawdown stress profile fixture + validation test
+- [x] Slice: Add one deterministic drawdown stress profile fixture + validation test
+  - delivered: 5 profiles + 79 tests in execution/drawdown_stress_profiles.py and tests/test_drawdown_stress_profiles.py
 - [ ] Slice: Add one paper telemetry schema test including threshold crossing payloads
 - [ ] Slice: Add one source-manifest fixture with stable expression IDs
 

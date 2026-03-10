@@ -20,7 +20,6 @@ import pytest
 
 from execution.drawdown_stress_profiles import (
     DRAWDOWN_STRESS_PROFILES,
-    DrawdownStressProfile,
     PROFILE_BENIGN,
     PROFILE_WARN_BREACH,
     PROFILE_DERISK_PATH,

@@ -20,7 +20,7 @@ the same drawdown_path_pct regardless of runtime environment.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 
