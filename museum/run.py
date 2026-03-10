@@ -97,6 +97,12 @@ class TradingConfig:
     max_daily_loss_pct: float = 0.03
     max_daily_loss_abs: float = 0.0
     respect_saved_halt_state: bool = True
+    guardrail_enabled: bool = False
+    guardrail_warn_drawdown_pct: float = 0.05
+    guardrail_derisk_drawdown_pct: float = 0.08
+    guardrail_halt_drawdown_pct: float = 0.12
+    guardrail_confirmation_window: int = 1
+    guardrail_events_log_path: str = "runtime/guardrail_events.jsonl"
 
     def __post_init__(self):
         raw_symbols = self.symbols or list(DEFAULT_SYMBOLS)
@@ -150,6 +156,15 @@ class TradingConfig:
         self.max_daily_loss_pct = max(0.0, float(self.max_daily_loss_pct))
         self.max_daily_loss_abs = max(0.0, float(self.max_daily_loss_abs))
         self.respect_saved_halt_state = bool(self.respect_saved_halt_state)
+        self.guardrail_enabled = bool(self.guardrail_enabled)
+        self.guardrail_warn_drawdown_pct = max(0.0, float(self.guardrail_warn_drawdown_pct))
+        self.guardrail_derisk_drawdown_pct = max(
+            self.guardrail_warn_drawdown_pct, float(self.guardrail_derisk_drawdown_pct)
+        )
+        self.guardrail_halt_drawdown_pct = max(
+            self.guardrail_derisk_drawdown_pct, float(self.guardrail_halt_drawdown_pct)
+        )
+        self.guardrail_confirmation_window = max(1, int(self.guardrail_confirmation_window))
         if self.max_iterations is not None:
             self.max_iterations = max(1, int(self.max_iterations))
 
@@ -192,6 +207,9 @@ class TradingEngine:
         self.risk_day_start_equity: float = float(self.config.capital)
         self.risk_day_realized_pnl: float = 0.0
         self.halt_reason: Optional[str] = None
+        self.guardrail_state: str = "normal"
+        self.guardrail_candidate_state: str = "normal"
+        self.guardrail_candidate_iterations: int = 0
 
         self._candidate_weights_path = self._discover_weights_path(self.config.weights_path)
         self._candidate_model_config_path = self._discover_model_config_path(
@@ -294,7 +312,69 @@ class TradingEngine:
             self._trigger_halt(f"max_daily_loss_abs_exceeded:{daily_loss_abs_limit:.4f}", snapshot=snapshot)
             return False
 
+        if self.config.guardrail_enabled:
+            state = self._check_drawdown_guardrails()
+            if state == "halt":
+                self._trigger_halt("guardrail_halt_triggered", snapshot=snapshot)
+                return False
+
         return True
+
+    def _check_drawdown_guardrails(self) -> str:
+        """Evaluate current drawdown against guardrail thresholds and record state.
+
+        States advance normal -> warn -> derisk -> halt as drawdown deepens.
+        Returns the current guardrail state string.  When guardrail_enabled is
+        False the method is a no-op and always returns 'normal'.
+        """
+        if not self.config.guardrail_enabled:
+            return "normal"
+
+        abs_dd = abs(min(self._portfolio_drawdown_pct(), 0.0))
+
+        if abs_dd >= self.config.guardrail_halt_drawdown_pct:
+            candidate = "halt"
+        elif abs_dd >= self.config.guardrail_derisk_drawdown_pct:
+            candidate = "derisk"
+        elif abs_dd >= self.config.guardrail_warn_drawdown_pct:
+            candidate = "warn"
+        else:
+            candidate = "normal"
+
+        if candidate != self.guardrail_state:
+            if candidate == self.guardrail_candidate_state:
+                self.guardrail_candidate_iterations += 1
+            else:
+                self.guardrail_candidate_state = candidate
+                self.guardrail_candidate_iterations = 1
+
+            if self.guardrail_candidate_iterations >= self.config.guardrail_confirmation_window:
+                old_state = self.guardrail_state
+                self.guardrail_state = candidate
+                self._emit_guardrail_event(old_state, candidate, abs_dd)
+        else:
+            # Candidate matches current state, reset candidate tracker
+            self.guardrail_candidate_state = candidate
+            self.guardrail_candidate_iterations = 0
+
+        return self.guardrail_state
+
+    def _emit_guardrail_event(self, old_state: str, new_state: str, drawdown: float):
+        event = {
+            "schema": "moneyfan.runtime.guardrail.event.v1",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "old_state": old_state,
+            "new_state": new_state,
+            "drawdown_pct": float(drawdown),
+            "threshold_warn": float(self.config.guardrail_warn_drawdown_pct),
+            "threshold_derisk": float(self.config.guardrail_derisk_drawdown_pct),
+            "threshold_halt": float(self.config.guardrail_halt_drawdown_pct),
+            "mode": str(self.config.mode),
+            "iteration": int(self.current_iteration),
+        }
+        print(f"🛡️  GUARDRAIL TRANSITION: {old_state} -> {new_state} (dd={drawdown:.2%})")
+        log_path = Path(self.config.guardrail_events_log_path)
+        self._append_jsonl(log_path, event)
 
     def _load_state(self):
         if not bool(getattr(self.config, "resume_state", True)):
@@ -1359,6 +1439,15 @@ class TradingEngine:
             f"max_daily_loss_pct={self.config.max_daily_loss_pct:.1%} "
             f"max_daily_loss_abs=${self.config.max_daily_loss_abs:.2f}"
         )
+        if self.config.guardrail_enabled:
+            print(
+                "🛡️  Drawdown Guardrails: "
+                f"warn={self.config.guardrail_warn_drawdown_pct:.1%} "
+                f"derisk={self.config.guardrail_derisk_drawdown_pct:.1%} "
+                f"halt={self.config.guardrail_halt_drawdown_pct:.1%} "
+                f"window={self.config.guardrail_confirmation_window} "
+                f"path={self.config.guardrail_events_log_path}"
+            )
         if bool(self.config.offload_execution_to_freqtrade):
             print(
                 "🔌 Execution offload: Freqtrade handoff enabled | "
