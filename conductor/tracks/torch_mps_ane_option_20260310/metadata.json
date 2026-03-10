@@ -1,0 +1,9 @@
+{
+  "track_id": "torch_mps_ane_option_20260310",
+  "type": "feature",
+  "status": "in_progress",
+  "created_at": "2026-03-10T00:00:00Z",
+  "updated_at": "2026-03-10T15:35:00Z",
+  "runtime_route": "kilo",
+  "description": "Torch-first training with MPS fallback, Core ML export, and ANE gap mapping"
+}
