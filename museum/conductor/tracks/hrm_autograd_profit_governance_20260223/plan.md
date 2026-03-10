@@ -74,10 +74,12 @@ This track now includes training tasks **and** integration with Freqtrade ring a
 
 ## Phase 5: Model Robustness & Production Hardening (AGENT HARNESS)
 
-- [ ] **PRIORITY 1:** Add model versioning and artifact management
-  - [ ] Implement semantic versioning for HRM models
-  - [ ] Create artifact registry with metadata
-  - [ ] Add model provenance tracking
+- [x] **PRIORITY 1:** Add model versioning and artifact management
+  - [x] Implement semantic versioning for HRM models
+  - [x] Create artifact registry with metadata
+  - [x] Add model provenance tracking
+  - files: `execution/model_version_registry.py`, `tests/test_model_version_registry.py`
+  - 45/45 tests pass: fingerprints, build, state machine, JSONL registry
 - [ ] **PRIORITY 2:** Implement model governance and promotion gates
   - [ ] Create promotion criteria based on profit metrics
   - [ ] Implement multi-slice validation requirements
