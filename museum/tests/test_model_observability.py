@@ -32,20 +32,16 @@ from execution.model_version_registry import (
 )
 from execution.promotion_gate import (
     EvaluationMetrics,
-    PromotionGate,
-    PromotionPolicy,
 )
 from execution.model_observability import (
     ALERT_SCHEMA,
     REPORT_SCHEMA,
-    REQUIRED_ALERT_KEYS,
     REQUIRED_REPORT_KEYS,
     VALID_ALERT_TYPES,
     AlertEvent,
     AlertThresholds,
     DecisionLogIndex,
     DegradationAlerter,
-    ModelPerformanceReport,
     build_performance_report,
     validate_alert_event,
     validate_report,

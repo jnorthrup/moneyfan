@@ -92,10 +92,13 @@ This track now includes training tasks **and** integration with Freqtrade ring a
   - [x] Add health checks for deployed models
   - files: `execution/rollback_controller.py`, `tests/test_rollback_controller.py`
   - 31/31 tests pass: artifact health check, automatic+manual rollback, idempotency, log round-trip
-- [ ] **PRIORITY 4:** Enhance observability and monitoring
-  - [ ] Create dashboards for model performance
-  - [ ] Implement alerting for model degradation
-  - [ ] Add comprehensive logging for model decisions
+- [x] **PRIORITY 4:** Enhance observability and monitoring
+  - [x] Create dashboards for model performance
+  - [x] Implement alerting for model degradation
+  - [x] Add comprehensive logging for model decisions
+  - files: `execution/model_observability.py`, `tests/test_model_observability.py`
+  - 42/42 tests pass: performance report, degradation alerting, decision log index
+  - Full Phase 5 governance stack: 152/152 combined (registry+gate+rollback+observability)
 
 ## Success Criteria for Freqtrade Alpha Integration
 
