@@ -37,10 +37,17 @@ Prepare and validate moneyfan-side pretesting/paper-testing drawdown inputs so t
 
 ## Phase 2: Paper Testing Drawdown Telemetry
 
-- [ ] Task: Standardize paper-loop drawdown telemetry event shape (`signal_id`, DD%, threshold state)
-- [ ] Task: Add reconciliation metadata needed by freqtrade report generation
-- [ ] Task: Add tests for telemetry completeness and compatibility
+- [x] Task: Standardize paper-loop drawdown telemetry event shape (`signal_id`, DD%, threshold state)
+  - files: `execution/paper_drawdown_telemetry.py`
+  - schema: moneyfan.paper.drawdown.telemetry.v1; REQUIRED_TELEMETRY_KEYS constant
+- [x] Task: Add reconciliation metadata needed by freqtrade report generation
+  - files: `execution/paper_drawdown_telemetry.py`
+  - fields: guardrail_action_active, position_size_scale, new_entries_allowed, effective_top_k, profile_id
+- [x] Task: Add tests for telemetry completeness and compatibility
+  - files: `tests/test_paper_drawdown_telemetry.py`
+  - 49/49 tests pass: schema, crossing payloads, validate(), helpers, stress profile replay
 - [ ] Task: Emit handoff artifacts for `../freqtrade/conductor/insights/paper/`
+  - blocked: freqtrade insights directory ownership and handoff batch cadence not yet decided
 
 ## Phase 3: Kotlingrad DSEL Source Alignment
 
@@ -52,13 +59,17 @@ Prepare and validate moneyfan-side pretesting/paper-testing drawdown inputs so t
 
 - [x] Slice: Add one deterministic drawdown stress profile fixture + validation test
   - delivered: 5 profiles + 79 tests in execution/drawdown_stress_profiles.py and tests/test_drawdown_stress_profiles.py
-- [ ] Slice: Add one paper telemetry schema test including threshold crossing payloads
+- [x] Slice: Add one paper telemetry schema test including threshold crossing payloads
+  - delivered: execution/paper_drawdown_telemetry.py + tests/test_paper_drawdown_telemetry.py (49/49 pass)
+  - crossing payloads at all 4 states; stress-profile path replay; validate() function
 - [ ] Slice: Add one source-manifest fixture with stable expression IDs
 
 ## Decision Queue
 
-- [ ] Decide minimum telemetry fields required before freqtrade accepts a handoff batch
+- [x] Decide minimum telemetry fields required before freqtrade accepts a handoff batch
+  - Resolved: REQUIRED_TELEMETRY_KEYS in paper_drawdown_telemetry.py (15 fields)
 - [ ] Decide whether moneyfan should include optional explanatory fields or keep a strict minimal schema
+  - Current: optional fields (profile_id, effective_top_k) present only when supplied; strict core required
 - [ ] Decide update cadence for source artifact publishing (per run vs daily batch)
 
 ## Backlog

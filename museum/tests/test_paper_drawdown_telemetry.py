@@ -24,7 +24,6 @@ import pytest
 from execution.paper_drawdown_telemetry import (
     TELEMETRY_SCHEMA,
     REQUIRED_TELEMETRY_KEYS,
-    VALID_THRESHOLD_STATES,
     build_paper_drawdown_telemetry_event,
     validate_telemetry_event,
     is_threshold_crossing,
@@ -312,7 +311,6 @@ def test_threshold_crossing_direction(prev, curr, direction):
 def _events_from_profile(profile, signal_id_prefix="test") -> list[dict]:
     """Simulate a paper-loop telemetry emission by replaying a stress profile."""
     events = []
-    prev_state = "normal"
     for idx, ((iteration, dd_pct), state) in enumerate(
         zip(profile.drawdown_path_pct, profile.expected_guardrail_states)
     ):
@@ -337,7 +335,6 @@ def _events_from_profile(profile, signal_id_prefix="test") -> list[dict]:
             ts_utc=f"2026-03-10T01:{idx:02d}:00+00:00",
         )
         events.append(event)
-        prev_state = state
     return events
 
 
