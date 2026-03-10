@@ -1,0 +1,34 @@
+{
+  "device": "mps",
+  "num_epochs": 5,
+  "batch_size": 4,
+  "seq_len": 2,
+  "seed": 42,
+  "epochs": [
+    {
+      "epoch": 0,
+      "loss": 1.0755858421325684
+    },
+    {
+      "epoch": 1,
+      "loss": 1.0619604587554932
+    },
+    {
+      "epoch": 2,
+      "loss": 1.04939866065979
+    },
+    {
+      "epoch": 3,
+      "loss": 1.0373051166534424
+    },
+    {
+      "epoch": 4,
+      "loss": 1.0252572298049927
+    }
+  ],
+  "initial_loss": 1.0755858421325684,
+  "final_loss": 1.0252572298049927,
+  "loss_reduced": true,
+  "status": "passed",
+  "error": null
+}

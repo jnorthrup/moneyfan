@@ -1,0 +1,5 @@
+{
+  "device": "mps",
+  "status": "failed",
+  "error": "linear(): input and weight.T shapes cannot be multiplied (2x48 and 32x32)"
+}
