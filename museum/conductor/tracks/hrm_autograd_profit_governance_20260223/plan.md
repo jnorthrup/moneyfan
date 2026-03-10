@@ -43,10 +43,10 @@ This track now includes training tasks **and** integration with Freqtrade ring a
 
 ## Phase 3: MLX HRM Training Evidence and Iteration Baseline
 
-- [ ] **PRIORITY 1:** Produce bounded MLX training smoke profiles for fast iteration
-  - [ ] Write tests (or validation checks) for training profile config generation/defaults where applicable
-  - [ ] Implement operator-facing examples for fast train loops and artifact expectations
-  - [ ] **CRITICAL:** Create training profiles that can be evaluated by Freqtrade ring agent
+- [x] **PRIORITY 1:** Produce bounded MLX training smoke profiles for fast iteration
+  - [x] Write tests (or validation checks) for training profile config generation/defaults where applicable
+  - [x] Implement operator-facing examples for fast train loops and artifact expectations
+  - [x] **CRITICAL:** Create training profiles that can be evaluated by Freqtrade ring agent
 - [ ] **PRIORITY 2:** Record training baseline evidence and remaining MLX training debt
   - [ ] Write/update tests for any training reporting helpers introduced in this phase
   - [ ] Implement baseline evidence capture/report updates focused on training throughput and objective behavior

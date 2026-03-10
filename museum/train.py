@@ -189,6 +189,25 @@ class EpisodeTrainingConfig:
 
 OBJECTIVE_TELEMETRY_VERSION = 1
 
+# Bounded training profiles for fast iteration and verification
+TRAINING_PROFILES = {
+    "smoke": {
+        "n_epoch_episodes": 2,
+        "pair_width": 3,
+        "bar_sequences_per_episode": 10,
+        "codec_outputs": 4,
+        "learning_rate": 1e-3,
+        "epochs": 1,
+    },
+    "rapid": {
+        "n_epoch_episodes": 20,
+        "pair_width": 5,
+        "bar_sequences_per_episode": 50,
+        "codec_outputs": 24,
+        "learning_rate": 5e-4,
+    }
+}
+
 
 def _safe_float(value: Any, default: float = 0.0) -> float:
     try:
@@ -2775,6 +2794,9 @@ def main():
                         help='Minimum sample density for density_gated mode (0.0 to 1.0)')
     parser.add_argument('--trade-step-schedule-interval', type=int, default=0,
                         help='Step interval for deterministic mode (0 = every step)')
+    parser.add_argument('--profile', type=str, default=None,
+                        choices=list(TRAINING_PROFILES.keys()),
+                        help='Load a predefined training profile (defaults < profile < CLI args)')
     parser.add_argument('--dashboard', action='store_true', help='Run Streamlit dashboard')
 
     args = parser.parse_args()
@@ -2782,17 +2804,43 @@ def main():
     if args.dashboard:
         run_dashboard()
     else:
+        # Resolve profile settings if requested
+        profile_settings = {}
+        if args.profile:
+            profile_settings = TRAINING_PROFILES.get(args.profile, {})
+            print(f"[PROFILE] Loading '{args.profile}' profile: {profile_settings}")
+
+        def _get_arg(name, default_val):
+            # Precedence: CLI Arg (if not default) > Profile > Default
+            cli_val = getattr(args, name)
+            # This is a bit tricky for booleans or ints where 0/False might be the default.
+            # We check if the user actually provided the argument on the command line.
+            # Argparse doesn't make this easy without custom actions, so we use a heuristic:
+            # if the cli_val is different from the parser's default, use it.
+            # Get the default from the parser for this argument
+            parser_default = parser.get_default(name)
+            
+            # If the user explicitly provided the argument (or it differs from default), use it
+            if cli_val != parser_default:
+                return cli_val
+            
+            # Otherwise, prefer profile setting, falling back to the CLI value (which is default)
+            if name in profile_settings:
+                return profile_settings[name]
+                
+            return cli_val
+
         print(f"Starting training: {args.episodes} epoch episodes, ${args.notional} notional")
 
         config = EpisodeTrainingConfig(
-            n_epoch_episodes=args.episodes,
+            n_epoch_episodes=_get_arg('episodes', args.episodes),
             notional=args.notional,
-            pair_width=args.pair_width,
-            bar_sequences_per_episode=int(args.bar_sequences_per_episode),
+            pair_width=_get_arg('pair_width', args.pair_width),
+            bar_sequences_per_episode=int(_get_arg('bar_sequences_per_episode', args.bar_sequences_per_episode)),
             min_bar_window=int(args.min_bar_window),
             max_bar_window=int(args.max_bar_window),
             optimizer_name=args.optimizer,
-            learning_rate=args.learning_rate,
+            learning_rate=_get_arg('learning_rate', args.learning_rate),
             weight_decay=args.weight_decay,
             trade_update_prob=(0.0 if args.pretrain_only else float(args.trade_update_prob)),
             trade_update_min_abs_return=float(args.trade_update_min_abs_return),
@@ -2822,7 +2870,7 @@ def main():
             candle_source=str(args.candle_source),
             duckdb_corpus_path=str(args.duckdb_corpus_path or ""),
             pair_universe_file=str(args.pair_universe_file or ""),
-            codec_outputs=max(int(args.codec_outputs), 1),
+            codec_outputs=max(int(_get_arg('codec_outputs', args.codec_outputs)), 1),
             energy_discount_gamma=float(args.energy_discount_gamma),
             energy_roundtrip_cost_bps=float(args.energy_roundtrip_cost_bps),
             energy_churn_penalty=float(args.energy_churn_penalty),
