@@ -5,6 +5,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+import json
 import pytest
 from run import TradingConfig, TradingEngine
 
@@ -99,7 +100,7 @@ def test_guardrail_monotonic_drawdown_path(engine_stub):
     """Walk drawdown from 0 % -> 5 % -> 8 % -> 12 % and verify state ladder."""
     engine = engine_stub(guardrail_enabled=True)
 
-    # At peak – no drawdown
+    # At peak - no drawdown
     engine.pnl = 0.0
     assert engine._check_drawdown_guardrails() == "normal"
     assert engine.guardrail_state == "normal"
@@ -161,14 +162,6 @@ def test_guardrail_artifact_emission(engine_stub, tmp_path):
         guardrail_events_log_path=str(events_path),
         guardrail_confirmation_window=1
     )
-    # mock _append_jsonl if needed, but here we can just let it write to tmp_path
-    # We need to make sure _append_jsonl works in the stub or use real engine methods
-    
-    # Real method uses Path(self.config.guardrail_events_log_path)
-    # The stub doesn't have _append_jsonl and _emit_guardrail_event by default
-    # since it's just a __new__'d object.
-    
-    # Let's attach the real methods to the stub for this test
     engine._append_jsonl = TradingEngine._append_jsonl.__get__(engine, TradingEngine)
     engine._emit_guardrail_event = TradingEngine._emit_guardrail_event.__get__(engine, TradingEngine)
     engine._json_safe = TradingEngine._json_safe.__get__(engine, TradingEngine)
@@ -178,10 +171,9 @@ def test_guardrail_artifact_emission(engine_stub, tmp_path):
     engine._check_drawdown_guardrails()
 
     assert events_path.exists()
-    import json
     with open(events_path, "r") as f:
         event = json.loads(f.readline())
-    
+
     assert event["schema"] == "moneyfan.runtime.guardrail.event.v1"
     assert event["old_state"] == "normal"
     assert event["new_state"] == "warn"
@@ -195,23 +187,22 @@ def test_guardrail_artifact_emission(engine_stub, tmp_path):
 def test_kill_switch_halts_on_guardrail_halt(engine_stub):
     """Verify that _check_kill_switches triggers a hard halt when guardrail is halt."""
     engine = engine_stub(guardrail_enabled=True, guardrail_halt_drawdown_pct=0.10)
-    
-    # Attach required methods for _trigger_halt and _save_state
+
     engine._risk_snapshot = TradingEngine._risk_snapshot.__get__(engine, TradingEngine)
     engine._equity = TradingEngine._equity.__get__(engine, TradingEngine)
     engine._portfolio_drawdown_pct = TradingEngine._portfolio_drawdown_pct.__get__(engine, TradingEngine)
     engine._check_kill_switches = TradingEngine._check_kill_switches.__get__(engine, TradingEngine)
     engine._check_drawdown_guardrails = TradingEngine._check_drawdown_guardrails.__get__(engine, TradingEngine)
     engine._trigger_halt = TradingEngine._trigger_halt.__get__(engine, TradingEngine)
-    engine._emit_guardrail_event = lambda *args: None  # Mock
-    engine._save_state = lambda: None  # Mock
-    engine._ensure_risk_day_bucket = lambda *args: None  # Mock
+    engine._emit_guardrail_event = lambda *args: None
+    engine._save_state = lambda: None
+    engine._ensure_risk_day_bucket = lambda *args: None
 
     # 11% drawdown (exceeds 10% halt threshold)
     engine.pnl = -11.0
-    
+
     ok = engine._check_kill_switches()
-    
+
     assert ok is False
     assert engine.running is False
     assert engine.halt_reason == "guardrail_halt_triggered"
@@ -303,3 +294,192 @@ def test_should_allow_new_entries_normal(engine_stub):
     engine.guardrail_state = "normal"
     allowed, reason = engine._should_allow_new_entries()
     assert allowed is True
+
+
+# ---------------------------------------------------------------------------
+# Phase 3: State persistence and resume-flow tests
+# ---------------------------------------------------------------------------
+
+def _build_saveable_engine(engine_stub, tmp_path, **overrides):
+    """Helper that builds a stub with all fields needed to call _save_state."""
+    engine = engine_stub(**overrides)
+    engine._risk_snapshot = TradingEngine._risk_snapshot.__get__(engine, TradingEngine)
+    engine._equity = TradingEngine._equity.__get__(engine, TradingEngine)
+    engine._save_state = TradingEngine._save_state.__get__(engine, TradingEngine)
+    return engine
+
+
+def test_save_state_includes_guardrail_fields(engine_stub, tmp_path):
+    """_save_state must persist guardrail_state and candidate window fields."""
+    engine = _build_saveable_engine(engine_stub, tmp_path)
+    engine.guardrail_state = "derisk"
+    engine.guardrail_candidate_state = "halt"
+    engine.guardrail_candidate_iterations = 2
+
+    engine._save_state()
+
+    with open(engine.state_path) as f:
+        saved = json.load(f)
+
+    assert saved["guardrail_state"] == "derisk"
+    assert saved["guardrail_candidate_state"] == "halt"
+    assert saved["guardrail_candidate_iterations"] == 2
+
+
+def test_load_state_restores_guardrail_fields(engine_stub, tmp_path):
+    """After save/load cycle, guardrail state-machine fields are correctly restored."""
+    state_path = tmp_path / "state.json"
+    state = {
+        "mode": "paper",
+        "pnl": -8.0,
+        "positions": {},
+        "trades": [],
+        "orders": [],
+        "latest_prices": {},
+        "latest_price_timestamps": {},
+        "current_iteration": 7,
+        "symbol_cooldown_until_iteration": {},
+        "halt_reason": None,
+        "guardrail_state": "warn",
+        "guardrail_candidate_state": "derisk",
+        "guardrail_candidate_iterations": 1,
+        "risk_state": {
+            "peak_equity": 100.0,
+            "risk_day_utc": "2026-03-09",
+            "risk_day_start_equity": 100.0,
+            "risk_day_realized_pnl": -8.0,
+        },
+        "timestamp": "2026-03-09T20:00:00",
+    }
+    state_path.write_text(json.dumps(state))
+
+    engine = engine_stub(resume_state=True)
+    engine.state_path = state_path
+    engine.config.state_path = str(state_path)
+    engine._ensure_risk_day_bucket = lambda *args: None
+    engine._load_state = TradingEngine._load_state.__get__(engine, TradingEngine)
+    engine._equity = TradingEngine._equity.__get__(engine, TradingEngine)
+    engine._utc_day_key = TradingEngine._utc_day_key
+    engine._load_state()
+
+    assert engine.guardrail_state == "warn"
+    assert engine.guardrail_candidate_state == "derisk"
+    assert engine.guardrail_candidate_iterations == 1
+    assert engine.current_iteration == 7
+    assert engine.pnl == pytest.approx(-8.0)
+
+
+def test_load_state_rejects_invalid_guardrail_state(engine_stub, tmp_path):
+    """Unrecognised saved guardrail_state values are silently ignored."""
+    state_path = tmp_path / "state.json"
+    state = {
+        "mode": "paper",
+        "pnl": 0.0,
+        "positions": {},
+        "trades": [],
+        "orders": [],
+        "latest_prices": {},
+        "latest_price_timestamps": {},
+        "current_iteration": 0,
+        "symbol_cooldown_until_iteration": {},
+        "halt_reason": None,
+        "guardrail_state": "UNKNOWN_GARBAGE",
+        "guardrail_candidate_state": "also_invalid",
+        "guardrail_candidate_iterations": "not_an_int",
+        "risk_state": {
+            "peak_equity": 100.0,
+            "risk_day_utc": "2026-03-09",
+            "risk_day_start_equity": 100.0,
+            "risk_day_realized_pnl": 0.0,
+        },
+        "timestamp": "2026-03-09T20:00:00",
+    }
+    state_path.write_text(json.dumps(state))
+
+    engine = engine_stub(resume_state=True)
+    engine.state_path = state_path
+    engine.config.state_path = str(state_path)
+    engine._ensure_risk_day_bucket = lambda *args: None
+    engine._load_state = TradingEngine._load_state.__get__(engine, TradingEngine)
+    engine._equity = TradingEngine._equity.__get__(engine, TradingEngine)
+    engine._utc_day_key = TradingEngine._utc_day_key
+    engine._load_state()
+
+    # Invalid values should leave the defaults intact
+    assert engine.guardrail_state == "normal"
+    assert engine.guardrail_candidate_state == "normal"
+    assert engine.guardrail_candidate_iterations == 0
+
+
+def test_halt_resume_blocks_trading(engine_stub, tmp_path):
+    """Engine with respect_saved_halt_state=True loads halt correctly from saved state."""
+    state_path = tmp_path / "state.json"
+    state = {
+        "mode": "paper",
+        "pnl": -12.0,
+        "positions": {},
+        "trades": [],
+        "orders": [],
+        "latest_prices": {},
+        "latest_price_timestamps": {},
+        "current_iteration": 5,
+        "symbol_cooldown_until_iteration": {},
+        "halt_reason": "guardrail_halt_triggered",
+        "guardrail_state": "halt",
+        "guardrail_candidate_state": "halt",
+        "guardrail_candidate_iterations": 3,
+        "risk_state": {
+            "peak_equity": 100.0,
+            "risk_day_utc": "2026-03-09",
+            "risk_day_start_equity": 100.0,
+            "risk_day_realized_pnl": -12.0,
+            "halt_reason": "guardrail_halt_triggered",
+        },
+        "timestamp": "2026-03-09T20:00:00",
+    }
+    state_path.write_text(json.dumps(state))
+
+    engine = engine_stub(
+        resume_state=True,
+        respect_saved_halt_state=True,
+    )
+    engine.state_path = state_path
+    engine.config.state_path = str(state_path)
+    engine._ensure_risk_day_bucket = lambda *args: None
+    engine._load_state = TradingEngine._load_state.__get__(engine, TradingEngine)
+    engine._equity = TradingEngine._equity.__get__(engine, TradingEngine)
+    engine._utc_day_key = TradingEngine._utc_day_key
+    engine._load_state()
+
+    assert engine.halt_reason == "guardrail_halt_triggered"
+    assert engine.guardrail_state == "halt"
+    # run() checks: if halt_reason and respect_saved_halt_state -> refuse to start
+    assert bool(engine.halt_reason) is True
+    assert bool(engine.config.respect_saved_halt_state) is True
+
+
+def test_state_schema_completeness(engine_stub, tmp_path):
+    """Saved state JSON contains all required guardrail schema keys."""
+    engine = _build_saveable_engine(engine_stub, tmp_path)
+    engine.guardrail_state = "warn"
+    engine.guardrail_candidate_state = "derisk"
+    engine.guardrail_candidate_iterations = 1
+    engine._save_state()
+
+    with open(engine.state_path) as f:
+        saved = json.load(f)
+
+    for required_key in (
+        "guardrail_state",
+        "guardrail_candidate_state",
+        "guardrail_candidate_iterations",
+        "halt_reason",
+        "risk_state",
+    ):
+        assert required_key in saved, f"Missing required state schema key: {required_key}"
+
+    risk = saved["risk_state"]
+    for required_risk_key in ("peak_equity", "risk_day_utc", "drawdown_pct", "halt_reason"):
+        assert required_risk_key in risk, (
+            f"Missing required risk_state key: {required_risk_key}"
+        )

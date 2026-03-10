@@ -532,10 +532,25 @@ class TradingEngine:
             if bool(self.config.respect_saved_halt_state):
                 print(f"⚠️  Loaded prior halt state: {self.halt_reason}")
 
+        # Restore guardrail state so confirmation window and state-machine survive a restart
+        saved_guardrail_state = str(state.get("guardrail_state", "normal") or "normal")
+        if saved_guardrail_state in ("normal", "warn", "derisk", "halt"):
+            self.guardrail_state = saved_guardrail_state
+        saved_candidate = str(state.get("guardrail_candidate_state", "normal") or "normal")
+        if saved_candidate in ("normal", "warn", "derisk", "halt"):
+            self.guardrail_candidate_state = saved_candidate
+        try:
+            self.guardrail_candidate_iterations = int(
+                state.get("guardrail_candidate_iterations", 0) or 0
+            )
+        except (TypeError, ValueError):
+            self.guardrail_candidate_iterations = 0
+
         self._ensure_risk_day_bucket()
         print(
             f"♻️  Restored state from {path} | pnl=${self.pnl:.2f} positions={len(self.positions)} "
-            f"trades={len(self.trades)} iter={self.current_iteration}"
+            f"trades={len(self.trades)} iter={self.current_iteration} "
+            f"guardrail={self.guardrail_state}"
         )
 
     def _init_hrm_runtime(self):
@@ -1674,6 +1689,9 @@ class TradingEngine:
             "current_iteration": int(self.current_iteration),
             "symbol_cooldown_until_iteration": self.symbol_cooldown_until_iteration,
             "halt_reason": self.halt_reason,
+            "guardrail_state": self.guardrail_state,
+            "guardrail_candidate_state": self.guardrail_candidate_state,
+            "guardrail_candidate_iterations": int(self.guardrail_candidate_iterations),
             "risk_state": {
                 "peak_equity": float(self.peak_equity),
                 "risk_day_utc": self.risk_day_utc,
