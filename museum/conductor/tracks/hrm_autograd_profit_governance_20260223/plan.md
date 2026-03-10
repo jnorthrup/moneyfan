@@ -86,10 +86,12 @@ This track now includes training tasks **and** integration with Freqtrade ring a
   - [x] Add audit trail for all model changes
   - files: `execution/promotion_gate.py`, `tests/test_promotion_gate.py`
   - 34/34 tests pass: per-criterion failures, state machine, rollback, multi-slice, audit JSONL
-- [ ] **PRIORITY 3:** Build rollback and recovery mechanisms
-  - [ ] Implement automatic rollback on performance regression
-  - [ ] Create manual rollback procedures
-  - [ ] Add health checks for deployed models
+- [x] **PRIORITY 3:** Build rollback and recovery mechanisms
+  - [x] Implement automatic rollback on performance regression
+  - [x] Create manual rollback procedures
+  - [x] Add health checks for deployed models
+  - files: `execution/rollback_controller.py`, `tests/test_rollback_controller.py`
+  - 31/31 tests pass: artifact health check, automatic+manual rollback, idempotency, log round-trip
 - [ ] **PRIORITY 4:** Enhance observability and monitoring
   - [ ] Create dashboards for model performance
   - [ ] Implement alerting for model degradation

@@ -27,7 +27,6 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 import json
-from typing import Any
 
 from execution.model_version_registry import (
     ModelVersionRecord,
