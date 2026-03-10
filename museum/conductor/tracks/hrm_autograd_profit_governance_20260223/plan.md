@@ -80,10 +80,12 @@ This track now includes training tasks **and** integration with Freqtrade ring a
   - [x] Add model provenance tracking
   - files: `execution/model_version_registry.py`, `tests/test_model_version_registry.py`
   - 45/45 tests pass: fingerprints, build, state machine, JSONL registry
-- [ ] **PRIORITY 2:** Implement model governance and promotion gates
-  - [ ] Create promotion criteria based on profit metrics
-  - [ ] Implement multi-slice validation requirements
-  - [ ] Add audit trail for all model changes
+- [x] **PRIORITY 2:** Implement model governance and promotion gates
+  - [x] Create promotion criteria based on profit metrics
+  - [x] Implement multi-slice validation requirements
+  - [x] Add audit trail for all model changes
+  - files: `execution/promotion_gate.py`, `tests/test_promotion_gate.py`
+  - 34/34 tests pass: per-criterion failures, state machine, rollback, multi-slice, audit JSONL
 - [ ] **PRIORITY 3:** Build rollback and recovery mechanisms
   - [ ] Implement automatic rollback on performance regression
   - [ ] Create manual rollback procedures

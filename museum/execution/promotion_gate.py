@@ -29,9 +29,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from execution.model_version_registry import (
-    VALID_PROMOTION_STATES,
     ModelVersionRecord,
-    ModelVersionRegistry,
 )
 
 

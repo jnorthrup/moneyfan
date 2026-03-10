@@ -24,7 +24,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 import json
-import pytest
+from typing import Any
 
 from execution.model_version_registry import (
     ModelVersionRecord,
@@ -35,7 +35,6 @@ from execution.promotion_gate import (
     REQUIRED_AUDIT_KEYS,
     VALID_DECISIONS,
     EvaluationMetrics,
-    GateDecision,
     PromotionGate,
     PromotionPolicy,
     load_audit_log,
