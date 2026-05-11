@@ -21,13 +21,23 @@ Naming convention (crypto-technical):
 from abc import ABC, abstractmethod
 from typing import Tuple, Dict, Any, Optional
 import numpy as np
+import logging
+
+# Configure logger for the codec_models package
+logger = logging.getLogger("codec_models")
+if not logger.handlers:
+    handler = logging.StreamHandler()
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
 
 try:
     import mlx.core as mx
     HAS_MLX = True
 except ImportError:
     HAS_MLX = False
-    print("⚠️  MLX not available - using NumPy fallback")
+    logger.warning("⚠️  MLX not available - using NumPy fallback")
 
 
 class BaseExpert(ABC):
