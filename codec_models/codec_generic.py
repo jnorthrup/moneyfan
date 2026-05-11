@@ -8,7 +8,11 @@ This serves as a template and fallback implementation.
 
 import numpy as np
 from typing import Tuple, Dict, Any
+import logging
 from .base_codec import BaseCodec
+
+# Use the package-level logger defined in base_codec
+logger = logging.getLogger("codec_models")
 
 try:
     import mlx.core as mx
@@ -32,10 +36,10 @@ class GenericCodec(BaseCodec):
         # Create MLX model if available
         if HAS_MLX:
             self.model = self._create_mlx_model()
-            print(f"✅ {self.name}: MLX model initialized")
+            logger.info(f"✅ {self.name}: MLX model initialized")
         else:
             self.model = None
-            print(f"⚠️  {self.name}: Using NumPy fallback")
+            logger.info(f"⚠️  {self.name}: Using NumPy fallback")
         
         # Performance tracking
         self.recent_sharpe = 0.0
@@ -73,8 +77,8 @@ class GenericCodec(BaseCodec):
                 
                 confidence = float(output[0, 0])
                 direction = float(output[0, 1])
-            except Exception as e:
-                print(f"⚠️  {self.name}: MLX forward failed: {e}")
+            except Exception:
+                logger.error(f"⚠️  {self.name}: MLX forward failed")
                 confidence, direction = self._simple_logic(market_data, features)
         else:
             # NumPy fallback
@@ -84,7 +88,7 @@ class GenericCodec(BaseCodec):
         confidence, direction = self.validate_signal(confidence, direction)
         
         # Update memory
-        self.update_memory(direction, features[:64] if len(features) >= 64 else features)
+        self.update_ob_memory(direction, features[:64] if len(features) >= 64 else features)
         
         return confidence, direction
     
@@ -131,9 +135,9 @@ class GenericCodec(BaseCodec):
         
         return confidence, direction
     
-    def test_time_adapter(self, 
-                         batch_data: Dict[str, Any],
-                         learning_rate: float = 1e-3) -> None:
+    def online_adapter(self,
+                      batch_data: Dict[str, Any],
+                      learning_rate: float = 1e-3) -> None:
         """
         Online fine-tuning for MLX model
         """
@@ -160,9 +164,9 @@ class GenericCodec(BaseCodec):
             loss, grads = mx.value_and_grad(loss_fn)(self.model.parameters())
             optimizer.update(self.model, grads)
             
-            print(f"✅ {self.name}: Online update, loss: {float(loss):.4f}")
-        except Exception as e:
-            print(f"⚠️  {self.name}: Online update failed: {e}")
+            logger.info(f"✅ {self.name}: Online update, loss: {float(loss):.4f}")
+        except Exception:
+            logger.error(f"⚠️  {self.name}: Online update failed")
 
 
 # Factory function
@@ -170,4 +174,4 @@ def create_codec(config: Dict[str, Any] = None):
     """Create generic codec instance"""
     if config is None:
         config = {}
-    return GenericCodec(config)    def online_adapter(self, *args, **kwargs) -> None:\n        pass\n
+    return GenericCodec(config)
