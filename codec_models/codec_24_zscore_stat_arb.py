@@ -33,8 +33,9 @@ def _ema(arr: np.ndarray, span: int) -> float:
 
 def _rolling_zscore(prices: np.ndarray, window: int) -> float:
     """Z-score of the last price vs rolling mean/std over `window` bars."""
-    if len(prices) < window:
-        window = max(2, len(prices))
+    n = len(prices)
+    if n < window:
+        window = max(2, n)
     seg = prices[-window:]
     mu  = seg.mean()
     std = seg.std()
@@ -112,20 +113,41 @@ class Codec24(BaseCodec):
             return self.validate_signal(0.1, 0.0)
 
         closes, highs, lows, volumes = self.get_ohlcv(market_data, features)
-
-
         prices = closes  # calibrated to pandas parquet data
+        last_p = float(prices[-1])
 
-        # ── 1. Rolling z-scores at multiple lookbacks ─────────────────────
-        zscores = [_rolling_zscore(prices, lb) for lb in self.lookbacks]
-        # Weighted composite z-score (mean-reversion: fade the sign)
-        composite_z = float(np.dot(zscores, self.weights))
+        # ── 1. Optimized Multi-lookback Rolling Z-Scores ──────────────────
+        # Compute mean and variance for all lookbacks in O(N) total
+        # using cumulative sums of prices and price^2.
+
+        # We only need the last 'max_lb' bars for our computations.
+        max_lb = max(self.lookbacks)
+        window_prices = prices[-max_lb:] if n > max_lb else prices
+
+        cumsum = np.cumsum(window_prices)
+        cumsum2 = np.cumsum(window_prices**2)
+
+        composite_z = 0.0
+        for lb, weight in zip(self.lookbacks, self.weights):
+            w = lb if n >= lb else max(2, n)
+            # Fetch sum and sum of squares from the end of the cumsum arrays
+            s = cumsum[-1] - (cumsum[-w-1] if w < len(cumsum) else 0.0)
+            s2 = cumsum2[-1] - (cumsum2[-w-1] if w < len(cumsum2) else 0.0)
+
+            mu = s / w
+            var = (s2 / w) - (mu**2)
+            std = np.sqrt(max(0.0, var))
+
+            z = (last_p - mu) / (std + 1e-8)
+            composite_z += z * weight
 
         # ── 2. EMA channel spread ─────────────────────────────────────────
         channel_spread = _ema_channel_spread(prices, fast=10, slow=30)
 
         # ── 3. Half-life filter ───────────────────────────────────────────
-        hl = _half_life(prices[-60:] if n >= 60 else prices)
+        # Use a single slice for the 60-bar window
+        p_60 = prices[-60:] if n >= 60 else prices
+        hl = _half_life(p_60)
         reverting = hl < self.max_half_life   # True → mean-reverting regime
 
         # ── 4. Cross-sectional percentile rank ────────────────────────────
