@@ -172,7 +172,7 @@ class HrmTrikeShedIOMuxer(
         return decision
     }
 
-    private fun resolveAction(score: Double, volatility: Double): HrmAction {
+    internal fun resolveAction(score: Double, volatility: Double): HrmAction {
         if (abs(score) < config.holdBand) return HrmAction.HOLD
         if (volatility < config.minVolatilityForAction) return HrmAction.HOLD
         return when {
