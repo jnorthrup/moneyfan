@@ -13,6 +13,12 @@ mean-reverting (estimated AR(1) beta < 0).
 
 import numpy as np
 from typing import Tuple, Dict, Any
+try:
+    from scipy.signal import lfilter
+    HAS_SCIPY = True
+except ImportError:
+    HAS_SCIPY = False
+
 from .base_codec import BaseCodec
 
 try:
@@ -68,12 +74,33 @@ class Codec05(BaseCodec):
         # leg_b = fast-EMA of prices (alpha=0.15)
         # The spread leg_b - leg_a approximates a pair spread
         alpha_f, alpha_s = 0.15, 0.05
-        leg_a = np.zeros(n)
-        leg_b = np.zeros(n)
-        leg_a[0] = leg_b[0] = prices[0]
-        for i in range(1, n):
-            leg_a[i] = alpha_s * prices[i] + (1 - alpha_s) * leg_a[i-1]
-            leg_b[i] = alpha_f * prices[i] + (1 - alpha_f) * leg_b[i-1]
+
+        if HAS_SCIPY:
+            # Vectorized EMA calculation using lfilter:
+            # y[i] = alpha * x[i] + (1 - alpha) * y[i-1]
+            # b = [alpha], a = [1, -(1-alpha)]
+            # We must use zi to ensure initial condition leg_a[0] = prices[0]
+            # zi = [(1-alpha) * y[-1]] where y[-1] is our initial state
+            b_s, a_s = [alpha_s], [1, -(1 - alpha_s)]
+            b_f, a_f = [alpha_f], [1, -(1 - alpha_f)]
+
+            # lfilter with zi=y[0]*(1-alpha) gives us the recursive definition:
+            # y[0] = alpha*x[0] + (1-alpha)*y_initial
+            # To get y[0] = x[0], we need (alpha*x[0] + (1-alpha)*y_initial) = x[0]
+            # (1-alpha)*y_initial = x[0] - alpha*x[0] = x[0]*(1-alpha)
+            # So y_initial = x[0].
+            zi_s = np.array([prices[0] * (1 - alpha_s)])
+            zi_f = np.array([prices[0] * (1 - alpha_f)])
+
+            leg_a, _ = lfilter(b_s, a_s, prices, zi=zi_s)
+            leg_b, _ = lfilter(b_f, a_f, prices, zi=zi_f)
+        else:
+            leg_a = np.zeros(n)
+            leg_b = np.zeros(n)
+            leg_a[0] = leg_b[0] = prices[0]
+            for i in range(1, n):
+                leg_a[i] = alpha_s * prices[i] + (1 - alpha_s) * leg_a[i-1]
+                leg_b[i] = alpha_f * prices[i] + (1 - alpha_f) * leg_b[i-1]
 
         spread = leg_b - leg_a
         seg = spread[-self.window:]
