@@ -38,6 +38,7 @@ class Codec14(BaseCodec):
         
         direction = 0.0
         confidence = 0.2
+        bb_position = 0.5
         
         if bb_upper > bb_lower:
             bb_width = bb_upper - bb_lower
@@ -66,12 +67,12 @@ class Codec14(BaseCodec):
                 mx_features = mx.array(features[:64].reshape(1, -1).astype(np.float32))
                 output = self.model(mx_features)
                 direction = direction * 0.5 + float(np.tanh(output[0, 1])) * 0.5
-            except:
-                pass
+            except Exception as e:
+                print(f"⚠️  {self.name}: MLX forward failed: {e}")
         
         self.record_instruments(
-                bb_pct=float(pct_b) if 'pct_b' in dir() else 0.5,
-                bb_width=float(bandwidth) if 'bandwidth' in dir() else 0.0,
+                bb_pct=float(bb_position),
+                bb_width=float(bandwidth),
             )
         return self.validate_signal(confidence, direction)
     
