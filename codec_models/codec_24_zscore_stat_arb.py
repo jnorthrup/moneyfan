@@ -34,11 +34,13 @@ def _ema(arr: np.ndarray, span: int) -> float:
 def _rolling_zscore(prices: np.ndarray, window: int) -> float:
     """Z-score of the last price vs rolling mean/std over `window` bars."""
     if len(prices) < window:
-        window = max(2, len(prices))
+        return 0.0
     seg = prices[-window:]
     mu  = seg.mean()
     std = seg.std()
-    return float((prices[-1] - mu) / (std + 1e-8))
+    if std < 1e-8:
+        return 0.0
+    return float((prices[-1] - mu) / std)
 
 
 def _half_life(prices: np.ndarray) -> float:
