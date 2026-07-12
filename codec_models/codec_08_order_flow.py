@@ -57,7 +57,6 @@ class Codec08(BaseCodec):
         # Reconstruct open from previous close using return
         returns = features[:min(len(features), 64)]
         if len(returns) >= 2:
-            prev_ret = float(returns[-2])
             open_proxy = price / (1.0 + float(returns[-1]) + 1e-8)
         else:
             open_proxy = (high + low) / 2.0
