@@ -118,6 +118,8 @@ class Codec12(BaseCodec):
     # ── Main forward ──────────────────────────────────────────────────────
 
     def forward(self, market_data: Dict[str, Any], features: np.ndarray) -> Tuple[float, float]:
+        alphas: List[Tuple[float, float]] = []
+        agreement: float = 0.0
         price   = float(market_data.get('price', 1.0))
         volume  = float(market_data.get('volume', 1.0))
         returns = features[:min(len(features), 64)]
@@ -131,7 +133,7 @@ class Codec12(BaseCodec):
 
         prices = closes  # calibrated to pandas parquet data
 
-        alphas: List[Tuple[float, float]] = [
+        alphas = [
             self._alpha_momentum(prices, returns),
             self._alpha_rsi(returns),
             self._alpha_bollinger(prices),
@@ -159,8 +161,8 @@ class Codec12(BaseCodec):
                 pass
 
         self.record_instruments(
-                alpha_count=float(len([s for s,_ in alphas if s != 0.0])) if 'alphas' in dir() else 0.0,
-                alpha_agreement=float(agreement) if 'agreement' in dir() else 0.0,
+                alpha_count=float(sum(1 for s, _ in alphas if s != 0.0)),
+                alpha_agreement=float(agreement),
             )
         return self.validate_signal(confidence, direction)
 
