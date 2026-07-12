@@ -13,6 +13,7 @@ Derived entirely from OHLCV:
 """
 
 import numpy as np
+import collections
 from typing import Tuple, Dict, Any
 from .base_codec import BaseCodec
 
@@ -54,9 +55,9 @@ class Codec10(BaseCodec):
         self.window = config.get('window', 20)
 
         # Stateful price history for Garman-Klass
-        self._highs:  list = []
-        self._lows:   list = []
-        self._closes: list = []
+        self._highs:  collections.deque = collections.deque(maxlen=self.window)
+        self._lows:   collections.deque = collections.deque(maxlen=self.window)
+        self._closes: collections.deque = collections.deque(maxlen=self.window)
 
         if HAS_MLX:
             self.model = nn.Sequential(
@@ -71,9 +72,9 @@ class Codec10(BaseCodec):
         high  = float(market_data.get('high', price))
         low   = float(market_data.get('low', price))
 
-        self._highs.append(high);   self._highs  = self._highs[-self.window:]
-        self._lows.append(low);     self._lows   = self._lows[-self.window:]
-        self._closes.append(price); self._closes = self._closes[-self.window:]
+        self._highs.append(high)
+        self._lows.append(low)
+        self._closes.append(price)
 
         returns = features[:min(len(features), 64)]
         n = len(returns)

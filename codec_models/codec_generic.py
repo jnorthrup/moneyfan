@@ -164,10 +164,13 @@ class GenericCodec(BaseCodec):
         except Exception as e:
             print(f"⚠️  {self.name}: Online update failed: {e}")
 
+    def online_adapter(self, *args, **kwargs) -> None:
+        pass
+
 
 # Factory function
 def create_codec(config: Dict[str, Any] = None):
     """Create generic codec instance"""
     if config is None:
         config = {}
-    return GenericCodec(config)    def online_adapter(self, *args, **kwargs) -> None:\n        pass\n
+    return GenericCodec(config)
