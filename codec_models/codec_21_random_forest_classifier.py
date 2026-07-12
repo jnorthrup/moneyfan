@@ -13,6 +13,7 @@ from .base_codec import BaseCodec
 try:
     import mlx.core as mx
     import mlx.nn as nn
+    import mlx.optimizers as optim
     HAS_MLX = True
 except ImportError:
     HAS_MLX = False
@@ -102,8 +103,10 @@ class Codec21(BaseCodec):
                 nn.ReLU(),
                 nn.Linear(64, 2)
             )
+            self.optimizer = optim.Adam(learning_rate=config.get('learning_rate', 1e-3))
         else:
             self.model = None
+            self.optimizer = None
 
     def _build_features(self, market_data: Dict[str, Any], features: np.ndarray) -> np.ndarray:
         """Build the 8-feature engineered vector from OHLCV context."""
@@ -176,5 +179,41 @@ class Codec21(BaseCodec):
             )
         return self.validate_signal(confidence, direction)
 
-    def online_adapter(self, *args, **kwargs) -> None:
-        pass
+    def online_adapter(self, batch_data: Dict[str, Any], learning_rate: float = 1e-3) -> None:
+        """
+        Online test-time adaptation for the MLX model component.
+        Note: The Random Forest ensemble is deterministic and non-differentiable;
+        this adapter only fine-tunes the hybrid MLX neural network head.
+        """
+        if not HAS_MLX or self.model is None:
+            return
+
+        if 'inputs' not in batch_data or 'targets' not in batch_data:
+            return
+
+        try:
+            # Prepare data
+            # batch_data['targets'] expected shape [batch, 2] -> [conviction, direction]
+            X = mx.array(batch_data['inputs'].astype(np.float32))
+            y = mx.array(batch_data['targets'].astype(np.float32))
+
+            def loss_fn(model, X, y):
+                out = model(X)
+                # out[:, 0] is direction logit (tanh), out[:, 1] is conviction logit (sigmoid)
+                # y[:, 0] is conviction target, y[:, 1] is direction target
+                ml_dir = mx.tanh(out[:, 0])
+                ml_conf = mx.sigmoid(out[:, 1])
+
+                loss_conf = mx.mean((ml_conf - y[:, 0])**2)
+                loss_dir = mx.mean((ml_dir - y[:, 1])**2)
+                return loss_conf + loss_dir
+
+            loss_and_grad_fn = nn.value_and_grad(self.model, loss_fn)
+
+            # Use persistent optimizer state
+            if hasattr(self, 'optimizer') and self.optimizer is not None:
+                loss, grads = loss_and_grad_fn(self.model, X, y)
+                self.optimizer.update(self.model, grads)
+                mx.eval(self.model.parameters(), self.optimizer.state)
+        except Exception as e:
+            print(f"⚠️  {self.name}: Online adaptation failed: {e}")

@@ -32,9 +32,11 @@ class GenericCodec(BaseCodec):
         # Create MLX model if available
         if HAS_MLX:
             self.model = self._create_mlx_model()
+            self.optimizer = optim.Adam(learning_rate=config.get('learning_rate', 1e-3))
             print(f"✅ {self.name}: MLX model initialized")
         else:
             self.model = None
+            self.optimizer = None
             print(f"⚠️  {self.name}: Using NumPy fallback")
         
         # Performance tracking
@@ -84,7 +86,7 @@ class GenericCodec(BaseCodec):
         confidence, direction = self.validate_signal(confidence, direction)
         
         # Update memory
-        self.update_memory(direction, features[:64] if len(features) >= 64 else features)
+        self.update_ob_memory(direction, features[:64] if len(features) >= 64 else features)
         
         return confidence, direction
     
@@ -131,9 +133,9 @@ class GenericCodec(BaseCodec):
         
         return confidence, direction
     
-    def test_time_adapter(self, 
-                         batch_data: Dict[str, Any],
-                         learning_rate: float = 1e-3) -> None:
+    def online_adapter(self,
+                       batch_data: Dict[str, Any],
+                       learning_rate: float = 1e-3) -> None:
         """
         Online fine-tuning for MLX model
         """
@@ -148,19 +150,17 @@ class GenericCodec(BaseCodec):
             inputs_mx = mx.array(batch_data['inputs'].astype(np.float32))
             targets_mx = mx.array(batch_data['targets'].astype(np.float32))
             
-            # Define loss function
-            def loss_fn(params):
-                predictions = self.model.apply(params, inputs_mx)
-                return mx.mean((predictions - targets_mx) ** 2)
+            # Define loss function (MLX NN style)
+            def loss_fn(model, x, y):
+                return mx.mean((model(x) - y) ** 2)
             
-            # Create optimizer
-            optimizer = optim.Adam(learning_rate=learning_rate)
+            loss_and_grad_fn = nn.value_and_grad(self.model, loss_fn)
             
-            # Get gradients and update
-            loss, grads = mx.value_and_grad(loss_fn)(self.model.parameters())
-            optimizer.update(self.model, grads)
-            
-            print(f"✅ {self.name}: Online update, loss: {float(loss):.4f}")
+            # Get gradients and update using persistent optimizer
+            if hasattr(self, 'optimizer') and self.optimizer is not None:
+                loss, grads = loss_and_grad_fn(self.model, inputs_mx, targets_mx)
+                self.optimizer.update(self.model, grads)
+                mx.eval(self.model.parameters(), self.optimizer.state)
         except Exception as e:
             print(f"⚠️  {self.name}: Online update failed: {e}")
 
@@ -170,4 +170,4 @@ def create_codec(config: Dict[str, Any] = None):
     """Create generic codec instance"""
     if config is None:
         config = {}
-    return GenericCodec(config)    def online_adapter(self, *args, **kwargs) -> None:\n        pass\n
+    return GenericCodec(config)
