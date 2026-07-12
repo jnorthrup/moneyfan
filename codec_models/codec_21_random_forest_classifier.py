@@ -20,13 +20,17 @@ except ImportError:
 
 def _ema(prices: np.ndarray, span: int) -> float:
     """Exponential moving average of a price series."""
-    if len(prices) == 0:
+    n = len(prices)
+    if n == 0:
         return 0.0
+    if n == 1:
+        return float(prices[0])
     alpha = 2.0 / (span + 1)
-    val = float(prices[0])
-    for p in prices[1:]:
-        val = alpha * float(p) + (1 - alpha) * val
-    return val
+    # Vectorized EMA: y_t = alpha * x_t + (1-alpha) * y_{t-1}
+    # Expanded: y_n = alpha * sum_{i=1}^{n-1} (1-alpha)**(n-1-i) * x_i + (1-alpha)**(n-1) * x_0
+    weights = np.power(1.0 - alpha, np.arange(n - 1, -1, -1))
+    weights[1:] *= alpha
+    return float(np.dot(prices, weights))
 
 
 def _rsi(returns: np.ndarray, period: int = 14) -> float:
