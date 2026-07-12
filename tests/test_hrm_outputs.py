@@ -16,7 +16,6 @@ from typing import Tuple
 
 from hrm.torch_hrm import (
     TorchHrmModule,
-    TorchHrmConfig,
     create_hrm_model,
     get_device,
 )
