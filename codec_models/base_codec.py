@@ -19,7 +19,7 @@ Naming convention (crypto-technical):
 """
 
 from abc import ABC, abstractmethod
-from typing import Tuple, Dict, Any, Optional
+from typing import Tuple, Dict, Any
 import numpy as np
 
 try:

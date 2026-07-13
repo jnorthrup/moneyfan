@@ -62,13 +62,15 @@ class GenericCodec(BaseCodec):
             if len(features) < 15:
                 padded = np.zeros(15, dtype=np.float32)
                 padded[:len(features)] = features
-                features = padded
+                input_features = padded
             elif len(features) > 15:
-                features = features[:15]
+                input_features = features[:15]
+            else:
+                input_features = features
             
             try:
                 # MLX forward pass
-                features_mx = mx.array(features.reshape(1, -1))
+                features_mx = mx.array(input_features.reshape(1, -1))
                 output = self.model(features_mx)
                 
                 confidence = float(output[0, 0])
@@ -83,8 +85,8 @@ class GenericCodec(BaseCodec):
         # Validate and normalize
         confidence, direction = self.validate_signal(confidence, direction)
         
-        # Update memory
-        self.update_memory(direction, features[:64] if len(features) >= 64 else features)
+        # Update temporal order book memory
+        self.update_ob_memory(direction, features)
         
         return confidence, direction
     
@@ -126,7 +128,7 @@ class GenericCodec(BaseCodec):
         if not signals:
             return 0.0, 0.0
         
-        direction = np.mean(signals)
+        direction = float(np.mean(signals))
         confidence = abs(direction) + 0.2  # Base confidence
         
         return confidence, direction
@@ -164,10 +166,14 @@ class GenericCodec(BaseCodec):
         except Exception as e:
             print(f"⚠️  {self.name}: Online update failed: {e}")
 
+    # Satisfy BaseExpert abstract method
+    def online_adapter(self, *args, **kwargs) -> None:
+        return self.test_time_adapter(*args, **kwargs)
+
 
 # Factory function
 def create_codec(config: Dict[str, Any] = None):
     """Create generic codec instance"""
     if config is None:
         config = {}
-    return GenericCodec(config)    def online_adapter(self, *args, **kwargs) -> None:\n        pass\n
+    return GenericCodec(config)
