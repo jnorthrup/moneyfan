@@ -21,6 +21,7 @@ Naming convention (crypto-technical):
 from abc import ABC, abstractmethod
 from typing import Tuple, Dict, Any, Optional
 import numpy as np
+import importlib
 
 try:
     import mlx.core as mx
@@ -290,13 +291,21 @@ class ExpertFactory:
         if config is None:
             config = {}
 
+        # 🛡️ SECURITY: Validate expert_id to prevent insecure dynamic loading
+        if not isinstance(expert_id, int) or not (1 <= expert_id <= 24):
+            from .codec_generic import GenericCodec
+            config['codec_id'] = 0
+            config['name'] = "codec_generic"
+            return GenericCodec(config)
+
         config['codec_id'] = expert_id
         config['name'] = f"codec_{expert_id:02d}"
 
+        # 🛡️ SECURITY: Use importlib.import_module instead of __import__
         codec_module = f"codecs.codec_{expert_id:02d}_generic"
 
         try:
-            module = __import__(codec_module, fromlist=[f'Codec_{expert_id:02d}'])
+            module = importlib.import_module(codec_module)
             codec_class = getattr(module, f'Codec_{expert_id:02d}')
             return codec_class(config)
         except (ImportError, AttributeError):

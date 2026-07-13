@@ -84,7 +84,7 @@ class GenericCodec(BaseCodec):
         confidence, direction = self.validate_signal(confidence, direction)
         
         # Update memory
-        self.update_memory(direction, features[:64] if len(features) >= 64 else features)
+        self.update_ob_memory(direction, features[:64] if len(features) >= 64 else features)
         
         return confidence, direction
     
@@ -131,7 +131,7 @@ class GenericCodec(BaseCodec):
         
         return confidence, direction
     
-    def test_time_adapter(self, 
+    def online_adapter(self,
                          batch_data: Dict[str, Any],
                          learning_rate: float = 1e-3) -> None:
         """
@@ -170,4 +170,4 @@ def create_codec(config: Dict[str, Any] = None):
     """Create generic codec instance"""
     if config is None:
         config = {}
-    return GenericCodec(config)    def online_adapter(self, *args, **kwargs) -> None:\n        pass\n
+    return GenericCodec(config)
