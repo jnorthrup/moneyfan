@@ -634,10 +634,13 @@ class CandlePipeline:
     def _load_candles_duckdb_symbol_tables(self, con: Any, symbols: List[str], start: str, end: str) -> Tuple[List[pd.DataFrame], Optional[str]]:
         dfs: List[pd.DataFrame] = []
         where_clauses: List[str] = []
+        params = []
         if start:
-            where_clauses.append(f"timestamp >= '{start} 00:00:00'")
+            where_clauses.append("timestamp >= ?")
+            params.append(f"{start} 00:00:00")
         if end:
-            where_clauses.append(f"timestamp <= '{end} 23:59:59'")
+            where_clauses.append("timestamp <= ?")
+            params.append(f"{end} 23:59:59")
         where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
 
         try:
@@ -651,7 +654,7 @@ class CandlePipeline:
                 continue
             try:
                 q = f"SELECT * FROM {table} {where_sql} ORDER BY timestamp ASC"
-                df_sym = con.execute(q).df()
+                df_sym = con.execute(q, params).df()
                 if df_sym.empty:
                     continue
                 if 'symbol' not in df_sym.columns:
@@ -666,19 +669,22 @@ class CandlePipeline:
         if not symbols:
             return dfs, "duckdb_sequences_import"
 
-        symbol_sql = ", ".join([f"'{str(s)}'" for s in symbols])
-        where_clauses = [f"symbol IN ({symbol_sql})"]
+        where_clauses = ["symbol = ANY(?)"]
+        params = [list(symbols)]
         if start:
-            where_clauses.append(f"timestamp >= '{start} 00:00:00'")
+            where_clauses.append("timestamp >= ?")
+            params.append(f"{start} 00:00:00")
         if end:
-            where_clauses.append(f"timestamp <= '{end} 23:59:59'")
+            where_clauses.append("timestamp <= ?")
+            params.append(f"{end} 23:59:59")
+
         q = (
             "SELECT * FROM binance_sequences_import "
             f"WHERE {' AND '.join(where_clauses)} "
             "ORDER BY symbol ASC, timestamp ASC"
         )
         try:
-            df = con.execute(q).df()
+            df = con.execute(q, params).df()
             if not df.empty:
                 dfs.append(df)
         except Exception:
@@ -696,17 +702,22 @@ class CandlePipeline:
                 if not path.exists():
                     continue
                 where_clauses = []
+                params = []
                 if start:
-                    where_clauses.append(f"timestamp >= '{start} 00:00:00'")
+                    where_clauses.append("timestamp >= ?")
+                    params.append(f"{start} 00:00:00")
                 if end:
-                    where_clauses.append(f"timestamp <= '{end} 23:59:59'")
+                    where_clauses.append("timestamp <= ?")
+                    params.append(f"{end} 23:59:59")
                 where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
                 query = f"""
-                    SELECT * FROM read_parquet('{path}')
+                    SELECT * FROM read_parquet(?)
                     {where_sql}
                     ORDER BY timestamp ASC
                 """
-                df_sym = con.execute(query).df()
+                # For read_parquet(?), the path is the first parameter
+                all_params = [str(path)] + params
+                df_sym = con.execute(query, all_params).df()
                 if df_sym.empty:
                     continue
                 if 'pair' in df_sym.columns and 'symbol' not in df_sym.columns:
