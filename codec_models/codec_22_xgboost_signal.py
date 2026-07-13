@@ -118,41 +118,52 @@ class Codec22(BaseCodec):
         returns = features[:min(len(features), 64)]
         n = len(returns)
         closes, highs, lows, volumes = self.get_ohlcv(market_data, features)
-
         prices = closes  # calibrated to pandas parquet data
 
-        def mom(p, k):
-            return (price - float(np.mean(p[-k:]))) / (float(np.mean(p[-k:])) + 1e-8) if len(p) >= k else 0.0
+        # Caching slices and computing stats once to avoid redundant O(N) passes
+        p3 = prices[-3:] if n >= 3 else None
+        p10 = prices[-10:] if n >= 10 else None
+        p20 = prices[-20:] if n >= 20 else None
+        p30 = prices[-30:] if n >= 30 else None
 
-        mom3  = mom(prices, 3)
-        mom10 = mom(prices, 10)
-        mom30 = mom(prices, 30)
+        # Means (reused across mom, Bollinger, and Z-score features)
+        m10 = float(np.mean(p10)) if p10 is not None else price
+        m20 = float(np.mean(p20)) if p20 is not None else price
+        m30 = float(np.mean(p30)) if p30 is not None else price
+
+        # mom features
+        mom3 = 0.0
+        if n >= 3:
+            m3 = float(np.mean(p3))
+            mom3 = (price - m3) / (m3 + 1e-8)
+
+        mom10 = (price - m10) / (m10 + 1e-8) if n >= 10 else 0.0
+        mom30 = (price - m30) / (m30 + 1e-8) if n >= 30 else 0.0
 
         macd_l, macd_s = _macd(prices)
         macd_hist = macd_l - macd_s
 
-        r = returns[-14:] if n >= 14 else returns
-        gains = r[r > 0].mean() if (r > 0).any() else 0.0
-        losses = -r[r < 0].mean() if (r < 0).any() else 1e-8
+        r14 = returns[-14:] if n >= 14 else returns
+        gains = r14[r14 > 0].mean() if (r14 > 0).any() else 0.0
+        losses = -r14[r14 < 0].mean() if (r14 < 0).any() else 1e-8
         rsi = 100 - 100 / (1 + gains / losses)
         rsi_norm = rsi / 100.0
 
-        vol = float(np.std(returns[-20:])) if n >= 20 else 0.01
-        long_vol = float(np.std(returns[-50:])) if n >= 50 else vol
+        r20 = returns[-20:] if n >= 20 else None
+        r50 = returns[-50:] if n >= 50 else None
+        vol = float(np.std(r20)) if r20 is not None else 0.01
+        long_vol = float(np.std(r50)) if r50 is not None else vol
         vol_ratio = vol / (long_vol + 1e-8)
 
         # Bollinger position: -1 below lower, +1 above upper
-        sma20 = float(np.mean(prices[-20:])) if n >= 20 else price
-        std20 = float(np.std(prices[-20:])) if n >= 20 else 1.0
-        bb_pos = (price - sma20) / (2.0 * std20 + 1e-8)
+        std20 = float(np.std(p20)) if p20 is not None else 1.0
+        bb_pos = (price - m20) / (2.0 * std20 + 1e-8)
 
         # Z-scores
-        mean10 = float(np.mean(prices[-10:])) if n >= 10 else price
-        std10  = float(np.std(prices[-10:]))  if n >= 10 else 1.0
-        z10 = (price - mean10) / (std10 + 1e-8)
-        mean30 = float(np.mean(prices[-30:])) if n >= 30 else price
-        std30  = float(np.std(prices[-30:]))  if n >= 30 else 1.0
-        z30 = (price - mean30) / (std30 + 1e-8)
+        std10 = float(np.std(p10)) if p10 is not None else 1.0
+        z10 = (price - m10) / (std10 + 1e-8)
+        std30 = float(np.std(p30)) if p30 is not None else 1.0
+        z30 = (price - m30) / (std30 + 1e-8)
 
         atr_norm = (high - low) / (price + 1e-8)
 
