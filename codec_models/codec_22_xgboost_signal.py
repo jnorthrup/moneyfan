@@ -43,9 +43,7 @@ def _macd(prices: np.ndarray, fast: int = 12, slow: int = 26, sig: int = 9):
     if len(prices) < slow:
         return 0.0, 0.0
     m = ema(prices, fast) - ema(prices, slow)
-    hist = np.array([ema(prices[:max(1, len(prices) - sig + i + 1)], sig)
-                     for i in range(sig)])
-    s = float(hist[-1]) if len(hist) > 0 else 0.0
+    s = ema(prices, sig)
     return m, s
 
 
