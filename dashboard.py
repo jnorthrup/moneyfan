@@ -14,6 +14,7 @@ import os
 import threading
 import queue
 import time
+import concurrent.futures
 from pathlib import Path
 from datetime import datetime
 from typing import List, Dict
@@ -67,42 +68,52 @@ def _load_drawthru_snapshot():
                 "tables": sorted(tables),
             }
 
-        row_count, symbol_count, min_ts, max_ts = con.execute(
-            f"""
-            SELECT
-              COUNT(*) AS row_count,
-              COUNT(DISTINCT symbol) AS symbol_count,
-              MIN(timestamp) AS min_ts,
-              MAX(timestamp) AS max_ts
-            FROM {table_name}
-            {where_clause}
-            """
-        ).fetchone()
+        def run_query(query, params=None, as_df=False):
+            """Helper to run a query in its own DuckDB connection for thread-safety."""
+            import duckdb
+            # Use the global DRAWTHRU_DUCKDB_FILE
+            conn = duckdb.connect(str(DRAWTHRU_DUCKDB_FILE), read_only=True)
+            try:
+                res = conn.execute(query, params)
+                return res.df() if as_df else res.fetchone()
+            finally:
+                conn.close()
 
-        top_symbols_df = con.execute(
-            f"""
-            SELECT
-              symbol,
-              COUNT(*) AS row_count,
-              MAX(timestamp) AS last_ts
-            FROM {table_name}
-            {where_clause}
-            GROUP BY symbol
-            ORDER BY row_count DESC, symbol ASC
-            LIMIT 12
-            """
-        ).df()
+        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+            f_stats = executor.submit(run_query, f"""
+                SELECT
+                  COUNT(*) AS row_count,
+                  COUNT(DISTINCT symbol) AS symbol_count,
+                  MIN(timestamp) AS min_ts,
+                  MAX(timestamp) AS max_ts
+                FROM {table_name}
+                {where_clause}
+            """)
 
-        preview_symbol_row = con.execute(
-            f"""
-            SELECT symbol, MAX(timestamp) AS last_ts
-            FROM {table_name}
-            {where_clause}
-            GROUP BY symbol
-            ORDER BY last_ts DESC, symbol ASC
-            LIMIT 1
-            """
-        ).fetchone()
+            f_top = executor.submit(run_query, f"""
+                SELECT
+                  symbol,
+                  COUNT(*) AS row_count,
+                  MAX(timestamp) AS last_ts
+                FROM {table_name}
+                {where_clause}
+                GROUP BY symbol
+                ORDER BY row_count DESC, symbol ASC
+                LIMIT 12
+            """, as_df=True)
+
+            f_preview_row = executor.submit(run_query, f"""
+                SELECT symbol, MAX(timestamp) AS last_ts
+                FROM {table_name}
+                {where_clause}
+                GROUP BY symbol
+                ORDER BY last_ts DESC, symbol ASC
+                LIMIT 1
+            """)
+
+            row_count, symbol_count, min_ts, max_ts = f_stats.result()
+            top_symbols_df = f_top.result()
+            preview_symbol_row = f_preview_row.result()
 
         preview_rows = []
         if preview_symbol_row:
